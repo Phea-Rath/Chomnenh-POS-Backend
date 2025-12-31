@@ -252,6 +252,7 @@ class DetailService {
         }
 
         $order_item = $order_item->map(function ($order) {
+            $order->in_stock = $this->quanItems($order->item_id)[0]->in_stock;
             $order->stock = $this->quanItems($order->item_id)[0];
             $order->attributes = $this->attributeService
                 ->transformAttributes($order->item_id);

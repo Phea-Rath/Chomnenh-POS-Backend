@@ -47,6 +47,7 @@ class StockMasterController extends Controller
         )
         ->where('p.id', $proId)
         ->where('sm.is_deleted', 0)
+        ->where('to_w.warehouse_id', 1)
         ->where('sm.stock_created_by', $uid)
         ->get();
 
@@ -213,7 +214,6 @@ class StockMasterController extends Controller
                 'c.category_name',
                 'i.brand_id',
                 'b.brand_name',
-                'sd.quantity',
                 'sd.expire_date',
                 'i.created_by',
                 'i.is_deleted',
@@ -223,6 +223,7 @@ class StockMasterController extends Controller
                 'wh_to.warehouse_name as to_warehouse_name',
                 DB::raw('0 as images'),
                 DB::raw('0 as image'),
+                DB::raw('SUM(sd.quantity) as quantity'),
                 DB::raw('SUM(CASE WHEN sm.stock_type_id = 1 THEN sd.quantity ELSE 0 END) AS stock_return'),
                 DB::raw('SUM(CASE WHEN sm.stock_type_id = 2 THEN sd.quantity ELSE 0 END) AS stock_in'),
                 DB::raw('SUM(CASE WHEN sm.stock_type_id = 3 THEN sd.quantity ELSE 0 END) AS stock_out'),
@@ -247,7 +248,6 @@ class StockMasterController extends Controller
                 'i.brand_id',
                 'b.brand_name',
                 'i.created_by',
-                'sd.quantity',
                 'sd.expire_date',
                 'i.is_deleted',
                 'sm.from_warehouse',
@@ -255,6 +255,99 @@ class StockMasterController extends Controller
                 'sm.warehouse_id',
                 'wh_to.warehouse_name',
                 'sm.stock_date'
+            )
+            ->orderBy('i.item_id')
+            ->paginate($limit, ['*'], 'page', $page);
+            foreach ($stock_masters as $stock_master) {
+                $imagelist = $this->itemService->getImage($stock_master->item_id);
+                $stock_master->images = !empty($imagelist) ? $imagelist : null;
+                $stock_master->image = !empty($imagelist) ? $imagelist[0]['image'] : null;
+            }
+
+
+
+
+        if ($stock_masters->isEmpty()) {
+            return response()->json([
+                'message' => 'No item stock summary found!',
+                'status' => 404,
+                'data' => []
+            ]);
+        }
+
+        // Enrich current page items using ItemController-like grouping
+        $pageItems = collect($stock_masters->items());
+
+            return response()->json([
+                'message' => 'StockMaster summary selected successfully',
+                'status' => 200,
+                'data' => $pageItems->toArray(),
+                'pagination' => [
+                    'current_page' => $stock_masters->currentPage(),
+                    'per_page' => $stock_masters->perPage(),
+                    'total' => $stock_masters->total(),
+                    'last_page' => $stock_masters->lastPage(),
+                ]
+            ]);
+
+    }
+    public function stockTracking(Request $request)
+    {
+        $user = Auth::user();
+        $proId = $user->profile_id;
+        $limit = $request->input('limit', 10);
+        $page = $request->input('page', 1);
+
+        // Paginated stock details summary
+        $stock_masters = DB::table('stock_details as sd')
+            ->join('stock_masters as sm', 'sd.stock_id', '=', 'sm.stock_id')
+            ->join('warehouses as wh_from', 'sm.from_warehouse', '=', 'wh_from.warehouse_id')
+            ->join('warehouses as wh_to', 'sm.warehouse_id', '=', 'wh_to.warehouse_id')
+            ->join('items as i', 'sd.item_id', '=', 'i.item_id')
+            ->join('categories as c', 'i.category_id', '=', 'c.category_id')
+            ->join('brands as b', 'i.brand_id', '=', 'b.brand_id')
+            ->join('users as u', 'sm.stock_created_by', '=', 'u.id')
+            ->join('profiles as p', 'u.profile_id', '=', 'p.id')
+            ->select(
+                'i.item_id',
+                'i.item_code',
+                'i.barcode',
+                'i.item_name',
+                'i.item_price',
+                'i.item_cost',
+                'i.wholesale_price',
+                'i.category_id',
+                'c.category_name',
+                'i.brand_id',
+                'b.brand_name',
+                'i.created_by',
+                'i.is_deleted',
+                DB::raw('0 as images'),
+                DB::raw('0 as image'),
+                DB::raw('SUM(CASE WHEN sm.stock_type_id = 1 THEN sd.quantity ELSE 0 END) AS stock_return'),
+                DB::raw('SUM(CASE WHEN sm.stock_type_id = 2 THEN sd.quantity ELSE 0 END) AS stock_in'),
+                DB::raw('SUM(CASE WHEN sm.stock_type_id = 3 THEN sd.quantity ELSE 0 END) AS stock_out'),
+                DB::raw('SUM(CASE WHEN sm.stock_type_id = 5 THEN sd.quantity ELSE 0 END) AS stock_sale'),
+                DB::raw('SUM(CASE WHEN sm.stock_type_id = 4 THEN sd.quantity ELSE 0 END) AS stock_waste'),
+            )
+            ->where('p.id', $proId)
+            ->where('sd.is_deleted', 0)
+            ->whereNotIn('sm.from_warehouse', [3,4])
+            ->whereNotIn('sm.warehouse_id', [2,3,4])
+            ->groupBy(
+                'i.item_id',
+                'i.item_code',
+                'i.barcode',
+                'i.item_name',
+                'i.item_price',
+                'i.item_cost',
+                'i.wholesale_price',
+                'i.category_id',
+                'c.category_name',
+                'i.brand_id',
+                'b.brand_name',
+                'i.created_by',
+                'i.is_deleted',
             )
             ->orderBy('i.item_id')
             ->paginate($limit, ['*'], 'page', $page);

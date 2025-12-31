@@ -41,13 +41,13 @@ class MenuController extends Controller
             'menu_path' => 'required|string',
         ]);
         $menu = Menus::create($validated);
+
         if (!empty($menu)) {
             Permission::create([
                 'user_id' => 1,
                 'menu_id' => $menu->menu_id,
             ]);
         }
-        // return response()->json($menu, 201);
         return response()->json([
             'message' => 'menus created successfully',
             'status' => 200,

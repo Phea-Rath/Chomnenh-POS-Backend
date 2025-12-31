@@ -285,7 +285,6 @@ class OrderMasterController extends Controller
         ]);
 
         $order_items = [];
-        // $order_details = [];
         if ($order_masters) {
             OrderItems::where('order_id', $id)->delete();
         }

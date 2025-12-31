@@ -137,6 +137,7 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::resource('sale-items', orderPageController::class)->only(['index']);
     Route::get('/stock/{id}', [StockMasterController::class, 'getStockByOrderNo']);
     Route::get('/stock_transection', [StockMasterController::class, 'stockTransection']);
+    Route::get('/stock_tracking', [StockMasterController::class, 'stockTracking']);
     Route::get('/popular_stock', [StockMasterController::class, 'popularStockIn']);
     Route::get('/quan_stock_by_attr', [StockDetailController::class, 'quantityInStockByItemId']);
     Route::post('/suppliers/{id}', [SupplierController::class, 'update']);
