@@ -21,41 +21,22 @@ return new class extends Migration
             $table->timestamps();
         });
 
-        Permission::insert([
-            ['user_id' => 1, 'menu_id' => 1],
-            ['user_id' => 1, 'menu_id' => 2],
-            ['user_id' => 1, 'menu_id' => 3],
-            ['user_id' => 1, 'menu_id' => 4],
-            ['user_id' => 1, 'menu_id' => 5],
-            // ['user_id' => 1, 'menu_id' => 6],
-            // ['user_id' => 1, 'menu_id' => 7],
-            ['user_id' => 1, 'menu_id' => 8],
-            ['user_id' => 1, 'menu_id' => 9],
-            ['user_id' => 1, 'menu_id' => 10],
-            // ['user_id' => 1, 'menu_id' => 11],
-            ['user_id' => 1, 'menu_id' => 12],
-            ['user_id' => 1, 'menu_id' => 13],
-            ['user_id' => 1, 'menu_id' => 14],
-            ['user_id' => 1, 'menu_id' => 15],
-            ['user_id' => 1, 'menu_id' => 16],
-            ['user_id' => 1, 'menu_id' => 17],
-            ['user_id' => 1, 'menu_id' => 18],
-            ['user_id' => 1, 'menu_id' => 19],
-            ['user_id' => 1, 'menu_id' => 20],
-            ['user_id' => 1, 'menu_id' => 21],
-            ['user_id' => 1, 'menu_id' => 22],
-            ['user_id' => 1, 'menu_id' => 23],
-            ['user_id' => 1, 'menu_id' => 24],
-            ['user_id' => 1, 'menu_id' => 25],
-            ['user_id' => 1, 'menu_id' => 26],
-            ['user_id' => 1, 'menu_id' => 27],
-            ['user_id' => 1, 'menu_id' => 28],
-            ['user_id' => 1, 'menu_id' => 29],
-            ['user_id' => 1, 'menu_id' => 30],
-            ['user_id' => 1, 'menu_id' => 31],
-            ['user_id' => 1, 'menu_id' => 32],
-            ['user_id' => 1, 'menu_id' => 33],
-        ]);
+    //    $exclude = [6, 7, 11];
+
+        $permissions = [];
+
+        for ($i = 1; $i <= 30; $i++) {
+            // if (in_array($i, $exclude)) {
+            //     continue;
+            // }
+
+            $permissions[] = [
+                'user_id' => 1,
+                'menu_id' => $i,
+            ];
+        }
+
+        Permission::insert($permissions);
     }
 
     /**
