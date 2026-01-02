@@ -27,7 +27,7 @@ return new class extends Migration
             ["menu_name" => "Orders", 'menu_type' => 0, 'menu_icon' => 'PiShoppingCartBold', 'menu_path' => "/dashboard/orders"],
             ["menu_name" => "ការកំណត់", 'menu_type' => 0, 'menu_icon' => 'GrSettingsOption', 'menu_path' => "/dashboard/setting"],
             ["menu_name" => "ប្រភេទទំនិញ", 'menu_type' => 1, 'menu_icon' => 'MdCategory', 'menu_path' => "/dashboard/category"],
-            // ["menu_name" => "ពណ៌", 'menu_type' => 1, 'menu_icon' => 'IoColorPaletteSharp', 'menu_path' => "/dashboard/color"],
+            ["menu_name" => "សម្រង់តម្លៃ", 'menu_type' => 1, 'menu_icon' => 'IoColorPaletteSharp', 'menu_path' => "/dashboard/quotations"],
             // ["menu_name" => "ទំហំ", 'menu_type' => 1, 'menu_icon' => 'GiResize', 'menu_path' => "/dashboard/size"],
             ["menu_name" => "Brand", 'menu_type' => 1, 'menu_icon' => 'AiFillLike', 'menu_path' => "/dashboard/brand"],
             ["menu_name" => "Scale", 'menu_type' => 1, 'menu_icon' => 'FaBalanceScaleLeft', 'menu_path' => "/dashboard/scale"],

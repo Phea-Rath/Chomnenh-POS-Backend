@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\OrderItems;
 use App\Services\AttributeService;
 use App\Services\DetailService;
+use App\Services\ItemService;
 use Auth;
 use DB;
 use Illuminate\Http\Request;
@@ -16,11 +17,13 @@ class OrderItemController extends Controller
      */
      protected $attributeService;
      protected $detailService;
+     protected $itemService;
 
-    public function __construct(AttributeService $attributeService, DetailService $detailService)
+    public function __construct(AttributeService $attributeService, DetailService $detailService, ItemService $itemService)
     {
         $this->attributeService = $attributeService;
         $this->detailService = $detailService;
+        $this->itemService = $itemService;
     }
 
     public function index()
@@ -148,58 +151,56 @@ class OrderItemController extends Controller
     }
 
     public function popularSales()
-{
-    $user = Auth::user();
-    $uid = $user->id;
+    {
+        $user = Auth::user();
+        $uid = $user->id;
 
-    $order_items = DB::table('order_items')
-        ->join('items', 'order_items.item_id', '=', 'items.item_id')
-        ->join('brands', 'items.brand_id', '=', 'brands.brand_id')
-        ->join('order_masters', 'order_items.order_id', '=', 'order_masters.order_id')
-        ->where('order_items.is_deleted', 0)
-        ->select(
-            'items.item_image','brands.brand_name','items.item_name',
-            DB::raw('
-                SUM(
-                    CASE
-                        WHEN order_masters.sale_type = "sale"
-                            THEN order_items.item_price*order_items.quantity
-                        ELSE
-                            order_items.item_wholesale_price*order_items.quantity
-                    END
-                ) AS total_price
-            '),
-            DB::raw('
-                SUM(order_items.quantity) AS total_quantity
-            ')
-        )
-        ->groupBy('items.item_image', 'brands.brand_name','items.item_name')
-        ->orderByDesc('total_price')
-        ->limit(5)
-        ->get();
+        $order_items = DB::table('order_items')
+            ->join('items', 'order_items.item_id', '=', 'items.item_id')
+            ->join('brands', 'items.brand_id', '=', 'brands.brand_id')
+            ->join('order_masters', 'order_items.order_id', '=', 'order_masters.order_id')
+            ->where('order_items.is_deleted', 0)
+            ->select(
+                'order_items.item_id','brands.brand_name','items.item_name',
+                DB::raw('
+                    SUM(
+                        CASE
+                            WHEN order_masters.sale_type = "sale"
+                                THEN order_items.item_price*order_items.quantity
+                            ELSE
+                                order_items.item_wholesale_price*order_items.quantity
+                        END
+                    ) AS total_price
+                '),
+                DB::raw('
+                    SUM(order_items.quantity) AS total_quantity
+                '),
+                DB::raw('0 AS image')
+            )
+            ->groupBy('order_items.item_id','brands.brand_name','items.item_name')
+            ->orderByDesc('total_price')
+            ->limit(5)
+            ->get();
 
-    // Check if any data was found
-    if ($order_items->isEmpty()) {
+        // Check if any data was found
+        if ($order_items->isEmpty()) {
+            return response()->json([
+                'message' => 'No popular sales found!',
+                'status'  => 404
+            ]);
+        }
+
+        // Fix image URLs
+        foreach ($order_items as $item) {
+            $item->image = $this->itemService->getImage($item->item_id)[0]['image'];
+        }
+
         return response()->json([
-            'message' => 'No popular sales found!',
-            'status'  => 404
+            'message' => 'Popular sales retrieved successfully!',
+            'status'  => 200,
+            'data'    => $order_items
         ]);
     }
-
-    // Fix image URLs
-    foreach ($order_items as $item) {
-        if (!empty($item->item_image)) {
-            $filenameOnly = basename($item->item_image);
-            $item->item_image = url('storage/images/' . $filenameOnly);
-        }
-    }
-
-    return response()->json([
-        'message' => 'Popular sales retrieved successfully!',
-        'status'  => 200,
-        'data'    => $order_items
-    ]);
-}
 
     /**
      * Show the form for creating a new resource.

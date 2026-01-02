@@ -19,11 +19,11 @@ class RoleController extends Controller
         $user = Auth::user();
         $pid = $user->profile_id;
         $roles = DB::table('roles as r')
-        ->join('users as u', 'r.created_by', '=','u.user_id')
+        ->join('users as u', 'r.created_by', '=','u.id')
         ->join('profiles as p', 'p.id','=','u.profile_id')
-            ->where('is_deleted', 0)
+            ->where('r.is_deleted', 0)
             ->where('p.id', $pid)
-            ->select('roles.*')
+            ->select('r.*')
             ->get();
         if (count($roles) == 0) {
             return response()->json([

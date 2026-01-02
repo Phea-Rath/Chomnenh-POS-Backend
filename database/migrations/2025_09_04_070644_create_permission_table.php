@@ -21,14 +21,9 @@ return new class extends Migration
             $table->timestamps();
         });
 
-    //    $exclude = [6, 7, 11];
-
         $permissions = [];
 
-        for ($i = 1; $i <= 30; $i++) {
-            // if (in_array($i, $exclude)) {
-            //     continue;
-            // }
+        for ($i = 1; $i <= 31; $i++) {
 
             $permissions[] = [
                 'user_id' => 1,
