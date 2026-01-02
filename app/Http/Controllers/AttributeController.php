@@ -59,103 +59,103 @@ class AttributeController extends Controller
         ], 200);
     }
 
-    public function store(Request $request)
-    {
+    // public function store(Request $request)
+    // {
 
-        $attributes = json_decode($request->input('attributes'), true);
-        // $attributes = $request->input('attributes');
-        $category_id = $request->category_id;
-        $item_id = Items::max("item_id");
-        $edit_id = $request->input('edit_id');
-        // dd($attributes);
-        foreach ($attributes as $attr) {
+    //     $attributes = json_decode($request->input('attributes'), true);
+    //     // $attributes = $request->input('attributes');
+    //     $category_id = $request->category_id;
+    //     $item_id = Items::max("item_id");
+    //     $edit_id = $request->input('edit_id');
+    //     // dd($attributes);
+    //     foreach ($attributes as $attr) {
 
-            // 🔍 Check if attribute already exists
-            $id = Attribute::where('name', $attr['name'])->pluck('id')->first();
+    //         // 🔍 Check if attribute already exists
+    //         $id = Attribute::where('name', $attr['name'])->pluck('id')->first();
 
-            if ($id) {
-                // Attribute exists → only insert value
-                // AttributeValue::create([
-                //     'item_id' => $item_id,
-                //     'attribute_id' => $existing->id,
-                //     'value' => $attr['value']
-                // ]);
-                $arrValue = $attr['value'];
+    //         if ($id) {
+    //             // Attribute exists → only insert value
+    //             // AttributeValue::create([
+    //             //     'item_id' => $item_id,
+    //             //     'attribute_id' => $existing->id,
+    //             //     'value' => $attr['value']
+    //             // ]);
+    //             $arrValue = $attr['value'];
 
-                $values = array_map('trim', explode(',', $arrValue ));
+    //             $values = array_map('trim', explode(',', $arrValue ));
 
-                // dd($values);
+    //             // dd($values);
 
-                $payload = [
-                    'item_id' => $edit_id,
-                    'attribute_id' => $id,
-                ];
+    //             $payload = [
+    //                 'item_id' => $edit_id,
+    //                 'attribute_id' => $id,
+    //             ];
 
-                $attr_detail = AttributeDetail::create($payload);
-                foreach($values as $value){
-                    $id = DB::table('attribute_values')->where('value',$value)->value('id');
-                    if(!$id){
-                        $attribute_value = [
-                            'value' => $value,
-                        ];
-                    $id = AttributeValue::create($attribute_value)->id;
-                    }
-                    $attr_value_detail = [
-                        'attribute_detail_id'=>$attr_detail->id,
-                        'attribute_value_id'=>$id,
-                    ];
-                    AttributeValueDetail::create($attr_value_detail);
-                }
+    //             $attr_detail = AttributeDetail::create($payload);
+    //             foreach($values as $value){
+    //                 $id = DB::table('attribute_values')->where('value',$value)->value('id');
+    //                 if(!$id){
+    //                     $attribute_value = [
+    //                         'value' => $value,
+    //                     ];
+    //                 $id = AttributeValue::create($attribute_value)->id;
+    //                 }
+    //                 $attr_value_detail = [
+    //                     'attribute_detail_id'=>$attr_detail->id,
+    //                     'attribute_value_id'=>$id,
+    //                 ];
+    //                 AttributeValueDetail::create($attr_value_detail);
+    //             }
 
-                continue; // skip creating a new attribute
-            }
-            $user = Auth::user();
-            $uid = $user->id;
+    //             continue; // skip creating a new attribute
+    //         }
+    //         $user = Auth::user();
+    //         $uid = $user->id;
 
-            // 🆕 Create new attribute
-            $attribute = Attribute::create([
-                'name' => $attr['name'],
-                'type' => $attr['type'] ?? null,
-                'category_id' => $category_id,
-                'created_by' => $uid
-            ]);
+    //         // 🆕 Create new attribute
+    //         $attribute = Attribute::create([
+    //             'name' => $attr['name'],
+    //             'type' => $attr['type'] ?? null,
+    //             'category_id' => $category_id,
+    //             'created_by' => $uid
+    //         ]);
 
-            // ➕ Create attribute value
-            $arrValue = config($attr['value']);
+    //         // ➕ Create attribute value
+    //         $arrValue = config($attr['value']);
 
-                $values = is_array($arrValue)
-                    ? $arrValue
-                    : (isset($arrValue) ? [$arrValue] : []);
+    //             $values = is_array($arrValue)
+    //                 ? $arrValue
+    //                 : (isset($arrValue) ? [$arrValue] : []);
 
 
-                $payload = [
-                    'item_id' => $item_id,
-                    'attribute_id' => $attribute->id,
-                ];
+    //             $payload = [
+    //                 'item_id' => $item_id,
+    //                 'attribute_id' => $attribute->id,
+    //             ];
 
-                $attr_detail = AttributeDetail::create($payload);
-                foreach($values as $value){
-                    $exist = DB::table('attribute_values')->where('value',$value);
-                    if(!$exist){
-                        $attribute_value = [
-                            'value' => $value,
-                        ];
-                    $exist = AttributeValue::create($attribute_value);
-                    }
-                    $attr_value_detail = [
-                        'attribute_detail_id'=>$attr_detail->id,
-                        'attribute_value'=>$exist->id,
-                    ];
-                    AttributeValueDetail::create($attr_value_detail);
-                }
-        }
+    //             $attr_detail = AttributeDetail::create($payload);
+    //             foreach($values as $value){
+    //                 $exist = DB::table('attribute_values')->where('value',$value);
+    //                 if(!$exist){
+    //                     $attribute_value = [
+    //                         'value' => $value,
+    //                     ];
+    //                 $exist = AttributeValue::create($attribute_value);
+    //                 }
+    //                 $attr_value_detail = [
+    //                     'attribute_detail_id'=>$attr_detail->id,
+    //                     'attribute_value'=>$exist->id,
+    //                 ];
+    //                 AttributeValueDetail::create($attr_value_detail);
+    //             }
+    //     }
 
-        return response()->json([
-            'message' => 'Attributes processed successfully!',
-            'status' => 200,
-            'data' => $attr_detail,
-        ], 200);
-    }
+    //     return response()->json([
+    //         'message' => 'Attributes processed successfully!',
+    //         'status' => 200,
+    //         'data' => $attr_detail,
+    //     ], 200);
+    // }
 
 
     public function show(string $id)

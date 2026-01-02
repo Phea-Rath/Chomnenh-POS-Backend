@@ -15,6 +15,9 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Storage;
 use App\Services\AttributeService;
+use App\Models\AttributeValue;
+use App\Models\Attribute;
+use App\Models\AttributeValueDetail;
 use App\Services\ItemService;
 
 class ItemController extends Controller
@@ -67,6 +70,111 @@ class ItemController extends Controller
     ]);
 }
 
+
+public function storeAttr(Request $request)
+    {
+
+        $attributes = json_decode($request->input('attributes'), true);
+        // $attributes = $request->input('attributes');
+        $category_id = $request->category_id;
+        $item_id = Items::max("item_id");
+        // if($item_id){
+        //     return response()->json([
+        //         'message' => 'Attributes processed successfully!',
+        //         'status' => 200,
+        //         'data' => $item_id,
+        //     ], 200);
+        // }
+        $edit_id = $request->input('edit_id');
+        // dd($attributes);
+        foreach ($attributes as $attr) {
+
+            // 🔍 Check if attribute already exists
+            $id = Attribute::where('name', $attr['name'])->pluck('id')->first();
+
+            if ($id) {
+                // Attribute exists → only insert value
+                // AttributeValue::create([
+                //     'item_id' => $item_id,
+                //     'attribute_id' => $existing->id,
+                //     'value' => $attr['value']
+                // ]);
+                $arrValue = $attr['value'];
+
+                $values = array_map('trim', explode(',', $arrValue ));
+
+                // dd($values);
+
+                $payload = [
+                    'item_id' => $edit_id ?? $item_id,
+                    'attribute_id' => $id,
+                ];
+
+                $attr_detail = AttributeDetail::create($payload);
+                foreach($values as $value){
+                    $id = DB::table('attribute_values')->where('value',$value)->value('id');
+                    if(!$id){
+                        $attribute_value = [
+                            'value' => $value,
+                        ];
+                    $id = AttributeValue::create($attribute_value)->id;
+                    }
+                    $attr_value_detail = [
+                        'attribute_detail_id'=>$attr_detail->id,
+                        'attribute_value_id'=>$id,
+                    ];
+                    AttributeValueDetail::create($attr_value_detail);
+                }
+
+                continue; // skip creating a new attribute
+            }
+            $user = Auth::user();
+            $uid = $user->id;
+
+            // 🆕 Create new attribute
+            $attribute = Attribute::create([
+                'name' => $attr['name'],
+                'type' => $attr['type'] ?? null,
+                'category_id' => $category_id,
+                'created_by' => $uid
+            ]);
+
+            // ➕ Create attribute value
+            $arrValue = config($attr['value']);
+
+                $values = is_array($arrValue)
+                    ? $arrValue
+                    : (isset($arrValue) ? [$arrValue] : []);
+
+
+                $payload = [
+                    'item_id' => $item_id,
+                    'attribute_id' => $attribute->id,
+                ];
+
+                $attr_detail = AttributeDetail::create($payload);
+                foreach($values as $value){
+                    $exist = DB::table('attribute_values')->where('value',$value);
+                    if(!$exist){
+                        $attribute_value = [
+                            'value' => $value,
+                        ];
+                    $exist = AttributeValue::create($attribute_value);
+                    }
+                    $attr_value_detail = [
+                        'attribute_detail_id'=>$attr_detail->id,
+                        'attribute_value'=>$exist->id,
+                    ];
+                    AttributeValueDetail::create($attr_value_detail);
+                }
+        }
+
+        return response()->json([
+            'message' => 'Attributes processed successfully!',
+            'status' => 200,
+            'data' => $attr_detail,
+        ], 200);
+    }
 
 
 
@@ -178,6 +286,8 @@ class ItemController extends Controller
                 'barcode' => $barcode,
             ]);
         }
+
+        $this->storeAttr($request);
 
         return response()->json([
             'message'=>'item created successfully',
@@ -309,6 +419,8 @@ class ItemController extends Controller
         }
 
         AttributeDetail::where('item_id', $id)->delete();
+
+        $this->storeAttr($request);
         return response()->json([
             'message'=>'item update successfully',
             'status'=>200,
