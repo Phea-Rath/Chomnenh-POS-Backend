@@ -106,6 +106,7 @@ class OrderMasterController extends Controller
         $order_date = $now->format('Y-m-d');
 
         $validated = $request->validate([
+            'online' => 'required|integer',
             'status' => 'required|integer',
             'order_tel' => 'required|string|max:255',
             'order_address' => 'required|string|max:255',
@@ -136,6 +137,7 @@ class OrderMasterController extends Controller
             'order_no' => $order_no,
             'order_customer_id' => $validated['order_customer_id'] ?? null,
             'sale_type' => $validated['sale_type'] ?? null,
+            'online' => $validated['online'],
             'status' => $validated['status'],
             'order_tel' => $validated['order_tel'],
             'order_address' => $validated['order_address'],
@@ -408,28 +410,28 @@ class OrderMasterController extends Controller
     }
     public function viewOrder(string $id)
     {
-        $user = Auth::user();
-        $proId = $user->profile_id;
-        $orders = OrderMaster::where('order_id', $id);
-        $orderItems = OrderItems::where('order_id', $id);
-        if (!$orders) {
-            return response()->json([
-                'message' => 'order not found!',
-                'status' => 404,
-            ]);
-        }
-        $orders->update([
-            'status' => 3,
-        ]);
-        if (!$order_items->isEmpty()) {
-            foreach ($order_items as $item) {
-                $item->update([
-                    'status' => 3,
-                ]);
-            }
-        }
-        broadcast(new OnlineEvent('view order', $proId))->toOthers();
-        return $this->show($id);
+        // $user = Auth::user();
+        // $proId = $user->profile_id;
+        // $orders = OrderMaster::where('order_id', $id);
+        // $orderItems = OrderItems::where('order_id', $id);
+        // if (!$orders) {
+        //     return response()->json([
+        //         'message' => 'order not found!',
+        //         'status' => 404,
+        //     ]);
+        // }
+        // $orders->update([
+        //     'status' => 3,
+        // ]);
+        // if (!$order_items->isEmpty()) {
+        //     foreach ($order_items as $item) {
+        //         $item->update([
+        //             'status' => 3,
+        //         ]);
+        //     }
+        // }
+        // broadcast(new OnlineEvent('view order', $proId))->toOthers();
+        // return $this->show($id);
     }
 
 

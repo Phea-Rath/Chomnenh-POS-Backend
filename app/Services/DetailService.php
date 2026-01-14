@@ -313,6 +313,7 @@ class DetailService {
                     - SUM(CASE WHEN sm.stock_type_id = 4 THEN sd.quantity ELSE 0 END)
                     - SUM(CASE WHEN sm.stock_type_id = 5 THEN sd.quantity ELSE 0 END)
                     AS in_stock'),
+                DB::raw('SUM(CASE WHEN sm.stock_type_id = 1 THEN sd.quantity ELSE 0 END) AS stock_return'),
                 DB::raw('SUM(CASE WHEN sm.stock_type_id = 2 THEN sd.quantity ELSE 0 END) AS stock_in'),
                 DB::raw('SUM(CASE WHEN sm.stock_type_id = 3 THEN sd.quantity ELSE 0 END) AS stock_out'),
                 DB::raw('SUM(CASE WHEN sm.stock_type_id = 4 THEN sd.quantity ELSE 0 END) AS stock_wasted'),
@@ -329,6 +330,7 @@ class DetailService {
             ->where('oi.item_id', $item_id)
             ->where('oi.is_deleted', 0)
             ->where('om.is_deleted', 0)
+            ->where('om.status', 6)
             ->sum('oi.quantity');
             if(!$totalOrdered){
                 $totalOrdered = 0;

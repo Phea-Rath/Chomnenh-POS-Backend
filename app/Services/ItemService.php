@@ -83,10 +83,11 @@ class ItemService {
         $imagelist = $this->getImage($id);
         // ---- Build Attributes ---- //
         $attributes = $this->attributeService->transformAttributes($id);
-        $stock = $this->detailService->quanItems($id);
+        $stock = $this->detailService->quanItems($id)[0];
 
         $data = [
             "id" => $item->item_id,
+            "barcode" => $item->barcode,
             "code" => $item->item_code,
             "name" => $item->item_name,
             "price" => (float)$item->item_price,

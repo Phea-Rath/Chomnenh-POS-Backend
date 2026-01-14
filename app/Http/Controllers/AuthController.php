@@ -30,6 +30,11 @@ class AuthController extends Controller
                 "message" => "Bad Credentials",
             ], 404);
         }
+        if ($user->status == 0) {
+            return response([
+                "message" => "User disabled!",
+            ], 404);
+        }
 
         $user->update([
             'login_at' => $loginAt
@@ -81,8 +86,6 @@ class AuthController extends Controller
         ]);
 
 
-        // Initialize the image model
-        // $users = new Users();
 
         if ($request->hasFile('image')) {
             // Process the uploaded file
@@ -107,11 +110,6 @@ class AuthController extends Controller
                     'message' => 'Failed to upload image',
                 ], 500);
             } else {
-                // Return an error response if the file couldn't be stored
-                // return response()->json([
-                //     'message' => 'Failed to upload image',
-                // ], 500);
-                // Create the post
                 if (!empty($fields['start_date']) || !empty($fields["term"])) {
                     $date = new DateTime($fields["start_date"]);
                     $date->modify("+{$fields["term"]} months");
@@ -170,7 +168,7 @@ class AuthController extends Controller
                 "username" => $fields["username"],
                 "profile_id" => $data->id ?? $proId,
                 "phone_number" => $fields["phone_number"],
-                    "role_id" => $fields["role_id"],
+                "role_id" => $fields["role_id"],
                 "role" => $fields["role"],
                 "status" => 1,
                 "created_by" => $uid,
@@ -185,5 +183,47 @@ class AuthController extends Controller
             'profile' => $data ?? [],
             'users' => $user
         ], 201);
+    }
+
+    public function guest(string $phone_number)
+    {
+        $user = Auth::user();
+        if (!$user) {
+            return response()->json([
+                'message' => 'Unauthorized',
+            ], 401);
+        }
+        $uid = $user->id;
+        $proId = $user->profile_id;
+        $loginAt = now()->format('Y-m-d');
+
+        $user = Users::where('phone_number',$phone_number)->first();
+
+        if(!$user){
+            $user = Users::create([
+                "username" => 'guest',
+                "profile_id" => $proId,
+                "phone_number" => $phone_number,
+                "role_id" => 2,
+                "role" => 'guest',
+                "status" => 1,
+                "created_by" => $uid,
+                "image" => null,
+                "password" => bcrypt('guest')
+            ]);
+        }
+
+        $user->update([
+            'login_at' => $loginAt
+        ]);
+
+        $token = $user->createToken("remember_token")->plainTextToken;
+
+        $respones = [
+            'user' => $user,
+            'token' => $token
+        ];
+        return response($respones, 200);
+
     }
 }

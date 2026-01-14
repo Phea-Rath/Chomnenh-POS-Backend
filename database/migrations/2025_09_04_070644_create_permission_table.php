@@ -23,13 +23,15 @@ return new class extends Migration
 
         $permissions = [];
 
-        for ($i = 1; $i <= 31; $i++) {
 
-            $permissions[] = [
-                'user_id' => 1,
-                'menu_id' => $i,
-            ];
-        }
+
+        $permissions = [
+            ['user_id' => 1,'menu_id' => 4,],
+            ['user_id' => 1,'menu_id' => 26,],
+            ['user_id' => 1,'menu_id' => 25,],
+            ['user_id' => 1,'menu_id' => 23,],
+        ];
+
 
         Permission::insert($permissions);
     }

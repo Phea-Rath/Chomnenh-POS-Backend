@@ -16,10 +16,21 @@ class QuotationDetail extends Model
         'quotation_id',
         'item_id',
         'item_name',
+        'item_image',
         'quantity',
         'price',
         'discount',
         'total_price',
         'scale',
     ];
+
+    public function item()
+    {
+        return $this->belongsTo(Items::class, 'item_id', 'item_id');
+    }
+
+     public function quotation()
+    {
+        return $this->belongsTo(Quotation::class, 'quotation_id','quotation_id');
+    }
 }

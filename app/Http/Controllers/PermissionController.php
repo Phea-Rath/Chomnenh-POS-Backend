@@ -22,6 +22,7 @@ class PermissionController extends Controller
         }
         $proId = $user->profile_id;
         $role = $user->role_id;
+        $permissions = [];
         $query = Permission::join('users', 'users.id', '=', 'permission.user_id')
             ->join('profiles', 'profiles.id', '=', 'users.profile_id')
             ->join('menus', 'permission.menu_id', '=', 'menus.menu_id')

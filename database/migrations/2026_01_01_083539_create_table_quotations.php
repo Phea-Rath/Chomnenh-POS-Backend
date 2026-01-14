@@ -31,6 +31,8 @@ return new class extends Migration
             $table->decimal('order_total', 10, 2)
                   ->default(0.00)
                   ->comment('សរុបការលក់');
+            $table->decimal('tax', 3, 2)
+                  ->default(0.00);
 
             $table->decimal('delivery_fee', 10, 2)
                   ->default(0.00)

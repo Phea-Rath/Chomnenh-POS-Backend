@@ -54,7 +54,7 @@ class WarehouseController extends Controller
         $validated = $request->validate([
             'warehouse_name' => 'required|string|max:255',
             'status' => 'required|string|max:255',
-            'created_by' => 'required|integer',
+            // 'created_by' => 'required|integer',
         ]);
 
         // Create the post

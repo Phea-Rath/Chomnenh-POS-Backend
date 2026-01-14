@@ -33,45 +33,46 @@ class ItemController extends Controller
         $this->itemService = $itemService;
     }
 
-    public function index()
-{
-    $user = Auth::user();
-    $proId = $user->profile_id;
+    public function index(Request $request)
+    {
+        $user = Auth::user();
+        $proId = $user->profile_id;
+        $limit = $request->input('limit', 10);
+        $page = $request->input('page', 1);
 
-    $rawItems = DB::table('items')
-        ->leftJoin('users', 'users.id', '=', 'items.created_by')
-        ->leftJoin('profiles', 'users.profile_id', '=', 'profiles.id')
-        ->where('profiles.id', $proId)
-        ->where('items.is_deleted', 0)
-        ->select(
-            'items.*',
-        )
-        ->get();
+        $rawItems = DB::table('items')
+            ->leftJoin('users', 'users.id', '=', 'items.created_by')
+            ->leftJoin('profiles', 'users.profile_id', '=', 'profiles.id')
+            ->where('profiles.id', $proId)
+            ->where('items.is_deleted', 0)
+            ->select(
+                'items.*',
+            )->paginate($limit, ['*'], 'page', $page);
 
-    if ($rawItems->count() == 0) {
+        if ($rawItems->count() == 0) {
+            return response()->json([
+                'message' => 'Items not found!',
+                'status' => 404,
+                'data' => []
+            ]);
+        }
+
+        $items = [];
+        foreach ($rawItems as $item) {
+            $items[] = $this->itemService->getItem($item->item_id);
+        }
+
+
+
         return response()->json([
-            'message' => 'Items not found!',
-            'status' => 404,
-            'data' => []
+            'message' => 'Items selected successfully',
+            'status' => 200,
+            'data' => array_reverse($items),
         ]);
     }
 
-    $items = [];
-    foreach ($rawItems as $item) {
-        $items[] = $this->itemService->getItem($item->item_id);
-    }
 
-
-
-    return response()->json([
-        'message' => 'Items selected successfully',
-        'status' => 200,
-        'data' => array_reverse($items),
-    ]);
-}
-
-
-public function storeAttr(Request $request)
+    public function storeAttr(Request $request)
     {
 
         $attributes = json_decode($request->input('attributes'), true);
@@ -219,8 +220,6 @@ public function storeAttr(Request $request)
             'wholesale_price' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
             'item_images' => 'nullable|array',
             'item_images.*' => '',
-            // 'expire_date' => 'required|date',
-            // 'quantity' => 'required|integer',
         ]);
 
         if (is_array($request->item_images) && count($request->item_images) > 0) {
@@ -434,40 +433,72 @@ public function storeAttr(Request $request)
      */
     public function destroy(string $id)
     {
-        $items = Items::find($id);
-        if (!$items) {
+        $item = Items::find($id);
+        if (!$item) {
             return response()->json([
                 "message" => "This item not found!",
             ], 404);
         }
-        // Delete image file if it exists
-        if ($items->item_image) {
-            $imagePath = public_path('storage/images/' . $items->item_image);
-            if (file_exists($imagePath)) {
-                unlink($imagePath);
-                $items->is_deleted = 1;
-                $items->save();
-                return response()->json([
-                    "message" => "Item deleted successfully",
-                    "status" => 200,
-                    "data" => $items,
-                ], 200);
-            } else {
-                $items->is_deleted = 1;
-                $items->save();
-                return response()->json([
-                    "message" => "Item not folder image",
-                    "status" => 200,
-                    "data" => $items,
-                ], 200);
-            }
-        } else {
+
+        $item->is_deleted = 1;
+        $item->save();
+        return response()->json([
+            "message" => "Item deleted successfully",
+            "status" => 200,
+            "data" => $item,
+        ], 200);
+    }
+
+    public function cancelDel(string $id)
+    {
+        $item = Items::find($id);
+        if (!$item) {
             return response()->json([
-                "message" => "Item not image",
+                "message" => "This item not found!",
+            ], 404);
+        }
+
+        $item->is_deleted = 0;
+
+        $item->save();
+        return response()->json([
+            "message" => "Item deleted successfully",
+            "status" => 200,
+            "data" => $item,
+        ], 200);
+    }
+
+
+    public function deleted(string $id)
+    {
+        $item = Items::find($id);
+        if (!$item) {
+            return response()->json([
+                "message" => "This item not found!",
+            ], 404);
+        }
+
+        $imageIds = DB::table('item_images')->where('item_id', $id)->pluck('image_id');
+        $images = DB::table('images')->whereIn('id', $imageIds)->select('image')->get();
+
+
+
+
+        if (count($images) > 0) {
+            $item->delete();
+            foreach($images as $i){
+                $imagePath = public_path('storage/images/' . $i->image);
+                if (file_exists($imagePath)) {
+                    unlink($imagePath);
+                    // dd($imagePath);
+                }
+            }
+            return response()->json([
+                "message" => "Item deleted successfully",
                 "status" => 200,
                 "data" => $items,
             ], 200);
-        }
+}
     }
 
     public function importItem(Request $request)

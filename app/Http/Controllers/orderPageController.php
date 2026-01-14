@@ -126,6 +126,7 @@ class orderPageController extends Controller
                 'i.item_code',
                 'i.barcode',
                 'i.item_name',
+                'i.category_id',
                 'i.item_cost',
                 'i.item_price',
                 'i.discount',
@@ -142,7 +143,8 @@ class orderPageController extends Controller
                 DB::raw('SUM(CASE WHEN sm.stock_type_id = 3 THEN sd.quantity ELSE 0 END) AS stock_out'),
                 DB::raw('SUM(CASE WHEN sm.stock_type_id = 5 THEN sd.quantity ELSE 0 END) AS sold')
             )
-            ->groupBy('i.item_id', 'i.item_code', 'i.item_name', 'i.item_cost', 'i.discount', 'i.item_price', 'i.wholesale_price')
+            ->groupBy('i.item_id', 'i.item_code', 'i.item_name', 'i.item_cost', 'i.discount', 'i.item_price',
+                'i.category_id', 'i.wholesale_price')
             ->orderBy('i.item_id')
             ->get();
 
@@ -207,6 +209,7 @@ class orderPageController extends Controller
                 'code' => $it->item_code,
                 'barcode' => $it->barcode,
                 'name' => $it->item_name,
+                'category_id' => $it->category_id,
                 'cost' => (float)$it->item_cost,
                 'price' => (float)$it->item_price,
                 'discount' => (float)$it->discount,

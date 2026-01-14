@@ -8,9 +8,20 @@ use Carbon\Carbon;
 use DB;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use App\Services\ItemService;
+use App\Services\AttributeService;
 
 class NotificationController extends Controller
 {
+    protected $attributeService;
+    protected $itemService;
+
+
+    public function __construct(AttributeService $attributeService, ItemService $itemService)
+    {
+        $this->attributeService = $attributeService;
+        $this->itemService = $itemService;
+    }
     public function index()
     {
         $user = Auth::user();
@@ -21,28 +32,25 @@ class NotificationController extends Controller
             ->join('warehouses', 'stock_masters.warehouse_id', '=', 'warehouses.warehouse_id')
             ->join('items', 'stock_details.item_id', '=', 'items.item_id')
             ->join('categories', 'items.category_id', '=', 'categories.category_id')
-            ->join('sizes', 'items.size_id', '=', 'sizes.size_id')
             ->join('users', 'stock_masters.stock_created_by', '=', 'users.id')
             ->join('profiles', 'users.profile_id', '=', 'profiles.id')
             ->select(
                 'items.item_id',
                 'items.item_code',
                 'items.item_name',
-                'items.item_image',
+                // 'items.item_image',
                 'items.item_price',
                 'categories.category_name',
                 'categories.category_id',
-                'items.color_id',
-                'items.color_pick',
-                'sizes.size_id',
-                'sizes.size_name',
                 'stock_details.expire_date',
-                DB::raw(' 
-            SUM(CASE WHEN stock_masters.stock_type_id = 1 THEN stock_details.quantity ELSE 0 END) 
-            + SUM(CASE WHEN stock_masters.stock_type_id = 2 THEN stock_details.quantity ELSE 0 END) 
-            - SUM(CASE WHEN stock_masters.stock_type_id = 3 THEN stock_details.quantity ELSE 0 END) 
-            - SUM(CASE WHEN stock_masters.stock_type_id = 4 THEN stock_details.quantity ELSE 0 END) 
-            - SUM(CASE WHEN stock_masters.stock_type_id = 5 THEN stock_details.quantity ELSE 0 END) 
+                DB::raw('0 as image'),
+                DB::raw('0 as images'),
+                DB::raw('
+            SUM(CASE WHEN stock_masters.stock_type_id = 1 THEN stock_details.quantity ELSE 0 END)
+            + SUM(CASE WHEN stock_masters.stock_type_id = 2 THEN stock_details.quantity ELSE 0 END)
+            - SUM(CASE WHEN stock_masters.stock_type_id = 3 THEN stock_details.quantity ELSE 0 END)
+            - SUM(CASE WHEN stock_masters.stock_type_id = 4 THEN stock_details.quantity ELSE 0 END)
+            - SUM(CASE WHEN stock_masters.stock_type_id = 5 THEN stock_details.quantity ELSE 0 END)
             AS in_stock ')
             )->where('warehouses.status', 'stock')
             ->where('stock_details.is_deleted', 0)
@@ -65,14 +73,10 @@ class NotificationController extends Controller
                 'items.item_id',
                 'items.item_code',
                 'items.item_name',
-                'items.item_image',
+                // 'items.item_image',
                 'items.item_price',
                 'categories.category_name',
                 'categories.category_id',
-                'items.color_pick',
-                'items.color_id',
-                'sizes.size_id',
-                'sizes.size_name',
                 'stock_details.expire_date',
             )
             ->orderBy('items.item_id')->get();
@@ -81,12 +85,9 @@ class NotificationController extends Controller
             if ($item->in_stock <= 0) {
                 continue; // Skip items with in_stock less than or equal to 0
             }
-            // $url = asset($item->item_image);
-            if ($item->item_image) {
-                $filenameOnly = basename($item->item_image);
-                $imageUrl = url('storage/images/' . $filenameOnly);
-                $item->item_image = $imageUrl;
-            }
+
+            $item->images = $this->itemService->getImage($item->item_id);
+            $item->item_image = $this->itemService->getImage($item->item_id)[0]['image'];
             $newData[] = $item;
         }
         return response()->json(['message' => 'StockMaster show successfully!', 'status' => 200, 'data' => $newData,], 200);
@@ -103,7 +104,7 @@ class NotificationController extends Controller
             ->join('profiles', 'users.profile_id', '=', 'profiles.id')
             ->where('profiles.id', $proId)
             ->where('om.is_deleted', 0)
-            ->whereIn('om.status', [2, 3])
+            ->where('om.online', 1)
             ->select('om.*')
             ->orderBy('om.order_id', 'desc')
             ->get();
@@ -121,17 +122,11 @@ class NotificationController extends Controller
             $order->items = DB::table('order_items as oi')
                 ->join('items as i', 'oi.item_id', '=', 'i.item_id')
                 ->join('categories as c', 'i.category_id', '=', 'c.category_id')
-                ->join('sizes as s', 'i.size_id', '=', 's.size_id')
                 ->select(
                     'i.item_name',
                     'i.item_code',
-                    'i.color_id',
-                    'i.color_pick',
                     'i.category_id',
                     'c.category_name',
-                    'i.size_id',
-                    's.size_name',
-                    'i.item_image', // make sure you select image
                     'oi.*'
                 )
                 ->where('oi.is_deleted', 0)
@@ -140,10 +135,8 @@ class NotificationController extends Controller
 
             // Fix: loop through each item
             foreach ($order->items as $item) {
-                if (!empty($item->item_image)) {
-                    $filenameOnly = basename($item->item_image);
-                    $item->item_image = url('storage/images/' . $filenameOnly);
-                }
+                $item->images = $this->itemService->getImage($item->item_id);
+                $item->item_image = $this->itemService->getImage($item->item_id)[0]['image'];
             }
 
             return $order;

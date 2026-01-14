@@ -21,6 +21,8 @@ class AttributeService {
             ->select('a.id as name_id', 'a.name','a.type', 'av.id as value_id', 'av.value')
             ->get();
 
+        // dd($id);
+
         if(empty($attrs) || count($attrs) < 0){
             return response()->json([
                 'status' => 404,

@@ -17,14 +17,24 @@ class RoleController extends Controller
     public function index()
     {
         $user = Auth::user();
+        $roleId = $user->role_id;
         $pid = $user->profile_id;
-        $roles = DB::table('roles as r')
+        $query = DB::table('roles as r')
         ->join('users as u', 'r.created_by', '=','u.id')
         ->join('profiles as p', 'p.id','=','u.profile_id')
             ->where('r.is_deleted', 0)
-            ->where('p.id', $pid)
-            ->select('r.*')
-            ->get();
+            ->select('r.*','u.username as created_by_name');
+
+        $roles = [];
+
+        if($roleId == 1){
+            $roles = $query->whereNotIn('r.role_id', [1,2])->get();
+        }elseif($roleId == 2){
+            $roles = [];
+        }else{
+            $roles = $query->whereNotIn('r.role_id', [1,2,3])->whereIn('p.id', [$pid, 1])->get();
+        }
+
         if (count($roles) == 0) {
             return response()->json([
                 'message' => 'Roles not found!',

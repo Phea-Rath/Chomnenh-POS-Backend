@@ -29,20 +29,12 @@ class AttributeController extends Controller
         $role = $user->role_id;
         $proId = $user->profile_id;
 
-        if ($role == 1) {
             $attributes = DB::table('attributes')
                 ->join('users', 'attributes.created_by', '=', 'users.id')
                 ->where('users.profile_id', $proId)
                 ->select('attributes.*')
                 ->get();
-        } else {
-            $attributes = DB::table('attributes')
-                ->join('users', 'attributes.created_by', '=', 'users.id')
-                ->where('users.profile_id', $proId)
-                ->where('attributes.created_by', $uid)
-                ->select('attributes.*')
-                ->get();
-        }
+        
 
         if (count($attributes) == 0) {
             return response()->json([

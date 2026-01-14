@@ -27,31 +27,25 @@ class UserController extends Controller
     public function index()
     {
         $user = Auth::user();
-        // dd($user);
         $uid = $user->id;
         $proid = $user->profile_id;
         $role = $user->role_id;
-        // return  response()->json(Users::latest()->get());
-        // $users = DB::table('users as u')
-        //     ->where('u.profile_id', $uproid)
-        //     // ->paginate($page);
-        //     ->get();
         $users = DB::table('users as u')
-            // ->where('u.profile_id', $proid)
-            ->where('u.is_deleted', 0);
-
+            ->leftJoin('users as c', 'u.created_by', '=', 'c.id')   // 👈 self join
+            ->where('u.is_deleted', 0)
+            ->select(
+                'u.*',
+                'c.username as created_by_name'
+            );
         if ($role === 1) {
             // get all users (no filter)
-            $users = $users->get();
-        } elseif ($role === 2) {
+            $users = $users->whereIn('u.created_by', [0, $uid])->get();
+        } elseif ($role === 4 || $role === 3) {
             // filter by profile_id
-            $users = $users->where('u.profile_id', $proid)->get();
-        } elseif ($role === 3) {
+            $users = $users->where('u.profile_id', $proid)->whereNot('u.id',$user->created_by)->get();
+        } else {
             // filter by user id
             $users = $users->where('u.id', $uid)->get();
-        } else {
-            // default: no result
-            $users = collect();
         }
         if (!$users) {
             return response()->json([
@@ -75,26 +69,13 @@ class UserController extends Controller
     }
     public function show(string $id)
     {
-        $user = Auth::user();
-        $role = $user->role_id;
-        $uid = $user->id;
-        $proid = $user->profile_id;
-        // return  response()->json(Users::latest()->get());
-        $query = DB::table('users as u')
-            ->where('u.is_deleted', 0);
-        if ($role === 1) {
-            // get user by id (no filter)
-            $user = $query->where('u.id', $id)->first();
-        } elseif ($role === 2) {
-            // filter by profile_id
-            $user = $query->where('u.profile_id', $proid)->where('u.id', $id)->first();
-        } elseif ($role === 3) {
-            // filter by user id
-            $user = $query->where('u.id', $uid)->where('u.id', $id)->first();
-        } else {
-            // default: no result
-            $user = null;
-        }
+        $user = DB::table('users as u')
+            ->leftJoin('users as c', 'u.created_by', '=', 'c.id')   // 👈 self join
+            ->where('u.is_deleted', 0)
+            ->select(
+                'u.*',
+                'c.username as created_by_name'
+            )->where('u.id', $id)->first();
         if (!$user) {
             return response()->json([
                 'message' => 'user not found!',
@@ -106,9 +87,35 @@ class UserController extends Controller
             $user->image = $imageUrl;
         }
         return response()->json([
-            'message' => 'Profiles selected successfully',
+            'message' => 'Profiles show successfully',
             'status' => 200,
             'data' => $user,
+        ]);
+    }
+
+
+    public function showByProId(string $id)
+    {
+        // $user = Auth::user();
+        // return  response()->json(Users::latest()->get());
+        $users = DB::table('users')
+            ->where('is_deleted', 0)->where('profile_id', $id)->get();
+        if (count($users) == 0) {
+            return response()->json([
+                'message' => 'user not found!',
+            ], 404);
+        }
+        foreach($users as $user){
+            if ($user->image) {
+                $filenameOnly = basename($user->image);
+                $imageUrl = url('storage/images/' . $filenameOnly);
+                $user->image = $imageUrl;
+            }
+        }
+        return response()->json([
+            'message' => 'Profiles selected successfully',
+            'status' => 200,
+            'data' => $users,
         ]);
     }
 
@@ -189,6 +196,96 @@ class UserController extends Controller
                 "password" => bcrypt($fields["password"])
             ]);
         }
+    }
+
+    public function disabledUser($id){
+        $user = Users::find($id);
+        if(empty($user)){
+            return response()->json([
+                'message'=>'User not found!',
+                'status'=> 201,
+            ],300);
+        }
+        $user->status = 0;
+        $user->save();
+
+        return response()->json([
+            'message'=>'User disabled successfully!',
+            'status'=> 200,
+            'data'=>$user
+        ],201);
+    }
+    public function enabledUser($id){
+        $user = Users::find($id);
+        if(empty($user)){
+            return response()->json([
+                'message'=>'User not found!',
+                'status'=> 201,
+            ],300);
+        }
+        $user->status = 1;
+        $user->save();
+
+        return response()->json([
+            'message'=>'User disabled successfully!',
+            'status'=> 200,
+            'data'=>$user
+        ],201);
+    }
+
+    public function disabledCompany($id){
+        $user = Auth::user();
+        $uId = $user->id;
+        if($uId != 1){
+            return response()->json([
+                'message'=>'User cannot enable!',
+                'status'=> 201,
+            ],300);
+        }
+        $users = Users::where('profile_id',$id)->get();
+        if(empty($user)){
+            return response()->json([
+                'message'=>'User not found!',
+                'status'=> 201,
+            ],300);
+        }
+        foreach($users as $user){
+            $user->status = 0;
+            $user->save();
+        }
+
+        return response()->json([
+            'message'=>'User enabled successfully!',
+            'status'=> 200,
+            'data'=>$users
+        ],201);
+    }
+    public function enabledCompany($id){
+        $user = Auth::user();
+        $uId = $user->id;
+        if($uId != 1){
+            return response()->json([
+                'message'=>'User cannot enable!',
+                'status'=> 201,
+            ],300);
+        }
+        $users = Users::where('profile_id',$id)->get();
+        if(empty($user)){
+            return response()->json([
+                'message'=>'User not found!',
+                'status'=> 201,
+            ],300);
+        }
+        foreach($users as $user){
+            $user->status = 1;
+            $user->save();
+        }
+
+        return response()->json([
+            'message'=>'User enabled successfully!',
+            'status'=> 200,
+            'data'=>$users
+        ],201);
     }
 
     public function destroy(string $id)

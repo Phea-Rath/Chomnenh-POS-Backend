@@ -8,10 +8,10 @@ use App\Models\StockMaster;
 use App\Models\ExchangeRate;
 use App\Models\StockAttribute;
 use App\Services\DetailService;
+use App\Services\ItemService;
 use DB;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use App\Services\ItemService;
 
 class StockMasterController extends Controller
 {
@@ -203,6 +203,7 @@ class StockMasterController extends Controller
             ->join('users as u', 'sm.stock_created_by', '=', 'u.id')
             ->join('profiles as p', 'u.profile_id', '=', 'p.id')
             ->select(
+                'sm.stock_id',
                 'i.item_id',
                 'i.item_code',
                 'i.barcode',
@@ -233,9 +234,10 @@ class StockMasterController extends Controller
             )
             ->where('p.id', $proId)
             ->where('sd.is_deleted', 0)
-            ->whereNotIn('sm.from_warehouse', [3,4])
+            ->whereNotIn('sm.from_warehouse', [2,3,4])
             ->whereNotIn('sm.warehouse_id', [2,3,4])
             ->groupBy(
+                'sm.stock_id',
                 'i.item_id',
                 'i.item_code',
                 'i.barcode',
@@ -270,7 +272,7 @@ class StockMasterController extends Controller
         if ($stock_masters->isEmpty()) {
             return response()->json([
                 'message' => 'No item stock summary found!',
-                'status' => 404,
+                'status' => 200,
                 'data' => []
             ]);
         }
@@ -416,29 +418,16 @@ class StockMasterController extends Controller
                 'c.category_name',
                 'i.brand_id',
                 'b.brand_name',
-                'sd.quantity',
-                'sd.expire_date',
-                'i.created_by',
                 'i.is_deleted',
-                'sm.from_warehouse',
-                'wh_from.warehouse_name as from_warehouse_name',
-                'sm.warehouse_id',
-                'wh_to.warehouse_name as to_warehouse_name',
                 DB::raw('0 as images'),
                 DB::raw('0 as image'),
-                DB::raw('SUM(CASE WHEN sm.stock_type_id = 1 THEN sd.quantity ELSE 0 END) AS stock_return'),
-                DB::raw('SUM(CASE WHEN sm.stock_type_id = 2 THEN sd.quantity ELSE 0 END) AS stock_in'),
-                DB::raw('SUM(CASE WHEN sm.stock_type_id = 3 THEN sd.quantity ELSE 0 END) AS stock_out'),
-                DB::raw('SUM(CASE WHEN sm.stock_type_id = 5 THEN sd.quantity ELSE 0 END) AS stock_sale'),
-                DB::raw('SUM(CASE WHEN sm.stock_type_id = 4 THEN sd.quantity ELSE 0 END) AS stock_waste'),
-                'sm.created_at'
+                DB::raw('0 as stock'),
+                // 'sm.created_at'
             )
             ->where('p.id', $proId)
             ->where('sd.is_deleted', 0)
             ->whereIn('sm.stock_type_id', [1,2]) // stock in
             ->where('sm.warehouse_id', $warehouseId)
-            // ->whereNotIn('sm.from_warehouse', [3,4])
-            // ->whereNotIn('sm.warehouse_id', [2,3,4])
             ->groupBy(
                 'i.item_id',
                 'i.item_code',
@@ -451,20 +440,13 @@ class StockMasterController extends Controller
                 'c.category_name',
                 'i.brand_id',
                 'b.brand_name',
-                'i.created_by',
-                'sd.quantity',
-                'sd.expire_date',
                 'i.is_deleted',
-                'sm.from_warehouse',
-                'wh_from.warehouse_name',
-                'sm.warehouse_id',
-                'wh_to.warehouse_name',
-                'sm.created_at'
             )
             ->orderBy('i.item_id')->get();
             // ->paginate($limit, ['*'], 'page', $page);
             foreach ($stock_masters as $stock_master) {
                 $imagelist = $this->itemService->getImage($stock_master->item_id);
+                $stock_master->stock = $this->detailService->quanItems($stock_master->item_id)[0];
                 $stock_master->images = !empty($imagelist) ? $imagelist : null;
                 $stock_master->image = !empty($imagelist) ? $imagelist[0]['image'] : null;
             }
@@ -712,30 +694,27 @@ class StockMasterController extends Controller
      */
     public function destroy(string $id)
     {
-        $stock_masters = StockMaster::find($id);
-        if (!$stock_masters) {
+        $stockMaster = StockMaster::find($id);
+
+        if (!$stockMaster) {
             return response()->json([
-                "message" => "This stock_master not found!",
+                'message' => 'This stock master not found!',
             ], 404);
-        }
-        $stock_detail = StockDetails::where($stock_masters->stock_masters_id);
-        if (!$stock_detail) {
-            return response()->json([
-                "message" => "This stock_detail not found!",
-            ], 404);
-        } else {
-            $stock_detail->is_deleted = 1;
-            $stock_detail->save();
         }
 
-        $stock_masters->is_deleted = 1;
-        $stock_masters->save();
-        // $stock_detail->delete();
+        // ✅ update all related stock details
+        StockDetails::where('stock_id', $stockMaster->stock_id)
+            ->update(['is_deleted' => 1]);
+
+        // ✅ update stock master
+        $stockMaster->is_deleted = 1;
+        $stockMaster->save();
+
         return response()->json([
-            "message" => "StockMaster deleted successfully",
-            "status" => 200,
-            "data" => $stock_masters,
-            // "details"=>$stock_detail,
+            'message' => 'StockMaster deleted successfully',
+            'status' => 200,
+            'data' => $stockMaster,
         ], 200);
     }
+
 }

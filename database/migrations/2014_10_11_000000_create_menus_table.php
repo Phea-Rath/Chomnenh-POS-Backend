@@ -41,7 +41,7 @@ return new class extends Migration
             ["menu_name" => "តាមដានស្តុក", 'menu_type' => 2, 'menu_icon' => 'FaListCheck', 'menu_path' => "/dashboard/record-stock"],
             ["menu_name" => "តាមដានស្តុកលក់", 'menu_type' => 2, 'menu_icon' => 'SiPayloadcms', 'menu_path' => "/dashboard/record-stock-sale"],
             ["menu_name" => "វិភាគ", 'menu_type' => 2, 'menu_icon' => 'BsGraphUpArrow', 'menu_path' => "/dashboard/analyze-stock"],
-            ["menu_name" => "ប្រតិបត្តិការស្តុក", 'menu_type' => 2, 'menu_icon' => 'FaListOl', 'menu_path' => "/dashboard/stock-transition"],
+            // ["menu_name" => "ប្រតិបត្តិការស្តុក", 'menu_type' => 2, 'menu_icon' => 'FaListOl', 'menu_path' => "/dashboard/stock-transition"],
             ["menu_name" => "មីនុយអេឡិចត្រូនិច", 'menu_type' => 2, 'menu_icon' => 'BsQrCodeScan', 'menu_path' => "/dashboard/e-menu"],
             ["menu_name" => "របាយការណ៍", 'menu_type' => 2, 'menu_icon' => 'TbReportAnalytics', 'menu_path' => "/dashboard/report"],
             ["menu_name" => "ការបញ្ជាទិញ", 'menu_type' => 2, 'menu_icon' => 'BiSolidPurchaseTag', 'menu_path' => "/dashboard/purchases"],

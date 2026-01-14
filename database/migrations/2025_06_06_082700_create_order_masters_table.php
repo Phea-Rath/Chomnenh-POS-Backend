@@ -18,6 +18,7 @@ return new class extends Migration
             $table->string("order_address");
             $table->date("order_date");
             $table->double("delivery_fee")->nullable();
+            $table->unsignedInteger("deliver_id")->nullable();
             $table->double("order_subtotal");
             $table->double("order_discount");
             $table->string("sale_type");
@@ -33,10 +34,12 @@ return new class extends Migration
             $table->integer("status")->default(1);
             $table->boolean("is_active")->default(true);
             $table->boolean("is_deleted")->default(0);
-            $table->boolean("is_cancelled")->default(0);
+            $table->boolean("online")->default(0);
+            $table->boolean("is_cacelled")->default(0);
             $table->timestamps();
             $table->foreign("created_by")->references("id")->on("users");
             $table->foreign("order_customer_id")->references("customer_id")->on("customers");
+            $table->foreign("deliver_id")->references("deliver_id")->on("delivers");
         });
     }
 

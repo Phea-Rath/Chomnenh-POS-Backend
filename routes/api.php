@@ -34,6 +34,8 @@ use App\Http\Controllers\StockTypeController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\WarehouseController;
+use App\Http\Controllers\QuotationController;
+use App\Http\Controllers\DeliverController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Broadcast;
 
@@ -57,6 +59,7 @@ Route::post('/verify-otp', [OtpController::class, 'verifyOtp']);
 Broadcast::routes(['middleware' => ['auth:sanctum']]);
 Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');
+    Route::post('/guest/{phone_number}', [AuthController::class, 'guest'])->middleware('auth:sanctum');
     Route::get('/alert_order_online', [NotificationController::class, 'orderOnline']);
     Route::get('/alert_stock_waste', [NotificationController::class, 'index']);
     Route::get('/provinces', [AddressController::class, 'getProvinces']);
@@ -75,6 +78,8 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::post('/customers/{id}', [\App\Http\Controllers\CustomerController::class, 'update']);
     Route::resource('customers', \App\Http\Controllers\CustomerController::class)->only(['index', 'show', 'store', 'destroy']);
     Route::resource('colors', ColorController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
+    Route::resource('delivers', DeliverController::class)->only(['index', 'show', 'store', 'destroy']);
+    Route::post('delivers/{id}', [DeliverController::class,'update']);
     //E
     Route::get('/expanse_by_week',[DashboardController::class, 'expanseWeek']);
     Route::get('/expanse_by_month',[DashboardController::class, 'expanseMonth']);
@@ -93,6 +98,8 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::resource('items', ItemController::class)->only(['index', 'show', 'store', 'destroy']);
     Route::post('/items/{id}', [ItemController::class, 'update']);
     Route::post('/import_items', [ItemController::class, 'importItem']);
+    Route::put('/cancel_removed_item/{id}', [ItemController::class, 'cancelDel']);
+    Route::delete('/deleted/{id}', [ItemController::class, 'deleted']);
     //M
     Route::resource('menus', MenuController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
     Route::get('/order_persent_montly', [OrderItemController::class, 'monthlyOrderPercentCompare']);
@@ -150,6 +157,10 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::get('/sale_by_day',[DashboardController::class, 'saleByDay']);
     Route::get('/sale_by_hour',[DashboardController::class, 'saleByHour']);
 
+    //Q
+    // Route::post('/quotations',[QuotationController::class, 'store']);
+    Route::apiResource('quotations', QuotationController::class);
+
     // Route::get("/users",[AuthController::class, "index"]);
     Route::resource('scales', ScaleController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
     Route::resource('sizes', SizeController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
@@ -162,6 +173,11 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::resource('stock_details', StockDetailController::class)->only(['index', 'show']);
     //U
     Route::get("/user_login", [UserController::class, "userLogin"]);
+    Route::get("/user_by_profile/{id}", [UserController::class, "showByProId"]);
+    Route::put("/disabled_user/{id}", [UserController::class, "disabledUser"]);
+    Route::put("/disabled_company/{id}", [UserController::class, "disabledCompany"]);
+    Route::put("/enabled_user/{id}", [UserController::class, "enabledUser"]);
+    Route::put("/enabled_company/{id}", [UserController::class, "enabledCompany"]);
     Route::get("/users", [UserController::class, "index"]);
     Route::get("/users/{id}", [UserController::class, "show"]);
     Route::delete("/users/{id}", [UserController::class, "destroy"]);
@@ -174,4 +190,23 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::put('/view_order/{id}', [OrderMasterController::class, 'viewOrder']);
     //W
     Route::resource('warehouses', WarehouseController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
+
+    Route::get('/image-base64/{filename}', function ($filename) {
+
+        $path = storage_path('app/public/images/' . $filename);
+
+        if (!File::exists($path)) {
+            return response()->json([
+                'error' => 'Image not found',
+                'path' => $path
+            ], 404);
+        }
+
+        $type = mime_content_type($path);
+        $data = base64_encode(file_get_contents($path));
+
+        return response("data:$type;base64,$data")
+            ->header('Content-Type', 'text/plain');
+    });
+
 });

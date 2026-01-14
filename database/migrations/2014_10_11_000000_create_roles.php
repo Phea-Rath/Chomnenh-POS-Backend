@@ -23,8 +23,10 @@ return new class extends Migration
 
         Roles::insert([
             ['role_name' => 'superadmin', 'role_description' => 'Super Administrator', 'created_by'=> 1, 'is_deleted' => 0, 'created_at' => now(), 'updated_at' => now()],
+            ['role_name' => 'guest', 'role_description' => 'Guest', 'created_by'=> 1, 'is_deleted' => 0, 'created_at' => now(), 'updated_at' => now()],
             ['role_name' => 'admin', 'role_description' => 'Administrator', 'created_by'=> 1, 'is_deleted' => 0, 'created_at' => now(), 'updated_at' => now()],
-            ['role_name' => 'user', 'role_description' => 'Regular User', 'created_by'=> 1, 'is_deleted' => 0, 'created_at' => now(), 'updated_at' => now()],
+            ['role_name' => 'manager', 'role_description' => 'Manager', 'created_by'=> 1, 'is_deleted' => 0, 'created_at' => now(), 'updated_at' => now()],
+            ['role_name' => 'staff', 'role_description' => 'Regular User', 'created_by'=> 1, 'is_deleted' => 0, 'created_at' => now(), 'updated_at' => now()],
         ]);
     }
 
