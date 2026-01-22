@@ -7,6 +7,7 @@ use App\Events\OnlineEvent;
 use App\Events\OrderMessage;
 use App\Events\PrivateChannelEvent;
 use App\Models\OrderItems;
+use App\Models\Customers;
 use App\Models\OrderMaster;
 use App\Models\ExchangeRate;
 use App\Models\OrderAttribute;
@@ -16,6 +17,7 @@ use DB;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use App\Services\ItemService;
+use App\Services\TelegramService;
 
 
 class OrderMasterController extends Controller
@@ -39,12 +41,23 @@ class OrderMasterController extends Controller
     {
         $user = auth::user();
         $uid = $user->id;
+        $proId = $user->profile_id;
         $orderMasters = DB::table('order_masters as om')
-        ->join('customers as cu','om.order_customer_id','=',"customer_id")
+            ->join('customers as cu','om.order_customer_id','=',"cu.customer_id")
+            ->join('delivers as dl','om.deliver_id','=',"dl.deliver_id")
+            ->join('users', 'om.created_by', '=', 'users.id')
+            ->join('profiles', 'users.profile_id', '=', 'profiles.id')
             ->where('om.is_deleted', 0)
-            ->where('om.created_by', $uid)
+            ->where('profiles.id', $proId)
             ->where('om.is_active', 1)
-            ->select('cu.customer_name','cu.customer_email',"om.*")->get();
+            ->select('cu.customer_name','cu.customer_email', 'dl.deliver_name', 'dl.image as deliver_image',"om.*")->get();
+
+        foreach ($orderMasters as $item) {
+            if ($item->deliver_image) {
+                $filenameOnly = basename($item->deliver_image);
+                $item->deliver_image = url('storage/images/' . $filenameOnly);
+            }
+        }
 
         if ($orderMasters->isEmpty()) {
             return response()->json([
@@ -94,10 +107,6 @@ class OrderMasterController extends Controller
         $year = $now->format('y');
 
         $exchange_rate = ExchangeRate::find($proId);
-        // return response()->json([
-        //     "data"=>$exchange_rate->usd_to_khr,
-        // ]);
-        // Count orders for this profile in the current month/year
         $orderCount = OrderMaster::where('created_by', $uid)
             ->whereMonth('order_date', $month)
             ->whereYear('order_date', $now->format('Y'))
@@ -113,6 +122,7 @@ class OrderMasterController extends Controller
             'order_payment_status' => 'nullable|string|max:255',
             'order_payment_method' => 'nullable|string|max:255',
             'order_customer_id' => 'nullable|integer',
+            'deliver_id' => 'nullable|integer',
             'sale_type' => 'nullable|string|max:255',
             'delivery_fee' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
             'order_subtotal' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
@@ -125,7 +135,7 @@ class OrderMasterController extends Controller
             'items.*.item_id' => 'required|integer',
             'items.*.item_name' => 'required|string|max:255',
             'items.*.item_price' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
-            'items.*.discount' => 'required|integer',
+            'items.*.discount' => 'required|numeric',
             'items.*.price' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
             'items.*.quantity' => 'required|integer',
             'items.*.item_cost' => 'required|numeric',
@@ -140,6 +150,7 @@ class OrderMasterController extends Controller
             'online' => $validated['online'],
             'status' => $validated['status'],
             'order_tel' => $validated['order_tel'],
+            'deliver_id' => $validated['deliver_id'],
             'order_address' => $validated['order_address'],
             'order_date' => $order_date,
             'delivery_fee' => $validated['delivery_fee'],
@@ -174,11 +185,52 @@ class OrderMasterController extends Controller
             ]);
         }
 
-        // $message = $validated['order_tel'];
-        // $user = $user->username;
 
-        // Broadcast to Pusher
-        broadcast(new PrivateChannelEvent("New order by" . $validated['order_tel'], (int)$proId))->toOthers();
+        if($validated['online'] == 1){
+            $customer = Customers::find($validated['order_customer_id']);
+
+            $keyboard = [
+                "inline_keyboard" => [
+                    [
+                        [
+                            "text" => "🔙 Return to App",
+                            "url"  => "http://localhost:5173/dashboard/order-tracking"
+                        ]
+                    ]
+                ]
+            ];
+            // $message = $validated['order_tel'];
+            // $user = $user->username;
+           $phone = $validated['order_tel']
+                ?? $customer->customer_tel
+                ?? 'N/A';
+
+            $address = $validated['order_address']
+                ?? $customer->customer_address
+                ?? 'N/A';
+
+            // $text =
+            // "<b>📦 Order Information</b>\n\n" .
+            // "<b>🧾 Order No:</b> {$order_no}\n" .
+            // "<b>📅 Order Date:</b> {$order_date}\n\n" .
+            // "<b>👤 Customer Name:</b> {$customer->customer_name}\n" .
+            // "<b>📧 Email:</b> " . ($customer->customer_email ?? 'N/A') . "\n" .
+            // "<b>📞 Phone:</b> {$phone}\n" .
+            // "<b>🏠 Address:</b> {$address}";
+            $text =
+            "<b>📦 Order Information</b>\n\n" .
+            "<b>🧾 Order No:</b> N/A\n" .
+            "<b>📅 Order Date:</b> N/A\n\n" .
+            "<b>👤 Customer Name:</b> N/A\n" .
+            "<b>📧 Email:</b> N/A" . "\n" .
+            "<b>📞 Phone:</b> N/A\n" .
+            "<b>🏠 Address:</b> N/A";
+
+            // Broadcast to Pusher
+            TelegramService::sendMessage($text, $keyboard);
+            broadcast(new PrivateChannelEvent("New order by" . $validated['order_tel'], (int)$proId))->toOthers();
+        }
+
         return $this->show($order_masters->order_id);
     }
 
@@ -194,7 +246,6 @@ class OrderMasterController extends Controller
         ->join('customers as cu','om.order_customer_id','=',"customer_id")
         ->where('order_id', $id)
             ->where('om.is_deleted', 0)
-            ->where('om.created_by', $uid)
             ->where('om.is_active', 1)
             ->select('cu.customer_name','cu.customer_email',"om.*")->get();
         if ($orderMasters->isEmpty()) {
@@ -249,6 +300,7 @@ class OrderMasterController extends Controller
             'order_date' => 'date',
             'order_payment_status' => 'nullable|string|max:255',
             'order_payment_method' => 'nullable|string|max:255',
+            'deliver_id' => 'nullable|integer',
             'delivery_fee' => 'numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
             'order_subtotal' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
             'order_discount' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
@@ -273,6 +325,7 @@ class OrderMasterController extends Controller
             // 'order_no' => $order_no,
             'order_tel' => $validated['order_tel'],
             'order_address' => $validated['order_address'],
+            'deliver_id' => $validated['deliver_id'],
             'order_date' => $validated['order_date'],
             'delivery_fee' => $validated['delivery_fee'],
             'order_payment_status' => $validated['order_payment_status'],
@@ -339,6 +392,8 @@ class OrderMasterController extends Controller
 
     public function cancel(string $id)
     {
+        $user = Auth::user();
+        $proId = $user->profile_id;
         $orders = OrderMaster::where('order_id', $id);
         // $orderItems = OrderItems::where('order_id', $id);
         if (!$orders) {
@@ -349,10 +404,9 @@ class OrderMasterController extends Controller
         }
         $orders->update([
             'is_cancelled' => 1,
+            'status' => 7,
         ]);
-        // $orderItems->update([
-        //     'is_cancelled' => 1,
-        // ]);
+        broadcast(new OnlineEvent('New Status', $proId))->toOthers();
         return response()->json([
             'message' => 'order cancelled successfully!',
             'status' => 200,
@@ -362,6 +416,8 @@ class OrderMasterController extends Controller
 
     public function uncancel(string $id)
     {
+        $user = Auth::user();
+        $proId = $user->profile_id;
         $orders = OrderMaster::where('order_id', $id);
         // $orderItems = OrderItems::where('order_id', $id);
         if (!$orders) {
@@ -372,10 +428,10 @@ class OrderMasterController extends Controller
         }
         $orders->update([
             'is_cancelled' => 0,
+            'status' => 1,
         ]);
-        // $orderItems->update([
-        //     'is_cancelled' => 0,
-        // ]);
+
+        broadcast(new OnlineEvent('New Status', $proId))->toOthers();
         return response()->json([
             'message' => 'order cancelled successfully!',
             'status' => 200,
@@ -408,31 +464,7 @@ class OrderMasterController extends Controller
             'data' => $orders->first()
         ]);
     }
-    public function viewOrder(string $id)
-    {
-        // $user = Auth::user();
-        // $proId = $user->profile_id;
-        // $orders = OrderMaster::where('order_id', $id);
-        // $orderItems = OrderItems::where('order_id', $id);
-        // if (!$orders) {
-        //     return response()->json([
-        //         'message' => 'order not found!',
-        //         'status' => 404,
-        //     ]);
-        // }
-        // $orders->update([
-        //     'status' => 3,
-        // ]);
-        // if (!$order_items->isEmpty()) {
-        //     foreach ($order_items as $item) {
-        //         $item->update([
-        //             'status' => 3,
-        //         ]);
-        //     }
-        // }
-        // broadcast(new OnlineEvent('view order', $proId))->toOthers();
-        // return $this->show($id);
-    }
+
 
 
     public function orderTransection(){
@@ -456,6 +488,7 @@ class OrderMasterController extends Controller
         DB::raw('0 AS images'),
         DB::raw('0 AS attributes'),
         DB::raw('SUM(CASE WHEN om.sale_type = "sale" THEN oi.quantity * oi.item_price ELSE oi.quantity * oi.item_wholesale_price END) AS amount_sold'),
+        DB::raw('SUM(oi.quantity) AS total_quantity_sold'),
         )
         ->where('om.is_deleted',0)
         ->where('p.id',$proId)
@@ -481,5 +514,76 @@ class OrderMasterController extends Controller
             'status' => 200,
             'data' => $orders,
         ]);
+    }
+
+
+
+    public function statusOrder($id,$status){
+        $user = Auth::user();
+        $proId = $user->profile_id;
+        $order = OrderMaster::find($id);
+        if (empty($order)) {
+            return response()->json([
+                'message' => 'order not found!',
+                'status' => 404,
+            ]);
+        }
+        if($status == 7){
+            $order->is_cancelled = 1;
+            $order->status = $status;
+            $order->save();
+        }else{
+            $order->status = $status;
+            $order->is_cancelled = 0;
+            $order->save();
+        }
+
+        broadcast(new OnlineEvent('New Status', $proId))->toOthers();
+        return response()->json([
+            'message' => 'new status!',
+            'status' => 200,
+        ]);
+    }
+
+    public function addDeliver($id,$deliver_id){
+        $user = Auth::user();
+        $proId = $user->profile_id;
+        $order = OrderMaster::find($id);
+        if (empty($order)) {
+            return response()->json([
+                'message' => 'order not found!',
+                'status' => 404,
+            ]);
+        }
+
+        $order->deliver_id = $deliver_id;
+        $order->save();
+        broadcast(new OnlineEvent('New Status', $proId))->toOthers();
+        return response()->json([
+            'message' => 'update delivery sevice!',
+            'status' => 200,
+        ]);
+    }
+
+
+    public function addDeliveryFee($id,$delivery_fee){
+        $user = Auth::user();
+        $proId = $user->profile_id;
+        $order = OrderMaster::find($id);
+        if (empty($order)) {
+            return response()->json([
+                'message' => 'order not found!',
+                'status' => 404,
+            ]);
+        }
+
+        $order->delivery_fee = $delivery_fee;
+        $order->order_total = $order->order_total + $delivery_fee;
+        $order->save();
+        return response()->json([
+            'message' => 'update delivery fee!',
+            'status' => 200,
+        ]);
+        broadcast(new OnlineEvent('New Status', $proId))->toOthers();
     }
 }

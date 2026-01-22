@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Events\OnlineEvent;
 use App\Models\StockDetails;
 use App\Models\StockMaster;
+use App\Models\Items;
 use App\Models\ExchangeRate;
 use App\Models\StockAttribute;
 use App\Services\DetailService;
@@ -526,6 +527,10 @@ class StockMasterController extends Controller
                 // 'attributes' => json_encode($attr ?? []),
                 'transection_date' => $stock_date,
                 'expire_date' => $item['expire_date'],
+            ]);
+
+            Items::find($item['item_id'])->update([
+                'cost_price' => $item['item_cost'],
             ]);
         }
 

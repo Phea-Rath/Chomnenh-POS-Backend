@@ -238,7 +238,7 @@ class DetailService {
                 'categories.category_name',
                 'order_masters.created_by as created_by'
             )
-            ->where('order_masters.created_by', $uid)
+            // ->where('order_masters.created_by', $uid)
             ->where('order_items.is_deleted', 0)
             ->where('order_items.order_id', $id)
             ->get();
@@ -330,7 +330,7 @@ class DetailService {
             ->where('oi.item_id', $item_id)
             ->where('oi.is_deleted', 0)
             ->where('om.is_deleted', 0)
-            ->where('om.status', 6)
+            ->whereIn('om.status', [4,5,6])
             ->sum('oi.quantity');
             if(!$totalOrdered){
                 $totalOrdered = 0;

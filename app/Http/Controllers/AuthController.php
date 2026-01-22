@@ -226,4 +226,29 @@ class AuthController extends Controller
         return response($respones, 200);
 
     }
+
+    public function forgotPassword(Request $request)
+    {
+        $request->validate([
+            'phone_number' => 'required|string',
+            'new_password' => 'required|string|min:6',
+        ]);
+
+        $phoneNumber = $request->phone_number;
+        $newPassword = $request->new_password;
+
+        $user = Users::where('phone_number', $phoneNumber)->first();
+
+        if (!$user) {
+            return response()->json(['message' => 'User not found'], 404);
+        }
+
+        $user->password = bcrypt($newPassword);
+        $user->save();
+
+        return response()->json([
+            'message' => 'Password updated successfully',
+            'status' => 200
+        ], 200);
+    }
 }

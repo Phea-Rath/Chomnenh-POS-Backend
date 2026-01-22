@@ -30,7 +30,7 @@ class PermissionController extends Controller
             ->select('permission.user_id', 'permission.menu_id', 'menus.menu_name', 'menus.menu_type', 'menus.menu_icon', 'menus.menu_path');
         if ($role === 1) {
             $permissions = $query->get();
-        } else if ($role === 2) {
+        } else if ($role === 3 && $role === 3) {
             // filter by profile_id
             $permissions = $query->where('profile_id', $proId)->get();
         } else {

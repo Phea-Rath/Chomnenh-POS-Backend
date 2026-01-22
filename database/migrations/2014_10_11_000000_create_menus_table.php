@@ -27,7 +27,7 @@ return new class extends Migration
             ["menu_name" => "Orders", 'menu_type' => 0, 'menu_icon' => 'PiShoppingCartBold', 'menu_path' => "/dashboard/orders"],
             ["menu_name" => "ការកំណត់", 'menu_type' => 0, 'menu_icon' => 'GrSettingsOption', 'menu_path' => "/dashboard/setting"],
             ["menu_name" => "ប្រភេទទំនិញ", 'menu_type' => 1, 'menu_icon' => 'MdCategory', 'menu_path' => "/dashboard/category"],
-            ["menu_name" => "សម្រង់តម្លៃ", 'menu_type' => 1, 'menu_icon' => 'IoColorPaletteSharp', 'menu_path' => "/dashboard/quotations"],
+            ["menu_name" => "សម្រង់តម្លៃ", 'menu_type' => 1, 'menu_icon' => 'MdOutlineRequestQuote', 'menu_path' => "/dashboard/quotations"],
             // ["menu_name" => "ទំហំ", 'menu_type' => 1, 'menu_icon' => 'GiResize', 'menu_path' => "/dashboard/size"],
             ["menu_name" => "Brand", 'menu_type' => 1, 'menu_icon' => 'AiFillLike', 'menu_path' => "/dashboard/brand"],
             ["menu_name" => "Scale", 'menu_type' => 1, 'menu_icon' => 'FaBalanceScaleLeft', 'menu_path' => "/dashboard/scale"],
@@ -35,7 +35,7 @@ return new class extends Migration
             // ["menu_name" => "Stock Type", 'menu_type' => 1, 'menu_icon' => 'GrDocumentStore', 'menu_path' => "/dashboard/stock-type"],
             ["menu_name" => "ប្រភេទចំណាយ", 'menu_type' => 1, 'menu_icon' => 'GiMoneyStack', 'menu_path' => "/dashboard/expanse-type"],
             ["menu_name" => "ការចំណាយ", 'menu_type' => 1, 'menu_icon' => 'FaMoneyBillTrendUp', 'menu_path' => "/dashboard/expanse"],
-            ["menu_name" => "លក់រាយ", 'menu_type' => 2, 'menu_icon' => 'MdShoppingCart', 'menu_path' => "/dashboard/orders"],
+            ["menu_name" => "Order Tracking", 'menu_type' => 2, 'menu_icon' => 'CgTrack', 'menu_path' => "/dashboard/order-tracking"],
             ["menu_name" => "បញ្ចុលស្តុក", 'menu_type' => 2, 'menu_icon' => 'AiFillProduct', 'menu_path' => "/dashboard/stock-list"],
             ["menu_name" => "ផ្ទេរស្តុក", 'menu_type' => 2, 'menu_icon' => 'FaTruck', 'menu_path' => "/dashboard/stock-transfer-list"],
             ["menu_name" => "តាមដានស្តុក", 'menu_type' => 2, 'menu_icon' => 'FaListCheck', 'menu_path' => "/dashboard/record-stock"],
@@ -56,6 +56,7 @@ return new class extends Migration
             ["menu_name" => "របាយការណ៍ទំនិញលក់", 'menu_type' => 4, 'menu_icon' => 'TbReportAnalytics', 'menu_path' => "/dashboard/report/sales_item"],
             ["menu_name" => "របាយការណ៍ចំណាយ", 'menu_type' => 4, 'menu_icon' => 'TbReportAnalytics', 'menu_path' => "/dashboard/expanse/report"],
             ["menu_name" => "ការបញ្ជាទិញដោយបុគ្គលិក", 'menu_type' => 4, 'menu_icon' => 'TbReportAnalytics', 'menu_path' => "/dashboard/purchases/report_user"],
+            ["menu_name" => "Delivery Service", 'menu_type' => 4, 'menu_icon' => 'FaTruckFast', 'menu_path' => "/dashboard/purchases/delivers"],
         ]);
     }
 

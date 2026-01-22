@@ -88,6 +88,7 @@ class orderPageController extends Controller
             ->where('oi.item_id', $id)
             ->where('oi.is_deleted', 0)
             ->where('om.is_deleted', 0)
+            ->whereIn('om.status', [4,5,6])
             ->sum('oi.quantity');
         if(!$totalOrdered){
             $totalOrdered = 0;

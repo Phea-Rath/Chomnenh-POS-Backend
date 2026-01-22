@@ -5,6 +5,9 @@ namespace App\Http\Controllers;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Quotation;
+use App\Models\ExchangeRate;
+use App\Models\OrderMaster;
+use App\Models\OrderItems;
 use App\Models\QuotationDetail;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -25,7 +28,7 @@ class QuotationController extends Controller
     {
         $quotations = Quotation::with([
                 'customer:customer_id,customer_name',
-                'details.item:item_id,item_name'
+                'details.item:item_id,item_name,item_cost'
             ])
             ->orderBy('created_at', 'desc')
             ->get()
@@ -283,6 +286,103 @@ class QuotationController extends Controller
                 'error' => $e->getMessage()
             ], 500);
         }
+    }
+
+    public function updateStatusQuote($id, $status){
+        $quote = Quotation::find($id);
+
+        if(empty($quote)){
+            return response()->json([
+                'message' => 'Quotation not found',
+                'status' => 404,
+            ], 404);
+        }
+
+        $quote->status = $status;
+        $quote->save();
+        if($status == 'approved'){
+            $this->approved($id);
+        }
+        return response()->json([
+            'message' => 'Quotation updated status',
+            'status' => 200,
+        ], 200);
+    }
+
+
+    public function approved($id){
+        $user = Auth::user();
+        $uid = $user->id;
+        $proId = $user->profile_id;
+        $now = now();
+        $month = $now->format('m');
+        $year = $now->format('y');
+
+
+        $exchange_rate = ExchangeRate::find($proId);
+        $orderCount = OrderMaster::where('created_by', $uid)
+            ->whereMonth('order_date', $month)
+            ->whereYear('order_date', $now->format('Y'))
+            ->count();
+        $order_no = 'ORD' . $proId . $year . $month . '-' . str_pad($orderCount + 1, 4, '0', STR_PAD_LEFT);
+        $order_date = $now->format('Y-m-d');
+
+        $quote = Quotation::with([
+                'customer:customer_id,customer_name',
+                'details.item:item_id,item_name,item_cost'
+            ])->findOrFail($id);
+
+        $order_masters = OrderMaster::create([
+            'order_no' => $order_no,
+            'order_customer_id' => $quote->customer_id ?? null,
+            'sale_type' => 'wholesale' ?? null,
+            'online' => 0,
+            'status' => 6,
+            'order_tel' => null,
+            'deliver_id' => 1,
+            'order_address' => null,
+            'order_date' => now()->format('Y-m-d'),
+            'delivery_fee' => $quote->delivery_fee,
+            'order_payment_status' => 'paid',
+            'order_payment_method' => 'cash',
+            'balance' => 0,
+            'payment' => $quote->grand_total,
+            'order_subtotal' => $quote->order_total,
+            'order_discount' => $quote->total_discount,
+            'order_tax' => $quote->tax ?? 0,
+            'order_total' => $quote->grand_total,
+            'created_by' => $uid,
+            'order_type' => null,
+        ]);
+
+        $order_id = $order_masters->order_id;
+        $order_items = [];
+        // $order_details = [];
+
+        foreach ($quote->details as $item) {
+            $order_items[] = OrderItems::create([
+                'order_id' => $order_id,
+                'item_id' => $item['item_id'],
+                'item_name' => $item['item_name'],
+                'item_price' => $item['price'],
+                'discount' => $item['discount'],
+                'price' => $item['total_price'],
+                'quantity' => $item['quantity'],
+                'item_cost' => $item['item']->item_cost ?? 0,
+                'item_wholesale_price' => $item['price'] ?? 0,
+                'exchange_rate' => (double)$exchange_rate->usd_to_khr,
+            ]);
+        }
+
+        $quoteUpdate = Quotation::find($id);
+        $quoteUpdate->status = 'approved';
+        $quoteUpdate->save();
+
+        // return response()->json([
+        //     'message' => 'Quotation approved successfull',
+        //     'status' => 200,
+        //     'data' => $order_masters
+        // ], 201);
     }
 
 }

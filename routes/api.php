@@ -52,6 +52,7 @@ use Illuminate\Support\Facades\Broadcast;
 */
 
 Route::post("/login", [AuthController::class, "login"]);
+Route::post("/new-password", [AuthController::class, "forgotPassword"]);
 Route::post('/send-otp', [OtpController::class, 'sendOtp']);
 Route::post('/verify-otp', [OtpController::class, 'verifyOtp']);
 
@@ -106,6 +107,9 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     //O
     Route::resource('order_masters', OrderMasterController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
     Route::put('/order_cancel/{id}', [OrderMasterController::class, 'cancel']);
+    Route::put('/status_order/{id}/{status}', [OrderMasterController::class, 'statusOrder']);
+    Route::put('/edit_delivery_service/{id}/{deliver_id}', [OrderMasterController::class, 'addDeliver']);
+    Route::put('/edit_delivery_fee/{id}/{delivery_fee}', [OrderMasterController::class, 'addDeliveryFee']);
     Route::resource('order_items', OrderItemController::class)->only(['index', 'show']);
     Route::put('/order_uncancel/{id}', [OrderMasterController::class, 'uncancel']);
     Route::get('/quan_order_by_attr', [OrderItemController::class, 'quantityInOrderByItemId']);
@@ -158,8 +162,9 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::get('/sale_by_hour',[DashboardController::class, 'saleByHour']);
 
     //Q
-    // Route::post('/quotations',[QuotationController::class, 'store']);
+    Route::put('/quotation_approved/{id}',[QuotationController::class, 'approved']);
     Route::apiResource('quotations', QuotationController::class);
+    Route::put("/quote_status/{id}/{status}", [QuotationController::class, "updateStatusQuote"]);
 
     // Route::get("/users",[AuthController::class, "index"]);
     Route::resource('scales', ScaleController::class)->only(['index', 'show', 'store', 'update', 'destroy']);

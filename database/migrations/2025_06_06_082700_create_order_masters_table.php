@@ -14,8 +14,8 @@ return new class extends Migration
         Schema::create('order_masters', function (Blueprint $table) {
             $table->id("order_id");
             $table->string("order_no");
-            $table->string("order_tel");
-            $table->string("order_address");
+            $table->string("order_tel")->nullable();
+            $table->string("order_address")->nullable();
             $table->date("order_date");
             $table->double("delivery_fee")->nullable();
             $table->unsignedInteger("deliver_id")->nullable();
@@ -35,7 +35,7 @@ return new class extends Migration
             $table->boolean("is_active")->default(true);
             $table->boolean("is_deleted")->default(0);
             $table->boolean("online")->default(0);
-            $table->boolean("is_cacelled")->default(0);
+            $table->boolean("is_cancelled")->default(0);
             $table->timestamps();
             $table->foreign("created_by")->references("id")->on("users");
             $table->foreign("order_customer_id")->references("customer_id")->on("customers");

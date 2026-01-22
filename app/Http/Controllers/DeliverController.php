@@ -86,14 +86,14 @@ class DeliverController extends Controller
 			$delivers = DB::table('delivers')
 				->join('users', 'delivers.created_by', '=', 'users.id')
 				->where('users.profile_id', $proId)
-				->select('delivers.*')
 				->where('delivers.deliver_id', $id)
+				->select('delivers.*')
 				->get();
 		} else {
 			$delivers = DB::table('delivers')
 				->join('users', 'delivers.created_by', '=', 'users.id')
 				->where('users.profile_id', $proId)
-				->where('delivers.created_by', $uid)
+				// ->where('delivers.created_by', $uid)
 				->select('delivers.*')
 				->where('delivers.deliver_id', $id)
 				->get();

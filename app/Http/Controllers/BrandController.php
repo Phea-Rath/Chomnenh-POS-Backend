@@ -6,6 +6,7 @@ use App\Models\Brands;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
+use App\Services\TelegramService;
 
 class BrandController extends Controller
 {
@@ -48,6 +49,7 @@ class BrandController extends Controller
             // 'data'=>$students->items(),
             'data' => array_reverse($brands->toArray()),
         ]);
+
     }
     public function store(Request $request)
     {

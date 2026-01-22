@@ -37,19 +37,34 @@ class ItemController extends Controller
     {
         $user = Auth::user();
         $proId = $user->profile_id;
-        $limit = $request->input('limit', 10);
+        $limit = $request->input('limit', 12);
         $page = $request->input('page', 1);
 
-        $rawItems = DB::table('items')
+        // 1. Capture the search term
+        $search = $request->input('search');
+
+
+        $query = DB::table('items')
             ->leftJoin('users', 'users.id', '=', 'items.created_by')
             ->leftJoin('profiles', 'users.profile_id', '=', 'profiles.id')
             ->where('profiles.id', $proId)
-            ->where('items.is_deleted', 0)
-            ->select(
-                'items.*',
-            )->paginate($limit, ['*'], 'page', $page);
+            ->where('items.is_deleted', 0);
 
-        if ($rawItems->count() == 0) {
+        // 2. Add Search Logic (Conditional)
+        if (!empty($search)) {
+            $query->where(function($q) use ($search) {
+                $q->where('items.item_name', 'LIKE', "%{$search}%")
+                ->orWhere('items.item_code', 'LIKE', "%{$search}%");
+                // Add other columns here if needed, e.g., ->orWhere('items.description', 'LIKE', ...)
+            });
+        }
+
+        $rawItems = $query->select('items.*')
+            ->orderBy('items.item_id', 'DESC')
+            ->paginate($limit, ['*'], 'page', $page);
+
+        // 3. Handle Empty Results
+        if ($rawItems->total() == 0) {
             return response()->json([
                 'message' => 'Items not found!',
                 'status' => 404,
@@ -62,12 +77,16 @@ class ItemController extends Controller
             $items[] = $this->itemService->getItem($item->item_id);
         }
 
-
-
         return response()->json([
             'message' => 'Items selected successfully',
             'status' => 200,
-            'data' => array_reverse($items),
+            'data' => $items,
+            'pagination' => [
+                'current_page' => $rawItems->currentPage(),
+                'per_page' => $rawItems->perPage(),
+                'total' => $rawItems->total(),
+                'last_page' => $rawItems->lastPage(),
+            ]
         ]);
     }
 
@@ -76,16 +95,8 @@ class ItemController extends Controller
     {
 
         $attributes = json_decode($request->input('attributes'), true);
-        // $attributes = $request->input('attributes');
         $category_id = $request->category_id;
         $item_id = Items::max("item_id");
-        // if($item_id){
-        //     return response()->json([
-        //         'message' => 'Attributes processed successfully!',
-        //         'status' => 200,
-        //         'data' => $item_id,
-        //     ], 200);
-        // }
         $edit_id = $request->input('edit_id');
         // dd($attributes);
         foreach ($attributes as $attr) {
@@ -94,17 +105,9 @@ class ItemController extends Controller
             $id = Attribute::where('name', $attr['name'])->pluck('id')->first();
 
             if ($id) {
-                // Attribute exists → only insert value
-                // AttributeValue::create([
-                //     'item_id' => $item_id,
-                //     'attribute_id' => $existing->id,
-                //     'value' => $attr['value']
-                // ]);
                 $arrValue = $attr['value'];
 
                 $values = array_map('trim', explode(',', $arrValue ));
-
-                // dd($values);
 
                 $payload = [
                     'item_id' => $edit_id ?? $item_id,
@@ -505,179 +508,85 @@ class ItemController extends Controller
     {
         $user = Auth::user();
         $uid = $user->id;
+        $itemsData = $request->input('items'); // This retrieves the JSON strings
+        $itemsFiles = $request->file('items'); // This retrieves the uploaded files
 
-        $items = $request->input('items');
-        if (!$items || !is_array($items)) {
-            return response()->json([
-                'message' => 'No items provided!',
-                'status' => 400,
-            ], 400);
+        if (empty($itemsData)) {
+            return response()->json(['message' => 'No data provided', 'status' => 400], 400);
         }
+        $itemCode = 'PRD-' . str_pad((Items::max('item_id') + 1), 5, '0', STR_PAD_LEFT);
+        $stock_no = now()->format('Ymd') . '-' . str_pad((StockMaster::max('stock_id') + 1), 5, '0', STR_PAD_LEFT);
+        $stock_date = now()->format('Y-m-d');
 
-        $createdItems = [];
-        $errors = [];
-        DB::beginTransaction();
+        // Generate barcode
+        $currentDate = Carbon::now();
+        $year = $currentDate->format('y'); // Last two digits of year (e.g., 25 for 2025)
+        $month = $currentDate->format('m'); // Two-digit month (e.g., 09)
+        $day = $currentDate->format('d'); // Two-digit day (e.g., 01)
+        $profile_id = '01'; // Assuming a fixed profile_id for this example
+        $created_by = str_pad($uid, 2, '0', STR_PAD_LEFT); // Two-digit created_by (e.g., 02)
+
+        // Count items created in the current month for barcode
+        $monthStart = $currentDate->startOfMonth()->format('Y-m-d');
+        $monthEnd = $currentDate->endOfMonth()->format('Y-m-d');
+        $itemCount = Items::whereBetween('created_at', [$monthStart, $monthEnd])->count() + 1;
+        $itemCountPadded = str_pad($itemCount, 5, '0', STR_PAD_LEFT); // Five-digit item count (e.g., 00001)
+
+        // Construct barcode (e.g., 010225090100001)
+        $barcode = $profile_id . $created_by . $year . $month . $day . $itemCountPadded;
+
         try {
-            // Get current date for barcode generation
-            $currentDate = Carbon::now();
-            $year = $currentDate->format('y'); // Last two digits of year (e.g., 25 for 2025)
-            $month = $currentDate->format('m'); // Two-digit month (e.g., 09)
-            $day = $currentDate->format('d'); // Two-digit day (e.g., 01)
-            $profile_id = '01'; // Assuming a fixed profile_id for this example
-            $created_by = str_pad($uid, 2, '0', STR_PAD_LEFT); // Two-digit created_by (e.g., 02)
+            DB::beginTransaction();
 
-            // Count items created in the current month for barcode
-            $monthStart = $currentDate->startOfMonth()->format('Y-m-d');
-            $monthEnd = $currentDate->endOfMonth()->format('Y-m-d');
-            $itemCount = Items::whereBetween('created_at', [$monthStart, $monthEnd])->count();
+            foreach ($itemsData as $index => $jsonString) {
+                // 1. Decode the JSON string sent from React
+                $data = json_decode($jsonString, true);
 
-            foreach ($items as $index => $item) {
-                // Increment item count for each item
-                $itemCount++;
-                $itemCountPadded = str_pad($itemCount, 5, '0', STR_PAD_LEFT); // Five-digit item count (e.g., 00001)
-
-                // Construct barcode (e.g., 010225090100001)
-                $barcode = $profile_id . $created_by . $year . $month . $day . $itemCountPadded;
-
-                // Ensure $item is an array (decode if JSON string)
-                if (is_string($item)) {
-                    $item = json_decode($item, true);
-                }
-                if (!is_array($item)) {
-                    $errors[] = "Row " . ($index + 1) . " is not a valid item object.";
-                    continue;
-                }
-
-                $filename = null;
-                if ($request->hasFile("items.$index.item_image")) {
-                    $file = $request->file("items.$index.item_image");
-                    $filename = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
-                    $directory = 'public/images';
-
-                    if (!Storage::exists($directory)) {
-                        Storage::makeDirectory($directory);
-                    }
-
-                    $path = $file->storeAs($directory, $filename);
-
-                        if (!$path) {
-                            $errors[] = "Row " . ($index + 1) . ": Failed to upload image file.";
-                            continue;
-                        }
-                } else {
-                    $filename = null;
-                }
-
-                // Clean up and normalize input
-                // $item['color_id'] = isset($item['color_id']) && is_numeric($item['color_id']) ? (int)$item['color_id'] : null;
-                // $item['color_pick'] = $item['color_pick'] ?? '#000000';
-                $item['item_cost'] = isset($item['item_cost']) && is_numeric($item['item_cost']) ? $item['item_cost'] : 0;
-                $item['wholesale_price'] = isset($item['wholesale_price']) && is_numeric($item['wholesale_price']) ? $item['wholesale_price'] : 0;
-                $item['item_price'] = isset($item['item_price']) && is_numeric($item['item_price']) ? $item['item_price'] : 0;
-                // Store single import image as JSON array for consistency with multi-image support
-                $item['item_image'] = $filename ? json_encode([$filename]) : null;
-                $item['expire_date'] = $item['expire_date'] ?? null;
-                $item['term'] = $item['term'] ?? null;
-                $item['quantity'] = isset($item['quantity']) && is_numeric($item['quantity']) ? $item['quantity'] : null;
-
-                // Validate required fields
-                if (
-                    empty($item['item_name']) ||
-                    empty($item['category_id']) ||
-                    empty($item['brand_id']) ||
-                    empty($item['scale_id']) ||
-                    empty($item['size_id'])
-                ) {
-                    $errors[] = "Row " . ($index + 1) . " missing required fields.";
-                    continue;
-                }
-
-                $itemMaxId = (int) Items::max('item_id');
-                $itemCode = 'PRD-' . str_pad($itemMaxId + 1, 5, '0', STR_PAD_LEFT);
-
-                $stockMaxId = (int) StockMaster::max('stock_id');
-                // $stock_no = now()->format('Ymd') . '-' . str_pad($stockMaxId + 1, 5, '0', STR_PAD_LEFT);
-                // $stock_date = now()->format('Y-m-d');
-                $item['item_code'] = $item['item_code'] ?? $itemCode;
-
-                // If color_id is 0 or null, check if color_pick exists, else create new color
-                if (empty($item['color_id']) || $item['color_id'] == 0) {
-                    $color = Colors::where('color_pick', $item['color_pick'])->first();
-                    if ($color) {
-                        $item['color_id'] = $color->color_id;
-                    } else {
-                        $color = Colors::create([
-                            'color_name' => $item['color_pick'],
-                            'color_pick' => $item['color_pick'],
-                            'created_by' => $uid,
-                        ]);
-                        $item['color_id'] = $color->color_id;
-                    }
-                }
-
-                // Create item with barcode
-                $createdItem = Items::create([
-                    'item_code' => $item['item_code'],
-                    'item_name' => $item['item_name'],
-                    'category_id' => $item['category_id'],
-                    'brand_id' => $item['brand_id'],
-                    'scale_id' => $item['scale_id'],
-                    'discount' => 0,
-                    'size_id' => $item['size_id'],
-                    'color_id' => $item['color_id'],
-                    'color_pick' => $item['color_pick'],
-                    'item_type' => 0,
-                    'item_cost' => $item['item_cost'],
-                    'wholesale_price' => $item['wholesale_price'],
-                    'item_price' => $item['item_price'],
-                    'created_by' => $uid,
-                    'item_image' => $item['item_image'],
+                // 2. Insert the Item into the database
+                $item = Items::create([
+                    'item_code' => $itemCode,
+                    'item_name'         => $data['item_name'],
+                    'item_price'        => $data['item_price'],
+                    'item_cost'         => 0,
+                    'wholesale_price' => $data['wholesale_price'],
+                    'category_id'  => $data['category_id'],
+                    'brand_id'     => $data['brand_id'],
+                    'scale_id'     => $data['scale_id'],
+                    'created_by'   => $uid,
                     'barcode' => $barcode,
                 ]);
+                $request = new Request($data);
+                $this->storeAttr($request);
 
-                // Only create stock if expire_date, term, and quantity are present and quantity > 0
-                // if (
-                //     !empty($item['expire_date']) &&
-                //     !empty($item['term']) &&
-                //     !empty($item['quantity']) &&
-                //     is_numeric($item['quantity']) &&
-                //     $item['quantity'] > 0
-                // ) {
-                //     $stockMaster = StockMaster::create([
-                //         'stock_no' => $stock_no,
-                //         'stock_type_id' => 2,
-                //         'from_warehouse' => 2,
-                //         'warehouse_id' => 1,
-                //         'stock_date' => $stock_date,
-                //         'stock_remark' => 'Imported from Excel',
-                //         'stock_created_by' => $uid,
-                //     ]);
+                // 3. Handle Images for this specific item index
+                if (isset($itemsFiles[$index]['images'])) {
+                    foreach ($itemsFiles[$index]['images'] as $file) {
+                        $filename = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
+                        $file->storeAs('public/images', $filename);
+                        $image = Image::create([
+                            'image' => $filename,
+                        ]);
 
-                //     StockDetails::create([
-                //         'stock_id' => $stockMaster->stock_id,
-                //         'item_id' => $createdItem->item_id,
-                //         'quantity' => $item['quantity'],
-                //         'expire_date' => $item['expire_date'],
-                //         'transection_date' => $stock_date,
-                //     ]);
-                // } else {
-                //     $errors[] = "Row " . ($index + 1) . " missing expire_date, term, or quantity. Stock not created.";
-                // }
-
-                $createdItems[] = $createdItem;
+                        $image = ItemImage::create([
+                            'item_id' => $item->item_id,
+                            'image_id' => $image->id,
+                        ]);
+                    }
+                }
             }
+
             DB::commit();
+
             return response()->json([
                 'message' => 'Items imported successfully!',
-                'status' => 201,
-                'data' => $createdItems,
-                'errors' => $errors,
+                'status'  => 201
             ], 201);
+
         } catch (\Exception $e) {
             DB::rollBack();
             return response()->json([
                 'message' => 'Import failed: ' . $e->getMessage(),
-                'status' => 500,
+                'status'  => 500
             ], 500);
         }
     }

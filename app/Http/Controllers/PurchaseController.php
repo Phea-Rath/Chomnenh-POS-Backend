@@ -396,19 +396,11 @@ class PurchaseController extends Controller
                     'created_at' => now(),
                     'updated_at' => now(),
                 ]);
-                $detailId = StockDetails::max("detail_id");
 
-                // dd($detailId);
-                $purchase_details = $item->attributes;
+                Items::find($item->item_id)->update([
+                    'cost_price' => (int)$item->item_cost,
+                ]);
 
-                foreach($purchase_details as $attr){
-                    StockAttribute::create([
-                        'stock_detail_id'=> $detailId,
-                        'item_id' =>$item->item_id,
-                        'attribute_id' =>$attr->name_id,
-                        'attribute_value_id' =>$attr->value_id,
-                    ]);
-                };
             }
 
             DB::commit();

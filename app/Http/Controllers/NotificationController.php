@@ -102,12 +102,19 @@ class NotificationController extends Controller
         $orderMasters = DB::table('order_masters as om')
             ->join('users', 'om.created_by', '=', 'users.id')
             ->join('profiles', 'users.profile_id', '=', 'profiles.id')
+            ->join('delivers', 'om.deliver_id', '=', 'delivers.deliver_id')
             ->where('profiles.id', $proId)
             ->where('om.is_deleted', 0)
             ->where('om.online', 1)
-            ->select('om.*')
+            ->select('om.*', 'delivers.deliver_name', 'delivers.image as deliver_image')
             ->orderBy('om.order_id', 'desc')
             ->get();
+        foreach ($orderMasters as $item) {
+            if ($item->deliver_image) {
+                $filenameOnly = basename($item->deliver_image);
+                $item->deliver_image = url('storage/images/' . $filenameOnly);
+            }
+        }
 
         if ($orderMasters->isEmpty()) {
             return response()->json([
