@@ -115,9 +115,12 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::get('/quan_order_by_attr', [OrderItemController::class, 'quantityInOrderByItemId']);
     Route::get('/orders/max-id', [OrderMasterController::class, 'getMaxId']);
     Route::get('/order_transection', [OrderMasterController::class, 'orderTransection']);
+    Route::get('/order_by_user', [OrderMasterController::class, 'orderByUser']);
     //P
     Route::post('/profile/image/{id}', [ProfileController::class, 'updateImage']);
     Route::put('/profile/number_phone/{id}', [ProfileController::class, 'updateNumberPhone']);
+    Route::put('/profile/telegram_service/{id}', [ProfileController::class, 'updateTelegramService']);
+    Route::post('/profile/qr_code/{id}', [ProfileController::class, 'updateImageQr']);
     Route::put('/profile/name/{id}', [ProfileController::class, 'updateName']);
     Route::resource('purchase', PurchaseController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
     Route::put('/purchase_cancel/{id}', [PurchaseController::class, 'purchaseCancel']);

@@ -11,6 +11,7 @@ use App\Models\Customers;
 use App\Models\OrderMaster;
 use App\Models\ExchangeRate;
 use App\Models\OrderAttribute;
+use App\Models\Users;
 use App\Services\DetailService;
 use App\Services\AttributeService;
 use DB;
@@ -49,6 +50,46 @@ class OrderMasterController extends Controller
             ->join('profiles', 'users.profile_id', '=', 'profiles.id')
             ->where('om.is_deleted', 0)
             ->where('profiles.id', $proId)
+            ->where('om.is_active', 1)
+            ->select('cu.customer_name','cu.customer_email', 'dl.deliver_name', 'dl.image as deliver_image',"om.*")->get();
+
+        foreach ($orderMasters as $item) {
+            if ($item->deliver_image) {
+                $filenameOnly = basename($item->deliver_image);
+                $item->deliver_image = url('storage/images/' . $filenameOnly);
+            }
+        }
+
+        if ($orderMasters->isEmpty()) {
+            return response()->json([
+                'message' => 'Order masters get fail!',
+                'status' => 404,
+            ]);
+        }
+
+        // Attach items to each order
+        $ordersWithItems = $orderMasters->map(function ($order) {
+            $order->items = $this->detailService->orderDetailById($order->order_id);
+            return $order;
+        });
+
+        return response()->json([
+            'message' => 'Order masters fetched successfully!',
+            'status' => 200,
+            'data' => array_reverse($ordersWithItems->toArray()),
+        ]);
+    }
+    public function orderByUser()
+    {
+        $user = auth::user();
+        $uid = $user->id;
+        $proId = $user->profile_id;
+        $orderMasters = DB::table('order_masters as om')
+            ->join('customers as cu','om.order_customer_id','=',"cu.customer_id")
+            ->join('delivers as dl','om.deliver_id','=',"dl.deliver_id")
+            ->join('users', 'om.created_by', '=', 'users.id')
+            ->where('om.is_deleted', 0)
+            ->where('om.created_by', $uid)
             ->where('om.is_active', 1)
             ->select('cu.customer_name','cu.customer_email', 'dl.deliver_name', 'dl.image as deliver_image',"om.*")->get();
 
@@ -123,6 +164,7 @@ class OrderMasterController extends Controller
             'order_payment_method' => 'nullable|string|max:255',
             'order_customer_id' => 'nullable|integer',
             'deliver_id' => 'nullable|integer',
+            'through' => 'nullable|integer',
             'sale_type' => 'nullable|string|max:255',
             'delivery_fee' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
             'order_subtotal' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
@@ -154,6 +196,7 @@ class OrderMasterController extends Controller
             'order_address' => $validated['order_address'],
             'order_date' => $order_date,
             'delivery_fee' => $validated['delivery_fee'],
+            'through' => $validated['through'] ?? $uid,
             'order_payment_status' => $validated['order_payment_status'],
             'order_payment_method' => $validated['order_payment_method'],
             'balance' => $validated['balance'],
@@ -188,19 +231,9 @@ class OrderMasterController extends Controller
 
         if($validated['online'] == 1){
             $customer = Customers::find($validated['order_customer_id']);
+            $profile_id = Users::where('id', $validated['through'])->value('profile_id');
+            $profile = DB::table('profiles')->where('id', $profile_id)->first();
 
-            $keyboard = [
-                "inline_keyboard" => [
-                    [
-                        [
-                            "text" => "🔙 Return to App",
-                            "url"  => "http://localhost:5173/dashboard/order-tracking"
-                        ]
-                    ]
-                ]
-            ];
-            // $message = $validated['order_tel'];
-            // $user = $user->username;
            $phone = $validated['order_tel']
                 ?? $customer->customer_tel
                 ?? 'N/A';
@@ -209,28 +242,43 @@ class OrderMasterController extends Controller
                 ?? $customer->customer_address
                 ?? 'N/A';
 
-            // $text =
-            // "<b>📦 Order Information</b>\n\n" .
-            // "<b>🧾 Order No:</b> {$order_no}\n" .
-            // "<b>📅 Order Date:</b> {$order_date}\n\n" .
-            // "<b>👤 Customer Name:</b> {$customer->customer_name}\n" .
-            // "<b>📧 Email:</b> " . ($customer->customer_email ?? 'N/A') . "\n" .
-            // "<b>📞 Phone:</b> {$phone}\n" .
-            // "<b>🏠 Address:</b> {$address}";
-            $text =
-            "<b>📦 Order Information</b>\n\n" .
-            "<b>🧾 Order No:</b> N/A\n" .
-            "<b>📅 Order Date:</b> N/A\n\n" .
-            "<b>👤 Customer Name:</b> N/A\n" .
-            "<b>📧 Email:</b> N/A" . "\n" .
-            "<b>📞 Phone:</b> N/A\n" .
-            "<b>🏠 Address:</b> N/A";
+            // Build items list dynamically
+            $itemsList = '';
+                foreach ($validated['items'] as $item) {
+                    $itemsList .=
+                        "\t\t• <b>{$item['item_name']}</b> |  Qty: {$item['quantity']}  |  Price: <b>\$" . ($item['price'] * $item['quantity'])."</b>\n";
+                }
 
-            // Broadcast to Pusher
-            TelegramService::sendMessage($text, $keyboard);
-            broadcast(new PrivateChannelEvent("New order by" . $validated['order_tel'], (int)$proId))->toOthers();
+
+             $message =
+                "🛒 <b>New Order Received</b>
+
+                🏪 <b>Shop:</b> {$profile->profile_name}
+                🆔 <b>Order No:</b> {$order_no}
+
+                📞 <b>Buyer Phone:</b> " . ($customer->customer_tel ?? $user->phone_number) . "
+                📦 <b>Recipient Phone:</b> {$phone}
+
+                📌 <b>Address:</b> " . ($address ?? 'N/A') . "
+                🗺️ <b>Commune:</b> " . ($customer->customer_communes ?? 'N/A') . "
+                🏙️ <b>District:</b> " . ($customer->customer_districts ?? 'N/A') . "
+                🌆 <b>Province:</b> " . ($customer->customer_provinces ?? 'N/A') . "
+                🏡 <b>Village:</b> " . ($customer->customer_villages ?? 'N/A') . "
+
+                📅 <b>Order Date:</b> {$order_date}
+
+                📦 <b>Items List</b>
+                {$itemsList}
+                💰 <b>Total:</b> 💵 <b>\${$validated['order_total']}</b>";
+
+
+
+                // Broadcast to Pusher
+                broadcast(new PrivateChannelEvent("New order by" . $validated['order_tel'], (int)$profile_id))->toOthers();
+                TelegramService::sendMessage($message, $profile_id);
         }
 
+        // return $message;
         return $this->show($order_masters->order_id);
     }
 

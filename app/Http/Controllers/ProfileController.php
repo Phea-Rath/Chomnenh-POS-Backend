@@ -27,6 +27,10 @@ class ProfileController extends Controller
                 $filenameOnly = basename($item->image);
                 $item->image = url('storage/images/' . $filenameOnly);
             }
+            if ($item->qr_code) {
+                $filenameOnly = basename($item->qr_code);
+                $item->qr_code = url('storage/images/' . $filenameOnly);
+            }
         }
 
         if ($profiles->isEmpty()) {
@@ -52,7 +56,7 @@ class ProfileController extends Controller
         $validated = $request->validate([
             "profile_name" => "required|string",
             "telephone"    => "required|string",
-            "start_date"   => "required|date", 
+            "start_date"   => "required|date",
             "term"        => "required|integer",
             'image'       => 'sometimes|file|image',
         ]);
@@ -105,6 +109,9 @@ class ProfileController extends Controller
         if ($profile->image) {
             $profile->image = url('storage/images/' . basename($profile->image));
         }
+        if ($profile->qr_code) {
+            $profile->qr_code = url('storage/images/' . basename($profile->qr_code));
+        }
 
         return response()->json([
             'message' => 'Profile retrieved successfully!',
@@ -145,6 +152,42 @@ class ProfileController extends Controller
 
         return response()->json([
             "message" => "Profile image updated successfully",
+            "status"  => 200,
+            "data"    => $profile,
+        ]);
+    }
+    public function updateImageQr(Request $request, string $id)
+    {
+        $profile = Profile::find($id);
+
+        if (!$profile) {
+            return response()->json([
+                "message" => "This profile not found!",
+                "status"  => 404,
+            ]);
+        }
+
+        $validated = $request->validate([
+            'qr_code' => 'required|file|image',
+        ]);
+
+        // Delete old image if exists
+        if ($profile->qr_code && Storage::exists('public/images/' . $profile->qr_code)) {
+            Storage::delete('public/images/' . $profile->qr_code);
+        }
+
+        // Upload new image
+        $file = $request->file('qr_code');
+        $filename = time() . '.' . $file->getClientOriginalExtension();
+        $file->storeAs('public/images', $filename);
+
+        $profile->qr_code = $filename;
+        $profile->save();
+
+        $profile->qr_code = url('storage/images/' . $filename);
+
+        return response()->json([
+            "message" => "Profile qr code updated successfully",
             "status"  => 200,
             "data"    => $profile,
         ]);
@@ -215,6 +258,30 @@ class ProfileController extends Controller
         $profile->save();
         return response()->json([
             "message" => "Profile name updated successfully",
+            "status"  => 200,
+            "data"    => $profile,
+        ]);
+    }
+    public function updateTelegramService(Request $request, string $id)
+    {
+        $profile = Profile::find($id);
+        $validate = $request->validate([
+            'bot_token' => 'required|string|max:200',
+            'chat_id' => 'required|string|max:200'
+        ]);
+
+        if (!$profile) {
+            return response()->json([
+                'message' => 'Profile not found!',
+                'status'  => 404,
+            ]);
+        }
+
+        $profile->bot_token = $validate['bot_token'];
+        $profile->chat_id = $validate['chat_id'];
+        $profile->save();
+        return response()->json([
+            "message" => "Profile Telegram service updated successfully",
             "status"  => 200,
             "data"    => $profile,
         ]);

@@ -100,7 +100,7 @@ class NotificationController extends Controller
         // $uid = $user->id;
         $proId = $user->profile_id;
         $orderMasters = DB::table('order_masters as om')
-            ->join('users', 'om.created_by', '=', 'users.id')
+            ->join('users', 'om.through', '=', 'users.id')
             ->join('profiles', 'users.profile_id', '=', 'profiles.id')
             ->join('delivers', 'om.deliver_id', '=', 'delivers.deliver_id')
             ->where('profiles.id', $proId)
@@ -142,8 +142,8 @@ class NotificationController extends Controller
 
             // Fix: loop through each item
             foreach ($order->items as $item) {
-                $item->images = $this->itemService->getImage($item->item_id);
-                $item->item_image = $this->itemService->getImage($item->item_id)[0]['image'];
+                    $item->images = $this->itemService->getImage($item->item_id);
+                    $item->item_image = $this->itemService->getImage($item->item_id)[0]['image'] ?? null;
             }
 
             return $order;

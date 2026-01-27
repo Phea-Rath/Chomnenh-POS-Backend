@@ -19,6 +19,7 @@ return new class extends Migration
             $table->date("order_date");
             $table->double("delivery_fee")->nullable();
             $table->unsignedInteger("deliver_id")->nullable();
+            $table->integer("through")->nullable();
             $table->double("order_subtotal");
             $table->double("order_discount");
             $table->string("sale_type");

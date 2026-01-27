@@ -43,6 +43,26 @@ class BrandController extends Controller
                 'data' => $brands
             ]);
         }
+
+        $message = "
+        🛒 <b>New Order Received</b>
+
+        🏪 <b>Shop:</b> KV9 CAMBODIA
+        🆔 <b>Order No:</b> 3840
+        📞 <b>Buyer Phone:</b> 069400142
+        📦 <b>Recipient Phone:</b> 069400142
+        📍 <b>Location:</b> sfsdf
+        📌 <b>District:</b> ៧មករា
+
+        📦 Items
+        • K White Foam (ហ្វូមលាងមុខជប៉ុន) × 1 = $8.00
+        • K white Serum UV ( សេរ៉ូមការពារកំដៅថ្ងៃ) × 1 = $12.00
+
+        💰 Total: $20.00
+        ";
+
+
+        TelegramService::sendMessage($message);
         return response()->json([
             'message' => 'Brands selected successfully',
             'status' => 200,
@@ -114,6 +134,7 @@ class BrandController extends Controller
             'data' => $brands,
         ], 201);
     }
+    
     public function update(Request $request, string $id)
     {
         $brands = Brands::find($id);
