@@ -13,33 +13,66 @@ class ExpanseMasterController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index()
-    {
-        $user = Auth::user();
-        $uid = $user->id;
-        $masters = DB::table('expanse_masters')
-            ->where('created_by', $uid)
-            ->where('is_deleted', 0)
-            ->get();
+    public function index(Request $request)
+{
+    $user = Auth::user();
+    $uid  = $user->id;
 
-        $items = DB::table('expanse_items')
-            ->join('expanse_types', 'expanse_items.expanse_type_id', '=', 'expanse_types.expanse_type_id')
-            ->whereIn('expanse_id', $masters->pluck('expanse_id'))
-            ->get()
-            ->groupBy('expanse_id');
+    $limit  = $request->input('limit', 10);
+    $page   = $request->input('page', 1);
+    $search = $request->input('search'); // 🔍 search keyword
 
-        // Attach items to each master
-        $result = $masters->map(function ($master) use ($items) {
-            $master->items = $items->get($master->expanse_id) ?? [];
-            return $master;
-        });
+    // Paginated masters
+    $masters = DB::table('expanse_masters as em')
+        ->where('em.created_by', $uid)
+        ->where('em.is_deleted', 0)
 
+        // 🔍 SEARCH FILTER
+        ->when($search, function ($query) use ($search) {
+            $query->where(function ($q) use ($search) {
+                $q->where('em.expanse_code', 'like', "%{$search}%")
+                  ->orWhere('em.expanse_name', 'like', "%{$search}%")
+                  ->orWhere('em.note', 'like', "%{$search}%");
+            });
+        })
+
+        ->orderBy('em.expanse_id', 'desc')
+        ->paginate($limit, ['*'], 'page', $page);
+
+    if ($masters->isEmpty()) {
         return response()->json([
-            'message' => 'expanse masters fetched successfully!',
-            'status' => 200,
-            'data' => array_reverse($result->toArray()),
+            'message' => 'Expanse masters not found!',
+            'status'  => 404,
+            'data'    => []
         ]);
     }
+
+    // Load items ONLY for current page masters
+    $items = DB::table('expanse_items as ei')
+        ->join('expanse_types as et', 'ei.expanse_type_id', '=', 'et.expanse_type_id')
+        ->whereIn('ei.expanse_id', collect($masters->items())->pluck('expanse_id'))
+        ->get()
+        ->groupBy('expanse_id');
+
+    // Attach items to each master
+    $result = collect($masters->items())->map(function ($master) use ($items) {
+        $master->items = $items->get($master->expanse_id) ?? [];
+        return $master;
+    });
+
+    return response()->json([
+        'message' => 'Expanse masters fetched successfully!',
+        'status'  => 200,
+        'data'    => $result->toArray(),
+        'pagination' => [
+            'current_page' => $masters->currentPage(),
+            'per_page'     => $masters->perPage(),
+            'total'        => $masters->total(),
+            'last_page'    => $masters->lastPage(),
+        ]
+    ]);
+}
+
 
 
     /**

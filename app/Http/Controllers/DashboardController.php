@@ -10,86 +10,108 @@ class DashboardController extends Controller
 {
     //
     public function showCard()
-    {
-        $user = Auth::user();
-        $uid = $user->id;
-        $proId = $user->profile_id;
-        $currentYear = now()->year;
+{
+    $user = Auth::user();
+    $uid = $user->id;
+    $proId = $user->profile_id;
+    $currentYear = now()->year;
 
-        // --- Totals ---
-        $stockData = DB::table('stock_details as sd')
-            ->join('stock_masters as sm', 'sd.stock_id', '=', 'sm.stock_id')
-            ->join('users as u', 'sm.stock_created_by', '=', 'u.id')
-            ->join('profiles as p', 'u.profile_id', '=', 'p.id')
-            ->where('sd.is_deleted', 0)
-            ->where('p.id', $proId)
-            ->where('sm.stock_created_by', $uid)
-            ->whereYear('sm.stock_date', $currentYear)
-            ->selectRaw("
+    /* ================= TOTAL STOCK ================= */
+    $stockData = DB::table('stock_details as sd')
+        ->join('stock_masters as sm', 'sd.stock_id', '=', 'sm.stock_id')
+        ->join('users as u', 'sm.stock_created_by', '=', 'u.id')
+        ->join('profiles as p', 'u.profile_id', '=', 'p.id')
+        ->where('sd.is_deleted', 0)
+        ->where('p.id', $proId)
+        ->where('sm.stock_created_by', $uid)
+        ->whereYear('sm.stock_date', $currentYear)
+        ->selectRaw("
+            COALESCE(SUM(CASE WHEN sm.stock_type_id = 1 THEN sd.quantity END),0) AS return_total,
+            COALESCE(SUM(CASE WHEN sm.stock_type_id = 2 THEN sd.quantity END),0) AS in_total,
+            COALESCE(SUM(CASE WHEN sm.stock_type_id = 3 THEN sd.quantity END),0) AS out_total,
+            COALESCE(SUM(CASE WHEN sm.stock_type_id = 4 THEN sd.quantity END),0) AS waste_total
+        ")
+        ->first();
+
+    /* ================= TOTAL SALES (ORDERS) ================= */
+    $saleTotal = DB::table('order_items as oi')
+        ->join('order_masters as om', 'oi.order_id', '=', 'om.order_id')
+        ->join('users as u', 'om.created_by', '=', 'u.id')
+        ->join('profiles as p', 'u.profile_id', '=', 'p.id')
+        ->where('p.id', $proId)
+        ->where('oi.is_deleted', 0)
+        ->where('om.is_deleted', 0)
+        ->whereIn('om.status', [4,5,6])
+        ->whereYear('om.order_date', $currentYear)
+        ->sum('oi.quantity');
+
+    /* ================= MONTHLY STOCK ================= */
+    $monthlyStock = DB::table('stock_details as sd')
+        ->join('stock_masters as sm', 'sd.stock_id', '=', 'sm.stock_id')
+        ->join('users as u', 'sm.stock_created_by', '=', 'u.id')
+        ->join('profiles as p', 'u.profile_id', '=', 'p.id')
+        ->where('sd.is_deleted', 0)
+        ->where('p.id', $proId)
+        ->where('sm.stock_created_by', $uid)
+        ->whereYear('sm.stock_date', $currentYear)
+        ->selectRaw("
+            MONTH(sm.stock_date) AS month,
             SUM(CASE WHEN sm.stock_type_id = 1 THEN sd.quantity ELSE 0 END) AS return_total,
             SUM(CASE WHEN sm.stock_type_id = 2 THEN sd.quantity ELSE 0 END) AS in_total,
             SUM(CASE WHEN sm.stock_type_id = 3 THEN sd.quantity ELSE 0 END) AS out_total,
-            SUM(CASE WHEN sm.stock_type_id = 5 THEN sd.quantity ELSE 0 END) AS sale_total,
             SUM(CASE WHEN sm.stock_type_id = 4 THEN sd.quantity ELSE 0 END) AS waste_total
         ")
-            ->first();
+        ->groupBy('month')
+        ->get();
 
-        if (!$stockData) {
-            return response()->json([
-                'message' => 'expanse data get fail!',
-                'status' => 404
-            ]);
-        }
-
-        // --- Monthly breakdown ---
-        $monthlyData = DB::table('stock_details as sd')
-            ->join('stock_masters as sm', 'sd.stock_id', '=', 'sm.stock_id')
-            ->join('users as u', 'sm.stock_created_by', '=', 'u.id')
-            ->join('profiles as p', 'u.profile_id', '=', 'p.id')
-            ->where('sd.is_deleted', 0)
-            ->where('p.id', $proId)
-            ->where('sm.stock_created_by', $uid)
-            ->whereYear('sm.stock_date', $currentYear)
-            ->selectRaw("
-            EXTRACT(MONTH FROM sm.stock_date) as month,
-            SUM(CASE WHEN sm.stock_type_id = 1 THEN sd.quantity ELSE 0 END) AS return_total,
-            SUM(CASE WHEN sm.stock_type_id = 2 THEN sd.quantity ELSE 0 END) AS in_total,
-            SUM(CASE WHEN sm.stock_type_id = 3 THEN sd.quantity ELSE 0 END) AS out_total,
-            SUM(CASE WHEN sm.stock_type_id = 5 THEN sd.quantity ELSE 0 END) AS sale_total,
-            SUM(CASE WHEN sm.stock_type_id = 4 THEN sd.quantity ELSE 0 END) AS waste_total
+    /* ================= MONTHLY SALES ================= */
+    $monthlySales = DB::table('order_items as oi')
+        ->join('order_masters as om', 'oi.order_id', '=', 'om.order_id')
+        ->join('users as u', 'om.created_by', '=', 'u.id')
+        ->join('profiles as p', 'u.profile_id', '=', 'p.id')
+        ->where('oi.is_deleted', 0)
+        ->where('om.is_deleted', 0)
+        ->whereIn('om.status', [4,5,6])
+        ->where('p.id', $proId)
+        ->whereYear('om.order_date', $currentYear)
+        ->selectRaw("
+            MONTH(om.order_date) AS month,
+            SUM(oi.quantity) AS sale_total
         ")
-            ->groupBy('month')
-            ->orderBy('month')
-            ->get();
+        ->groupBy('month')
+        ->get()
+        ->keyBy('month');
 
-        // Build month list from Jan -> current month
-        $months = [];
-        for ($m = 1; $m <= now()->month; $m++) {
-            $found = $monthlyData->firstWhere('month', $m);
-            $months[] = [
-                'name' => date('M', mktime(0, 0, 0, $m, 1)),
-                'return' => $found->return_total ?? 0,
-                'in' => $found->in_total ?? 0,
-                'out' => $found->out_total ?? 0,
-                'sale' => $found->sale_total ?? 0,
-                'waste' => $found->waste_total ?? 0,
-            ];
-        }
+    /* ================= BUILD MONTH ARRAY ================= */
+    $months = [];
+    for ($m = 1; $m <= now()->month; $m++) {
+        $stock = $monthlyStock->firstWhere('month', $m);
+        $sale  = $monthlySales[$m]->sale_total ?? 0;
 
-        return response()->json([
-            'message' => 'expanse data geted successfully!',
-            'status' => 200,
-            'data' => [
-                'stock_return' => $stockData->return_total ?? 0,
-                'stock_in' => $stockData->in_total ?? 0,
-                'stock_out' => $stockData->out_total ?? 0,
-                'stock_sale' => $stockData->sale_total ?? 0,
-                'stock_waste' => $stockData->waste_total ?? 0,
-                'stock_total' => ($stockData->return_total ?? 0) + ($stockData->in_total ?? 0),
-                'month' => $months
-            ]
-        ]);
+        $months[] = [
+            'name'   => date('M', mktime(0, 0, 0, $m, 1)),
+            'return' => $stock->return_total ?? 0,
+            'in'     => $stock->in_total ?? 0,
+            'out'    => $stock->out_total ?? 0,
+            'sale'   => $sale,
+            'waste'  => $stock->waste_total ?? 0,
+        ];
     }
+
+    return response()->json([
+        'status' => 200,
+        'message' => 'Dashboard data fetched successfully',
+        'data' => [
+            'stock_return' => $stockData->return_total,
+            'stock_in'     => $stockData->in_total,
+            'stock_out'    => $stockData->out_total,
+            'stock_sale'   => $saleTotal,
+            'stock_waste'  => $stockData->waste_total,
+            'stock_total'  => $stockData->return_total + $stockData->in_total,
+            'month'        => $months
+        ]
+    ]);
+}
 
 
     public function showGraphic(Request $request)
@@ -249,8 +271,8 @@ class DashboardController extends Controller
 
     // Build response arrays
     $weekCount = max(
-        count($salesThisMonth), 
-        count($salesLastMonth), 
+        count($salesThisMonth),
+        count($salesLastMonth),
     );
 
     $sales = [];
@@ -337,7 +359,7 @@ class DashboardController extends Controller
 
     // Build response arrays
     $weekCount = max(
-        count($stockThisMonth), 
+        count($stockThisMonth),
         count($stockLastMonth)
     );
 
@@ -553,7 +575,7 @@ public function saleByHour()
         'message' => 'Expanse masters fetched successfully!',
         'status' => 200,
         'data' => $sales,
-        
+
     ]);
 }
 
@@ -627,7 +649,7 @@ public function purchaseByHour()
         'message' => 'Expanse masters fetched successfully!',
         'status' => 200,
         'data' =>  $stock,
-        
+
     ]);
 }
 

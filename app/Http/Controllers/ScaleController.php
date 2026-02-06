@@ -23,7 +23,7 @@ class ScaleController extends Controller
             ->join('profiles', 'users.profile_id', '=', 'profiles.id')
             ->where('users.profile_id', '=', $proId)
             ->where('scales.is_deleted', 0)
-            ->select('scales.*')
+            ->select('users.username as created_by_name','scales.*')
             // ->paginate($page);
             ->get();
         if (count($scales) == 0) {
@@ -82,9 +82,14 @@ class ScaleController extends Controller
     {
         $user = Auth::user();
         $uid = $user->id;
-        $scales = Scales::where('created_by', $uid)
-            ->where('is_deleted', 0)
-            ->find($id);
+        $scales = DB::table('scales')
+            ->join('users', "scales.created_by", '=', 'users.id')
+            ->join('profiles', 'users.profile_id', '=', 'profiles.id')
+            ->where('scales.is_deleted', 0)
+            ->where('scales.scale_id', $id)
+            ->select('users.username as created_by_name','scales.*')
+            // ->paginate($page);
+            ->first();
         if (!$scales) {
             return response()->json([
                 'message' => 'Scale not found!',

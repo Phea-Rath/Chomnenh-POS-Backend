@@ -6,15 +6,21 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 use App\Services\AttributeService;
+use App\Services\DetailService;
+use App\Services\ItemService;
 
 class orderPageController extends Controller
 {
 
     protected $attributeService;
+    protected $detailService;
+    protected $itemService;
 
-    public function __construct(AttributeService $attributeService)
+    public function __construct(AttributeService $attributeService, DetailService $detailService, ItemService $itemService)
     {
         $this->attributeService = $attributeService;
+        $this->detailService = $detailService;
+        $this->itemService = $itemService;
     }
 
     public function showInStockByItem()
@@ -56,6 +62,7 @@ class orderPageController extends Controller
             )
             ->where('stock_details.is_deleted', 0)
             ->where('items.is_deleted', 0)
+            ->where('items.item_type', 0)
             ->where('warehouses.status', 'stock')
             ->where('profiles.id', $proId)
             // ->where('warehouses.warehouse_id', function ($query) {
@@ -103,6 +110,10 @@ class orderPageController extends Controller
         $user = auth()->user();
         $proId = $user->profile_id;
 
+        $limit = (int) $request->input('limit', 10);
+        $page = (int) $request->input('page', 1);
+        $search = trim((string) $request->input('search', ''));
+
         $itemFilter = $request->input('item_id');
         $attrKey = $request->input('attr_key');
         $attrValue = $request->input('attr_value');
@@ -115,10 +126,19 @@ class orderPageController extends Controller
             ->where('sd.is_deleted', 0)
             ->where('sm.is_deleted', 0)
             ->where('i.is_deleted', 0)
-            ->where('p.id', $proId);
+            ->where('p.id', $proId)
+            ->where('i.item_type', 0);
 
         if ($itemFilter) {
             $query->where('sd.item_id', $itemFilter);
+        }
+
+        if (!empty($search)) {
+            $query->where(function ($q) use ($search) {
+                $q->where('i.item_name', 'like', '%' . $search . '%')
+                  ->orWhere('i.item_code', 'like', '%' . $search . '%')
+                  ->orWhere('i.barcode', 'like', '%' . $search . '%');
+            });
         }
 
 
@@ -147,15 +167,17 @@ class orderPageController extends Controller
             ->groupBy('i.item_id', 'i.item_code', 'i.item_name', 'i.item_cost', 'i.discount', 'i.item_price',
                 'i.category_id', 'i.wholesale_price')
             ->orderBy('i.item_id')
-            ->get();
+            ->paginate($limit, ['*'], 'page', $page);
 
-            foreach($items as $it){
-                $orderQuan = $this->orderQuantityByItem($it->item_id);
-                if($orderQuan){
-                    $it->sold = $orderQuan;
-                    $it->in_stock = $it->in_stock - $orderQuan;
-                }
+        $pageItems = collect($items->items());
+
+        foreach($pageItems as $it){
+            $orderQuan = $this->detailService->quanItems($it->item_id)[0];
+            if($orderQuan){
+                $it->sold = $orderQuan->sold;
+                $it->in_stock = $orderQuan->in_stock;
             }
+        }
         if ($items->isEmpty()) {
             return response()->json([
                 'message' => 'No items found',
@@ -164,7 +186,7 @@ class orderPageController extends Controller
             ], 404);
         }
 
-        $itemIds = $items->pluck('item_id')->toArray();
+        $itemIds = $pageItems->pluck('item_id')->filter()->unique()->toArray();
 
         // ----- Attributes -----
         $groupedAttrs = [];
@@ -202,7 +224,7 @@ class orderPageController extends Controller
 
         // ---- Build Final Data -----
         $result = [];
-        foreach ($items as $it) {
+        foreach ($pageItems as $it) {
             $id = $it->item_id;
 
             $result[] = [
@@ -231,16 +253,25 @@ class orderPageController extends Controller
             'message' => 'All items retrieved',
             'status' => 200,
             'data' => $result,
+            'pagination' => [
+                'current_page' => $items->currentPage(),
+                'per_page' => $items->perPage(),
+                'total' => $items->total(),
+                'last_page' => $items->lastPage(),
+            ]
         ], 200);
     }
 
 
-public function indexTransfer()
+public function stockByItem(Request $request)
 {
     $user = Auth::user();
     $uid = $user->id;
+    $limit = (int) $request->input('limit', 10);
+    $page = (int) $request->input('page', 1);
+    $search = trim((string) $request->input('search', ''));
 
-    $results = DB::table('stock_details')
+    $query = DB::table('stock_details')
         ->join('stock_masters', 'stock_details.stock_id', '=', 'stock_masters.stock_id')
         ->join('warehouses', 'stock_masters.warehouse_id', '=', 'warehouses.warehouse_id')
         ->join('items', 'stock_details.item_id', '=', 'items.item_id')
@@ -250,21 +281,14 @@ public function indexTransfer()
         ->select(
             'items.item_id',
             'items.item_code',
+            'items.barcode',
             'items.item_name',
-            'items.item_image',
             'items.item_price',
             'items.wholesale_price',
             'categories.category_name',
             DB::raw('items.item_price - (items.item_price * (items.discount / 100)) as price_discount'),
             DB::raw('items.wholesale_price - (items.wholesale_price * (items.discount / 100)) as wholesale_price_discount'),
-            DB::raw('
-                SUM(CASE WHEN stock_masters.stock_type_id = 1 THEN stock_details.quantity ELSE 0 END)
-                + SUM(CASE WHEN stock_masters.stock_type_id = 3 THEN stock_details.quantity ELSE 0 END)
-                - SUM(CASE WHEN stock_masters.stock_type_id = 5 THEN stock_details.quantity ELSE 0 END)
-                + SUM(CASE WHEN stock_masters.stock_type_id = 2 THEN stock_details.quantity ELSE 0 END)
-                - SUM(CASE WHEN stock_masters.stock_type_id = 4 THEN stock_details.quantity ELSE 0 END)
-                AS in_stock
-            ')
+            DB::raw('0 AS in_stock')
         )
         ->where('stock_details.is_deleted', 0)
         ->where('warehouses.status', 'stock')
@@ -273,33 +297,44 @@ public function indexTransfer()
         ->groupBy(
             'items.item_id',
             'items.item_code',
+            'items.barcode',
             'items.item_name',
-            'items.item_image',
             'items.item_price',
             'items.wholesale_price',
             'categories.category_name'
         )
-        ->orderBy('items.item_id')
-        ->get();
+        ->orderBy('items.item_id');
 
+
+        if (!empty($search)) {
+            $query->where(function ($q) use ($search) {
+                $q->where('items.item_name', 'like', '%' . $search . '%')
+                  ->orWhere('items.item_code', 'like', '%' . $search . '%')
+                  ->orWhere('items.barcode', 'like', '%' . $search . '%');
+            });
+        }
+
+    $results = $query->paginate($limit, ['*'], 'page', $page);
 
     // FORMAT OUTPUT
     $data = $results->map(function ($item) {
-
+        $item->in_stock = $this->detailService->quanItems($item->item_id)[0]->in_stock ?? 0;
         // Build main image URL
-        $mainImage = $item->item_image
-            ? url('storage/images/' . basename($item->item_image))
-            : null;
+        $imagelist = $this->itemService->getImage($item->item_id);
+        $images = !empty($imagelist) ? $imagelist : null;
+        $image = !empty($imagelist) ? $imagelist[0]['image'] : null;
 
         return [
             "id" => $item->item_id,
             "name" => $item->item_name,
+            "code" => $item->item_code,
+            "barcode" => $item->barcode,
             "price" => (float)$item->item_price,
             "price_discount" => (float)$item->price_discount,
             "wholesale_price" => (float)$item->wholesale_price,
             "wholesale_price_discount" => (float)$item->wholesale_price_discount,
-            "image" => $mainImage,
-            "images" => [$mainImage], // YOU CAN UPDATE LATER IF YOU ADD MULTIPLE IMAGES
+            "image" => $image,
+            "images" => $images, // YOU CAN UPDATE LATER IF YOU ADD MULTIPLE IMAGES
             "category" => $item->category_name,
             "brand" => "unknown",
             "rating" => 0,
@@ -307,9 +342,6 @@ public function indexTransfer()
             "sold" => 0,
             "stock" => $item->in_stock,
             "discount" => 0,
-            "specifications" => [
-                "sizes" => []
-            ],
             "in_stock" => $item->in_stock
         ];
     });
@@ -317,7 +349,13 @@ public function indexTransfer()
     return response()->json([
         'message' => 'Items selected successfully',
         'status' => 200,
-        'data' => $data
+        'data' => $data,
+        'pagination' => [
+                'current_page' => $results->currentPage(),
+                'per_page' => $results->perPage(),
+                'total' => $results->total(),
+                'last_page' => $results->lastPage(),
+            ]
     ], 200);
 }
 
@@ -342,6 +380,7 @@ public function indexTransfer()
             ->where('sd.is_deleted', 0)
             ->where('sm.is_deleted', 0)
             ->where('i.is_deleted', 0)
+            ->where('i.item_type', 0)
             ->where('p.id', $proId);
 
         if ($itemFilter) {

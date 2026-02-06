@@ -23,6 +23,7 @@ return new class extends Migration
             $table->decimal('total_amount', 10, 2)->default(0);
             $table->decimal('total_paid', 10, 2)->default(0);
             $table->decimal('balance', 10, 2)->default(0);
+            $table->integer('purchase_type')->default(0);
             $table->tinyInteger('is_deleted')->default(0);
             $table->unsignedBigInteger('created_by')->nullable();
             $table->decimal('exchange_rate', 10, 2)->default(1);

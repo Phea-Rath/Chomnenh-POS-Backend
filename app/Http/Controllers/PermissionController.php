@@ -37,6 +37,12 @@ class PermissionController extends Controller
             // default: no result
             $user = [];
         }
+        foreach ($permissions as $item) {
+            if ($item->menu_icon) {
+                $filenameOnly = basename($item->menu_icon);
+                $item->menu_icon = url('storage/images/' . $filenameOnly);
+            }
+        }
         return response()->json([
             'message' => 'permission get successfully',
             'status' => 200,
@@ -51,6 +57,12 @@ class PermissionController extends Controller
             ->join('menus', 'permission.menu_id', '=', 'menus.menu_id')
             ->select('user_id', 'permission.menu_id', 'menus.menu_name', 'menus.menu_type', 'menus.menu_icon', 'menus.menu_path')
             ->get();
+        foreach ($permissions as $item) {
+            if ($item->menu_icon) {
+                $filenameOnly = basename($item->menu_icon);
+                $item->menu_icon = url('storage/images/' . $filenameOnly);
+            }
+        }
         if ($permissions->isEmpty()) {
             return response()->json([
                 'message' => 'No permissions found for this user',

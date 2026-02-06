@@ -28,56 +28,80 @@ class PurchaseController extends Controller
     {
         $this->detailService = $detailService;
     }
-    public function index()
-    {
-        $user = Auth::user();
-        $uid = $user->id;
-        $proId = $user->profile_id;
+    public function index(Request $request)
+{
+    $user  = Auth::user();
+    $uid   = $user->id;
+    $proId = $user->profile_id;
 
-        $purchases = DB::table('purchases as p')
-            ->join('suppliers as s', 'p.supplier_id', '=', 's.supplier_id')
-            ->join('users as u', 'p.created_by', '=', 'u.id')
-            ->join('profiles as pr', 'u.profile_id', '=', 'pr.id')
-            ->select(
-                'p.*',
-                's.supplier_name',
-                'u.username as created_by_name'
-            )
-            ->where('p.is_deleted', 0)
-            ->where('u.id', $uid)
-            ->where('pr.id', $proId)
-            ->get();
+    $limit  = $request->input('limit', 10);
+    $page   = $request->input('page', 1);
+    $search = $request->input('search'); // 🔍 search keyword
 
-        if ($purchases->isEmpty()) {
-            return response()->json([
-                'message' => 'No purchases found!',
-                'status'  => 404,
-                'data'    => []
-            ]);
-        }
+    $purchases = DB::table('purchases as p')
+        ->join('suppliers as s', 'p.supplier_id', '=', 's.supplier_id')
+        ->join('users as u', 'p.created_by', '=', 'u.id')
+        ->join('profiles as pr', 'u.profile_id', '=', 'pr.id')
+        ->select(
+            'p.*',
+            's.supplier_name',
+            'u.username as created_by_name'
+        )
+        ->where('p.is_deleted', 0)
+        ->where('u.id', $uid)
+        ->where('pr.id', $proId)
 
-        $data = $purchases->map(function ($purchase) {
+        // 🔍 SEARCH FILTER
+        ->when($search, function ($query) use ($search) {
+            $query->where(function ($q) use ($search) {
+                $q->where('p.purchase_no', 'like', "%{$search}%")
+                  ->orWhere('s.supplier_name', 'like', "%{$search}%")
+                  ->orWhere('u.username', 'like', "%{$search}%")
+                  ->orWhere('p.note', 'like', "%{$search}%");
+            });
+        })
 
-            $details = $this->detailService->purchaseDetail($purchase->purchase_id);
+        ->orderBy('p.purchase_id', 'desc')
+        ->paginate($limit, ['*'], 'page', $page);
 
-            $payments = DB::table('purchase_payments')
-                ->where('purchase_id', $purchase->purchase_id)
-                ->where('is_deleted', 0)
-                ->get();
-
-            return [
-                ...((array)$purchase),
-                'details'  => $details,
-                'payments' => $payments
-            ];
-        });
-
+    if ($purchases->isEmpty()) {
         return response()->json([
-            'message' => 'Purchases fetched successfully',
-            'status'  => 200,
-            'data'    => array_reverse($data->toArray())
+            'message' => 'No purchases found!',
+            'status'  => 404,
+            'data'    => []
         ]);
     }
+
+    // Enrich ONLY current page purchases
+    $data = collect($purchases->items())->map(function ($purchase) {
+
+        $details = $this->detailService->purchaseDetail($purchase->purchase_id);
+
+        $payments = DB::table('purchase_payments')
+            ->where('purchase_id', $purchase->purchase_id)
+            ->where('is_deleted', 0)
+            ->get();
+
+        return [
+            ...((array) $purchase),
+            'details'  => $details,
+            'payments' => $payments
+        ];
+    });
+
+    return response()->json([
+        'message' => 'Purchases fetched successfully',
+        'status'  => 200,
+        'data'    => $data->toArray(),
+        'pagination' => [
+            'current_page' => $purchases->currentPage(),
+            'per_page'     => $purchases->perPage(),
+            'total'        => $purchases->total(),
+            'last_page'    => $purchases->lastPage(),
+        ]
+    ]);
+}
+
 
     public function store(Request $request)
     {
@@ -96,10 +120,11 @@ class PurchaseController extends Controller
             'balance'            => 'nullable|numeric',
             'exchange_rate'      => 'nullable|numeric',
             'status'             => 'required|integer',
+            'purchase_type'      => 'required|integer',
             'items'              => 'required|array|min:1',
             'items.*.item_id'    => 'required|integer',
             'items.*.quantity'   => 'required|integer|min:1',
-            'items.*.item_cost' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
+            'items.*.item_cost'  => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
             'payments'           => 'array',
             'payments.*.amount'  => 'numeric|min:0',
             'payments.*.paid_at' => 'date'
@@ -120,6 +145,7 @@ class PurchaseController extends Controller
             'total_amount'  => $validated['total_amount'],
             'total_paid'    => $validated['total_paid'] ?? 0,
             'balance'       => $validated['balance'] ?? 0,
+            'purchase_type' => $validated['purchase_type'] ?? 0,
             'exchange_rate' => $validated['exchange_rate'] ?? 1,
             'status'        => $validated['status'],
             'created_by'    => $uid,
@@ -363,8 +389,8 @@ class PurchaseController extends Controller
                 'stock_no' => $stock_no,
                 'stock_type_id' => 2, // 2 = stock in
                 'from_warehouse' => 2, // Default or set as needed
-                'warehouse_id' => 1, // Default or set as needed
-                'order_id' => null,
+                'warehouse_id' => $purchaseDB->purchase_type == 0? 1 : 5, // Default or set as needed
+                'quantity' => collect($purchase['details'])->sum('quantity'),
                 'stock_date' => $stock_date,
                 'stock_remark' => 'Purchase Confirmed',
                 'stock_created_by' => $uid,
@@ -389,7 +415,7 @@ class PurchaseController extends Controller
                     'stock_id' => (int)$stockMasterId,
                     'item_id' => $item->item_id,
                     'quantity' => (int)$item->quantity,
-                    'item_cost' => (int)$item->item_cost,
+                    'item_cost' => $item->item_cost,
                     'expire_date' => null, // Set if available
                     'transection_date' => $stock_date,
                     'is_deleted' => 0,

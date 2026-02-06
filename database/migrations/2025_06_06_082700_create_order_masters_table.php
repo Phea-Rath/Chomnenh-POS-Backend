@@ -17,7 +17,7 @@ return new class extends Migration
             $table->string("order_tel")->nullable();
             $table->string("order_address")->nullable();
             $table->date("order_date");
-            $table->double("delivery_fee")->nullable();
+            $table->double("delivery_fee")->default(0);
             $table->unsignedInteger("deliver_id")->nullable();
             $table->integer("through")->nullable();
             $table->double("order_subtotal");

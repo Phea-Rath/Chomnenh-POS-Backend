@@ -14,7 +14,10 @@ return new class extends Migration
         Schema::create('profiles', function (Blueprint $table) {
             $table->id();
             $table->string("profile_name");
+            $table->string("bot_token")->nullable();
+            $table->string("chat_id")->nullable();
             $table->string("telephone");
+            $table->string("qr_code")->nullable();
             $table->date("start_date");
             $table->integer("term");
             $table->date("end_date");

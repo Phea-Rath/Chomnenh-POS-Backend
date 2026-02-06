@@ -38,47 +38,79 @@ class OrderMasterController extends Controller
         $this->itemService = $itemService;
     }
 
-    public function index()
-    {
-        $user = auth::user();
-        $uid = $user->id;
-        $proId = $user->profile_id;
-        $orderMasters = DB::table('order_masters as om')
-            ->join('customers as cu','om.order_customer_id','=',"cu.customer_id")
-            ->join('delivers as dl','om.deliver_id','=',"dl.deliver_id")
-            ->join('users', 'om.created_by', '=', 'users.id')
-            ->join('profiles', 'users.profile_id', '=', 'profiles.id')
-            ->where('om.is_deleted', 0)
-            ->where('profiles.id', $proId)
-            ->where('om.is_active', 1)
-            ->select('cu.customer_name','cu.customer_email', 'dl.deliver_name', 'dl.image as deliver_image',"om.*")->get();
+    public function index(Request $request)
+{
+    $user  = Auth::user();
+    $proId = $user->profile_id;
 
-        foreach ($orderMasters as $item) {
-            if ($item->deliver_image) {
-                $filenameOnly = basename($item->deliver_image);
-                $item->deliver_image = url('storage/images/' . $filenameOnly);
-            }
-        }
+    $limit  = $request->input('limit', 10);
+    $page   = $request->input('page', 1);
+    $search = $request->input('search'); // 🔍 search keyword
 
-        if ($orderMasters->isEmpty()) {
-            return response()->json([
-                'message' => 'Order masters get fail!',
-                'status' => 404,
-            ]);
-        }
+    $orderMasters = DB::table('order_masters as om')
+        ->join('customers as cu', 'om.order_customer_id', '=', 'cu.customer_id')
+        ->join('delivers as dl', 'om.deliver_id', '=', 'dl.deliver_id')
+        ->join('users as u', 'om.created_by', '=', 'u.id')
+        ->join('profiles as p', 'u.profile_id', '=', 'p.id')
+        ->where('om.is_deleted', 0)
+        ->where('om.is_active', 1)
+        ->where('p.id', $proId)
 
-        // Attach items to each order
-        $ordersWithItems = $orderMasters->map(function ($order) {
-            $order->items = $this->detailService->orderDetailById($order->order_id);
-            return $order;
-        });
+        // 🔍 SEARCH FILTER
+        ->when($search, function ($query) use ($search) {
+            $query->where(function ($q) use ($search) {
+                $q->where('om.order_no', 'like', "%{$search}%")
+                  ->orWhere('cu.customer_name', 'like', "%{$search}%")
+                  ->orWhere('cu.customer_email', 'like', "%{$search}%")
+                  ->orWhere('dl.deliver_name', 'like', "%{$search}%");
+            });
+        })
 
+        ->select(
+            'cu.customer_name',
+            'cu.customer_email',
+            'dl.deliver_name',
+            'dl.image as deliver_image',
+            'om.*'
+        )
+        ->orderBy('om.order_id', 'desc')
+        ->paginate($limit, ['*'], 'page', $page);
+
+    if ($orderMasters->isEmpty()) {
         return response()->json([
-            'message' => 'Order masters fetched successfully!',
-            'status' => 200,
-            'data' => array_reverse($ordersWithItems->toArray()),
+            'message' => 'Order masters not found!',
+            'status'  => 404,
+            'data'    => []
         ]);
     }
+
+    // Fix deliver image URL
+    foreach ($orderMasters as $item) {
+        if ($item->deliver_image) {
+            $filenameOnly = basename($item->deliver_image);
+            $item->deliver_image = url('storage/images/' . $filenameOnly);
+        }
+    }
+
+    // Attach items to each order (current page only)
+    $ordersWithItems = collect($orderMasters->items())->map(function ($order) {
+        $order->items = $this->detailService->orderDetailById($order->order_id);
+        return $order;
+    });
+
+    return response()->json([
+        'message' => 'Order masters fetched successfully!',
+        'status'  => 200,
+        'data'    => $ordersWithItems->toArray(),
+        'pagination' => [
+            'current_page' => $orderMasters->currentPage(),
+            'per_page'     => $orderMasters->perPage(),
+            'total'        => $orderMasters->total(),
+            'last_page'    => $orderMasters->lastPage(),
+        ]
+    ]);
+}
+
     public function orderByUser()
     {
         $user = auth::user();
@@ -515,54 +547,95 @@ class OrderMasterController extends Controller
 
 
 
-    public function orderTransection(){
-        $user = Auth::user();
-        $proId = $user->profile_id;
-        $orders = DB::table('order_items as oi')
-        ->join('order_masters as om','oi.order_id','=','om.order_id')
-        ->join('items as i','oi.item_id','=','i.item_id')
+    public function orderTransection(Request $request)
+{
+    $user  = Auth::user();
+    $proId = $user->profile_id;
+
+    $limit  = $request->input('limit', 10);
+    $page   = $request->input('page', 1);
+    $search = $request->input('search'); // 🔍 search keyword
+
+    $orders = DB::table('order_items as oi')
+        ->join('order_masters as om', 'oi.order_id', '=', 'om.order_id')
+        ->join('items as i', 'oi.item_id', '=', 'i.item_id')
         ->join('categories as c', 'c.category_id', '=', 'i.category_id')
         ->join('brands as b', 'b.brand_id', '=', 'i.brand_id')
-        ->join('users as u','om.created_by','=','u.id')
-        ->join('profiles as p','u.profile_id','=','p.id')
+        ->join('users as u', 'om.created_by', '=', 'u.id')
+        ->join('profiles as p', 'u.profile_id', '=', 'p.id')
         ->select(
-        'oi.item_id',
-        'i.item_name',
-        'i.barcode',
-        'i.item_code',
-        'c.category_name',
-        'b.brand_name',
-        DB::raw('0 AS image'),
-        DB::raw('0 AS images'),
-        DB::raw('0 AS attributes'),
-        DB::raw('SUM(CASE WHEN om.sale_type = "sale" THEN oi.quantity * oi.item_price ELSE oi.quantity * oi.item_wholesale_price END) AS amount_sold'),
-        DB::raw('SUM(oi.quantity) AS total_quantity_sold'),
+            'oi.item_id',
+            'i.item_name',
+            'i.barcode',
+            'i.item_code',
+            'c.category_name',
+            'b.brand_name',
+            DB::raw('0 AS image'),
+            DB::raw('0 AS images'),
+            DB::raw('0 AS attributes'),
+            DB::raw('SUM(CASE
+                WHEN om.sale_type = "sale"
+                THEN oi.quantity * oi.item_price
+                ELSE oi.quantity * oi.item_wholesale_price
+            END) AS amount_sold'),
+            DB::raw('SUM(oi.quantity) AS total_quantity_sold')
         )
-        ->where('om.is_deleted',0)
-        ->where('p.id',$proId)
-        ->groupBy('i.item_id','i.item_name','i.barcode','i.item_code')
-        ->get();
-        if ($orders->isEmpty()) {
-            return response()->json([
-                'message' => 'order transection not found!',
-                'status' => 404,
-            ]);
-        }
+        ->where('om.is_deleted', 0)
+        ->where('p.id', $proId)
 
-        foreach ($orders as $order) {
-            $images = $this->itemService->getImage($order->item_id);
-            $attrs = $this->attributeService->transformAttributes($order->item_id);
-            $order->attributes = $attrs??null;
-            $order->image = $images[0] ?? null;
-            $order->images = $images ?? [];
-        }
+        // 🔍 SEARCH FILTER
+        ->when($search, function ($query) use ($search) {
+            $query->where(function ($q) use ($search) {
+                $q->where('i.item_name', 'like', "%{$search}%")
+                  ->orWhere('i.item_code', 'like', "%{$search}%")
+                  ->orWhere('i.barcode', 'like', "%{$search}%")
+                  ->orWhere('c.category_name', 'like', "%{$search}%")
+                  ->orWhere('b.brand_name', 'like', "%{$search}%");
+            });
+        })
 
+        ->groupBy(
+            'i.item_id',
+            'i.item_name',
+            'i.barcode',
+            'i.item_code',
+            'c.category_name',
+            'b.brand_name'
+        )
+        ->orderByDesc('amount_sold')
+        ->paginate($limit, ['*'], 'page', $page);
+
+    if ($orders->isEmpty()) {
         return response()->json([
-            'message' => 'order transection fetched successfully!',
-            'status' => 200,
-            'data' => $orders,
+            'message' => 'Order transaction not found!',
+            'status'  => 404,
+            'data'    => []
         ]);
     }
+
+    // Enrich ONLY current page items
+    foreach ($orders as $order) {
+        $images = $this->itemService->getImage($order->item_id);
+        $attrs  = $this->attributeService->transformAttributes($order->item_id);
+
+        $order->attributes = $attrs ?? null;
+        $order->image      = $images[0] ?? null;
+        $order->images     = $images ?? [];
+    }
+
+    return response()->json([
+        'message' => 'Order transaction fetched successfully!',
+        'status'  => 200,
+        'data'    => $orders->items(),
+        'pagination' => [
+            'current_page' => $orders->currentPage(),
+            'per_page'     => $orders->perPage(),
+            'total'        => $orders->total(),
+            'last_page'    => $orders->lastPage(),
+        ]
+    ]);
+}
+
 
 
 

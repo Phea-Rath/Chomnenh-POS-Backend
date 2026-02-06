@@ -48,8 +48,8 @@ class StockMasterController extends Controller
         )
         ->where('p.id', $proId)
         ->where('sm.is_deleted', 0)
-        ->where('to_w.warehouse_id', 1)
-        ->where('sm.stock_created_by', $uid)
+        ->whereNotIn('to_w.warehouse_id', [2,3,4])
+        // ->where('sm.stock_created_by', $uid)
         ->get();
 
     if ($stock_masters->count() == 0) {
@@ -131,13 +131,191 @@ class StockMasterController extends Controller
 
     public function indexPagination(Request $request)
     {
-        $user = Auth::user();
-        $uid = $user->id;
+        $user  = Auth::user();
+        $uid   = $user->id;
         $proId = $user->profile_id;
-        $limit = $request->input('limit', 10);
-        $page = $request->input('page', 1);
+
+        $limit  = $request->input('limit', 10);
+        $page   = $request->input('page', 1);
+        $search = $request->input('search'); // 🔍 search keyword
 
         $stock_masters = DB::table('stock_masters as sm')
+            ->join('warehouses as from_w', 'sm.from_warehouse', '=', 'from_w.warehouse_id')
+            ->join('warehouses as to_w', 'sm.warehouse_id', '=', 'to_w.warehouse_id')
+            ->join('stock_types as st', 'sm.stock_type_id', '=', 'st.stock_type_id')
+            ->join('users as s', 'sm.stock_created_by', '=', 's.id')
+            ->join('profiles as p', 's.profile_id', '=', 'p.id')
+            ->select(
+                'from_w.warehouse_name as from_warehouse_name',
+                'to_w.warehouse_name as to_warehouse_name',
+                's.username as created_by_name',
+                'st.stock_type_name',
+                'sm.*'
+            )
+            ->where('p.id', $proId)
+            ->where('sm.is_deleted', 0)
+            ->where('sm.stock_created_by', $uid)
+
+            // 🔍 SEARCH FILTER
+            ->when($search, function ($query) use ($search) {
+                $query->where(function ($q) use ($search) {
+                    $q->where('sm.stock_no', 'like', "%{$search}%")
+                    ->orWhere('from_w.warehouse_name', 'like', "%{$search}%")
+                    ->orWhere('to_w.warehouse_name', 'like', "%{$search}%")
+                    ->orWhere('st.stock_type_name', 'like', "%{$search}%")
+                    ->orWhere('s.username', 'like', "%{$search}%");
+                });
+            })
+
+            ->orderBy('sm.stock_id', 'desc')
+            ->paginate($limit, ['*'], 'page', $page);
+
+        if ($stock_masters->count() == 0) {
+            return response()->json([
+                'message' => 'StockMaster not found!',
+                'status'  => 404,
+                'data'    => [],
+            ]);
+        }
+
+        // BUILD DATA RESULT
+        $data = $stock_masters->getCollection()->map(function ($master) {
+            return [
+                ...((array) $master),
+                'items' => $this->detailService->stockDetail($master->stock_id),
+            ];
+        });
+
+        return response()->json([
+            'message' => 'StockMaster pagination selected successfully',
+            'status'  => 200,
+            'data'    => $data->toArray(),
+            'pagination' => [
+                'current_page' => $stock_masters->currentPage(),
+                'per_page'     => $stock_masters->perPage(),
+                'total'        => $stock_masters->total(),
+                'last_page'    => $stock_masters->lastPage(),
+            ],
+        ]);
+    }
+
+
+    public function stockTransection(Request $request)
+{
+    $user  = Auth::user();
+    $proId = $user->profile_id;
+
+    $limit  = $request->input('limit', 10);
+    $page   = $request->input('page', 1);
+    $search = $request->input('search'); // 🔍 search keyword
+
+    $stock_masters = DB::table('stock_details as sd')
+        ->join('stock_masters as sm', 'sd.stock_id', '=', 'sm.stock_id')
+        ->join('warehouses as wh_from', 'sm.from_warehouse', '=', 'wh_from.warehouse_id')
+        ->join('warehouses as wh_to', 'sm.warehouse_id', '=', 'wh_to.warehouse_id')
+        ->join('stock_types as st', 'sm.stock_type_id', '=', 'st.stock_type_id')
+        ->join('users as s', 'sm.stock_created_by', '=', 's.id')
+        ->join('profiles as p', 's.profile_id', '=', 'p.id')
+        ->join('items as i', 'sd.item_id', '=', 'i.item_id')
+        ->join('categories as c', 'i.category_id', '=', 'c.category_id')
+        ->join('brands as b', 'i.brand_id', '=', 'b.brand_id')
+        ->select(
+            'i.item_id',
+            'i.item_code',
+            'i.barcode',
+            'i.item_name',
+            'i.item_price',
+            'i.item_cost',
+            'i.wholesale_price',
+            'i.category_id',
+            'c.category_name',
+            'i.brand_id',
+            'b.brand_name',
+            'i.is_deleted',
+            'wh_from.warehouse_name as from_warehouse_name',
+            'wh_to.warehouse_name as to_warehouse_name',
+            DB::raw('0 as images'),
+            DB::raw('0 as image'),
+            DB::raw('SUM(sd.quantity) as quantity'),
+            DB::raw('SUM(CASE WHEN sm.stock_type_id = 1 THEN sd.quantity ELSE 0 END) AS stock_return'),
+            DB::raw('SUM(CASE WHEN sm.stock_type_id = 2 THEN sd.quantity ELSE 0 END) AS stock_in'),
+            DB::raw('SUM(CASE WHEN sm.stock_type_id = 3 THEN sd.quantity ELSE 0 END) AS stock_out'),
+            DB::raw('SUM(CASE WHEN sm.stock_type_id = 5 THEN sd.quantity ELSE 0 END) AS stock_sale'),
+            DB::raw('SUM(CASE WHEN sm.stock_type_id = 4 THEN sd.quantity ELSE 0 END) AS stock_waste')
+        )
+        ->where('p.id', $proId)
+        ->where('sd.is_deleted', 0)
+
+        // 🔍 SEARCH FILTER
+        ->when($search, function ($query) use ($search) {
+            $query->where(function ($q) use ($search) {
+                $q->where('i.item_code', 'like', "%{$search}%")
+                  ->orWhere('i.item_name', 'like', "%{$search}%")
+                  ->orWhere('i.barcode', 'like', "%{$search}%")
+                  ->orWhere('c.category_name', 'like', "%{$search}%")
+                  ->orWhere('b.brand_name', 'like', "%{$search}%")
+                  ->orWhere('wh_from.warehouse_name', 'like', "%{$search}%")
+                  ->orWhere('wh_to.warehouse_name', 'like', "%{$search}%");
+            });
+        })
+
+        ->groupBy(
+            'i.item_id',
+            'i.item_code',
+            'i.barcode',
+            'i.item_name',
+            'i.item_price',
+            'i.item_cost',
+            'i.wholesale_price',
+            'i.category_id',
+            'c.category_name',
+            'i.brand_id',
+            'b.brand_name',
+            'i.is_deleted',
+            'wh_from.warehouse_name',
+            'wh_to.warehouse_name'
+        )
+        ->orderBy('i.item_id', 'desc')
+        ->paginate($limit, ['*'], 'page', $page);
+
+    foreach ($stock_masters as $stock_master) {
+        $imagelist = $this->itemService->getImage($stock_master->item_id);
+        $stock_master->images = !empty($imagelist) ? $imagelist : null;
+        $stock_master->image  = !empty($imagelist) ? $imagelist[0]['image'] : null;
+    }
+
+    if ($stock_masters->isEmpty()) {
+        return response()->json([
+            'message' => 'No item stock summary found!',
+            'status'  => 200,
+            'data'    => []
+        ]);
+    }
+
+    return response()->json([
+        'message' => 'StockMaster summary selected successfully',
+        'status'  => 200,
+        'data'    => $stock_masters->items(),
+        'pagination' => [
+            'current_page' => $stock_masters->currentPage(),
+            'per_page'     => $stock_masters->perPage(),
+            'total'        => $stock_masters->total(),
+            'last_page'    => $stock_masters->lastPage(),
+        ]
+    ]);
+}
+
+    public function stockTransfer(Request $request)
+{
+    $user  = Auth::user();
+    $uid   = $user->id;
+    $proId = $user->profile_id;
+
+    $limit  = $request->input('limit', 10);
+    $page   = $request->input('page', 1);
+    $search = $request->input('search'); // 🔍 search keyword
+
+    $stock_masters = DB::table('stock_masters as sm')
         ->join('warehouses as from_w', 'sm.from_warehouse', '=', 'from_w.warehouse_id')
         ->join('warehouses as to_w', 'sm.warehouse_id', '=', 'to_w.warehouse_id')
         ->join('stock_types as st', 'sm.stock_type_id', '=', 'st.stock_type_id')
@@ -151,8 +329,23 @@ class StockMasterController extends Controller
             'sm.*'
         )
         ->where('p.id', $proId)
+        ->whereNotIn('sm.from_warehouse', [2, 3, 4])
+        ->whereNotIn('sm.warehouse_id', [2, 3, 4])
         ->where('sm.is_deleted', 0)
         ->where('sm.stock_created_by', $uid)
+
+        // 🔍 SEARCH FILTER
+        ->when($search, function ($query) use ($search) {
+            $query->where(function ($q) use ($search) {
+                $q->where('sm.stock_no', 'like', "%{$search}%")
+                  ->orWhere('from_w.warehouse_name', 'like', "%{$search}%")
+                  ->orWhere('to_w.warehouse_name', 'like', "%{$search}%")
+                  ->orWhere('st.stock_type_name', 'like', "%{$search}%")
+                  ->orWhere('s.username', 'like', "%{$search}%");
+            });
+        })
+
+        ->orderBy('sm.stock_id', 'desc')
         ->paginate($limit, ['*'], 'page', $page);
 
     if ($stock_masters->count() == 0) {
@@ -165,135 +358,26 @@ class StockMasterController extends Controller
 
     // BUILD DATA RESULT
     $data = $stock_masters->map(function ($master) {
-
         return [
-            ...((array)$master),
+            ...((array) $master),
             'items' => $this->detailService->stockDetail($master->stock_id)
         ];
     });
 
-        return response()->json([
-            'message' => 'StockMaster pagination selected successfully',
-            'status' => 200,
-            'data' => $data->toArray(), // Only current page data
-            'pagination' => [
-                'current_page' => $stock_masters->currentPage(),
-                'per_page' => $stock_masters->perPage(),
-                'total' => $stock_masters->total(),
-                'last_page' => $stock_masters->lastPage(),
-            ]
-        ]);
-    }
+    return response()->json([
+        'message' => 'StockMaster pagination selected successfully',
+        'status'  => 200,
+        'data'    => $data->toArray(),
+        'pagination' => [
+            'current_page' => $stock_masters->currentPage(),
+            'per_page'     => $stock_masters->perPage(),
+            'total'        => $stock_masters->total(),
+            'last_page'    => $stock_masters->lastPage(),
+        ]
+    ]);
+}
 
 
-    public function stockTransection(Request $request)
-    {
-        $user = Auth::user();
-        $proId = $user->profile_id;
-        $limit = $request->input('limit', 10);
-        $page = $request->input('page', 1);
-
-        // Paginated stock details summary
-        $stock_masters = DB::table('stock_details as sd')
-            ->join('stock_masters as sm', 'sd.stock_id', '=', 'sm.stock_id')
-            ->join('warehouses as wh_from', 'sm.from_warehouse', '=', 'wh_from.warehouse_id')
-            ->join('warehouses as wh_to', 'sm.warehouse_id', '=', 'wh_to.warehouse_id')
-            ->join('items as i', 'sd.item_id', '=', 'i.item_id')
-            ->join('categories as c', 'i.category_id', '=', 'c.category_id')
-            ->join('brands as b', 'i.brand_id', '=', 'b.brand_id')
-            ->join('users as u', 'sm.stock_created_by', '=', 'u.id')
-            ->join('profiles as p', 'u.profile_id', '=', 'p.id')
-            ->select(
-                'sm.stock_id',
-                'i.item_id',
-                'i.item_code',
-                'i.barcode',
-                'i.item_name',
-                'i.item_price',
-                'i.item_cost',
-                'i.wholesale_price',
-                'i.category_id',
-                'c.category_name',
-                'i.brand_id',
-                'b.brand_name',
-                'sd.expire_date',
-                'i.created_by',
-                'i.is_deleted',
-                'sm.from_warehouse',
-                'wh_from.warehouse_name as from_warehouse_name',
-                'sm.warehouse_id',
-                'wh_to.warehouse_name as to_warehouse_name',
-                DB::raw('0 as images'),
-                DB::raw('0 as image'),
-                DB::raw('SUM(sd.quantity) as quantity'),
-                DB::raw('SUM(CASE WHEN sm.stock_type_id = 1 THEN sd.quantity ELSE 0 END) AS stock_return'),
-                DB::raw('SUM(CASE WHEN sm.stock_type_id = 2 THEN sd.quantity ELSE 0 END) AS stock_in'),
-                DB::raw('SUM(CASE WHEN sm.stock_type_id = 3 THEN sd.quantity ELSE 0 END) AS stock_out'),
-                DB::raw('SUM(CASE WHEN sm.stock_type_id = 5 THEN sd.quantity ELSE 0 END) AS stock_sale'),
-                DB::raw('SUM(CASE WHEN sm.stock_type_id = 4 THEN sd.quantity ELSE 0 END) AS stock_waste'),
-                'sm.stock_date as created_at'
-            )
-            ->where('p.id', $proId)
-            ->where('sd.is_deleted', 0)
-            ->whereNotIn('sm.from_warehouse', [2,3,4])
-            ->whereNotIn('sm.warehouse_id', [2,3,4])
-            ->groupBy(
-                'sm.stock_id',
-                'i.item_id',
-                'i.item_code',
-                'i.barcode',
-                'i.item_name',
-                'i.item_price',
-                'i.item_cost',
-                'i.wholesale_price',
-                'i.category_id',
-                'c.category_name',
-                'i.brand_id',
-                'b.brand_name',
-                'i.created_by',
-                'sd.expire_date',
-                'i.is_deleted',
-                'sm.from_warehouse',
-                'wh_from.warehouse_name',
-                'sm.warehouse_id',
-                'wh_to.warehouse_name',
-                'sm.stock_date'
-            )
-            ->orderBy('i.item_id')
-            ->paginate($limit, ['*'], 'page', $page);
-            foreach ($stock_masters as $stock_master) {
-                $imagelist = $this->itemService->getImage($stock_master->item_id);
-                $stock_master->images = !empty($imagelist) ? $imagelist : null;
-                $stock_master->image = !empty($imagelist) ? $imagelist[0]['image'] : null;
-            }
-
-
-
-
-        if ($stock_masters->isEmpty()) {
-            return response()->json([
-                'message' => 'No item stock summary found!',
-                'status' => 200,
-                'data' => []
-            ]);
-        }
-
-        // Enrich current page items using ItemController-like grouping
-        $pageItems = collect($stock_masters->items());
-
-            return response()->json([
-                'message' => 'StockMaster summary selected successfully',
-                'status' => 200,
-                'data' => $pageItems->toArray(),
-                'pagination' => [
-                    'current_page' => $stock_masters->currentPage(),
-                    'per_page' => $stock_masters->perPage(),
-                    'total' => $stock_masters->total(),
-                    'last_page' => $stock_masters->lastPage(),
-                ]
-            ]);
-
-    }
     public function stockTracking(Request $request)
     {
         $user = Auth::user();
@@ -509,7 +593,7 @@ class StockMasterController extends Controller
             'stock_type_id' => $validated['stock_type_id'],
             'from_warehouse' => $validated['from_warehouse'],
             'warehouse_id' => $validated['warehouse_id'],
-            // 'order_id' => $validated['order_id'] || null,
+            'quantity' => array_sum(array_column($validated['items'], 'quantity')),
             'stock_date' => $stock_date,
             'stock_remark' => $validated['stock_remark'],
             'stock_created_by' => $uid,
@@ -659,6 +743,7 @@ class StockMasterController extends Controller
             'from_warehouse' => $validated['from_warehouse'],
             'warehouse_id' => $validated['warehouse_id'],
             'stock_date' => $validated['stock_date'],
+            'quantity' => array_sum(array_column($validated['items'], 'quantity')),
             'stock_remark' => $validated['stock_remark'],
             // 'stock_created_by'=> $validated['stock_created_by'],
         ]);

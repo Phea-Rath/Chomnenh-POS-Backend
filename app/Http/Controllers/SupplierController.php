@@ -20,14 +20,14 @@ class SupplierController extends Controller
             $suppliers = DB::table('suppliers')
                 ->join('users', 'suppliers.created_by', '=', 'users.id')
                 ->where('users.profile_id', $proId)
-                ->select('suppliers.*')
+                ->select('users.username as created_by_name','suppliers.*')
                 ->where('suppliers.is_deleted', 0)
                 ->get();
         } else {
             $suppliers = DB::table('suppliers')
                 ->join('users', 'suppliers.created_by', '=', 'users.id')
                 ->where('users.profile_id', $proId)
-                ->select('suppliers.*')
+                ->select('users.username as created_by_name','suppliers.*')
                 ->where('suppliers.is_deleted', 0)
                 ->get();
         }
@@ -114,7 +114,7 @@ class SupplierController extends Controller
             $suppliers = DB::table('suppliers')
                 ->join('users', 'suppliers.created_by', '=', 'users.id')
                 ->where('users.profile_id', $proId)
-                ->select('suppliers.*')
+                ->select('users.username as created_by_name','suppliers.*')
                 ->where('suppliers.supplier_id', $id)
                 ->where('suppliers.is_deleted', 0)
                 ->first();
@@ -123,7 +123,7 @@ class SupplierController extends Controller
                 ->join('users', 'suppliers.created_by', '=', 'users.id')
                 ->where('users.profile_id', $proId)
                 ->where('suppliers.created_by', $uid)
-                ->select('suppliers.*')
+                ->select('users.username as created_by_name','suppliers.*')
                 ->where('suppliers.supplier_id', $id)
                 ->where('suppliers.is_deleted', 0)
                 ->first();

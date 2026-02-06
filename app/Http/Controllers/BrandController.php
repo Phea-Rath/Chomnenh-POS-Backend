@@ -21,7 +21,7 @@ class BrandController extends Controller
             $brands = DB::table('brands')
                 ->join('users', 'brands.created_by', '=', 'users.id')
                 ->where('users.profile_id', $proId)
-                ->select('brands.*')
+                ->select('users.username as created_by_name', 'brands.*')
                 // ->paginate($page);
                 ->where('brands.is_deleted', 0)
                 ->get();
@@ -30,7 +30,7 @@ class BrandController extends Controller
                 ->join('users', 'brands.created_by', '=', 'users.id')
                 ->where('users.profile_id', $proId)
                 // ->where('brands.created_by', $uid)
-                ->select('brands.*')
+                ->select('users.username as created_by_name', 'brands.*')
                 // ->paginate($page);
                 ->where('brands.is_deleted', 0)
                 ->get();
@@ -44,25 +44,6 @@ class BrandController extends Controller
             ]);
         }
 
-        $message = "
-        🛒 <b>New Order Received</b>
-
-        🏪 <b>Shop:</b> KV9 CAMBODIA
-        🆔 <b>Order No:</b> 3840
-        📞 <b>Buyer Phone:</b> 069400142
-        📦 <b>Recipient Phone:</b> 069400142
-        📍 <b>Location:</b> sfsdf
-        📌 <b>District:</b> ៧មករា
-
-        📦 Items
-        • K White Foam (ហ្វូមលាងមុខជប៉ុន) × 1 = $8.00
-        • K white Serum UV ( សេរ៉ូមការពារកំដៅថ្ងៃ) × 1 = $12.00
-
-        💰 Total: $20.00
-        ";
-
-
-        TelegramService::sendMessage($message);
         return response()->json([
             'message' => 'Brands selected successfully',
             'status' => 200,
@@ -107,21 +88,21 @@ class BrandController extends Controller
             $brands = DB::table('brands')
                 ->join('users', 'brands.created_by', '=', 'users.id')
                 ->where('users.profile_id', $proId)
-                ->select('brands.*')
+                ->select('users.username as created_by_name','brands.*')
                 // ->paginate($page);
                 ->where('brands.brand_id', $id)
                 ->where('brands.is_deleted', 0)
-                ->get();
+                ->first();
         } else {
             $brands = DB::table('brands')
                 ->join('users', 'brand.created_by', '=', 'users.id')
                 ->where('users.profile_id', $proId)
                 ->where('created_by', $uid)
-                ->select('brand.*')
+                ->select('users.username as created_by_name','brand.*')
                 // ->paginate($page);
                 ->where('brands.brand_id', $id)
                 ->where('brands.is_deleted', 0)
-                ->get();
+                ->first();
         }
         if (!$brands) {
             return response()->json([
@@ -134,7 +115,7 @@ class BrandController extends Controller
             'data' => $brands,
         ], 201);
     }
-    
+
     public function update(Request $request, string $id)
     {
         $brands = Brands::find($id);

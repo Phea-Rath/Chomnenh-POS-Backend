@@ -41,6 +41,11 @@ return new class extends Migration
                 'warehouse_name' => 'waste stock',
                 'status' => 'stock',
                 'created_by' => 1
+            ],
+            [
+                'warehouse_name' => 'production stock',
+                'status' => 'stock',
+                'created_by' => 1
             ]
         ]);
     }

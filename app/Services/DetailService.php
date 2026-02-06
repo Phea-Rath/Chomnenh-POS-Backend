@@ -347,4 +347,73 @@ class DetailService {
         }
 
 
+        // dd($totalQuan);
+    function calculateTotalCost($table, $item_label, $item_id, $requiredQuantity)
+    {
+        $resQuantity = (int)$this->quanItems($item_id)[0]->in_stock ?? 0;
+        $records = DB::table($table)
+            ->where($item_label, $item_id)
+            ->where('is_deleted', 0)
+            ->orderBy('created_at', 'desc') // rest stock first (FIFO)
+            ->get();
+
+        $remaining = $resQuantity;
+        $restTotalCost = 0;
+        $usedRecords = [];
+
+        foreach ($records as $record) {
+            if ($remaining <= 0) break;
+
+            $takeRestQty = min($record->quantity, $remaining); // only take what we need
+
+            $restTotalCost += $takeRestQty * $record->item_cost;
+
+            // Save only the quantity we actually used
+            $usedRecords[] = [
+                'detail_id' => $record->detail_id,
+                'stock_id' => $record->stock_id,
+                'item_id' => $record->item_id,
+                'created_at' => $record->created_at,
+                'item_cost' => $record->item_cost,
+                'used_quantity' => $takeRestQty,
+                'remaining_quantity' => $record->quantity - $takeRestQty,
+            ];
+
+            $remaining -= $takeRestQty;
+        }
+
+        $sorted = collect($usedRecords)
+        ->sortBy('created_at')
+        ->values();
+
+        $remaining = $requiredQuantity;
+        $totalCost = 0;
+
+        foreach ($sorted as $row) {
+            if ($remaining <= 0) break;
+
+            $takeQty = min($row['used_quantity'], $remaining);
+            $totalCost += $takeQty * (float)$row['item_cost'];
+            $remaining -= $takeQty;
+        }
+
+        return [
+            'usedCount' => count($usedRecords),
+            // 'records' => $usedRecords,
+            // 'remainingQuantity' => $remaining // how much we couldn’t fulfill
+            'requiredQty' => $requiredQuantity,
+            'restQuantiy' => $resQuantity,
+            'resTotalCost' => $restTotalCost,
+            'totalCost' => $totalCost,
+            'fulfilledQty' => $requiredQuantity - $remaining,
+            'notFulfilledQty' => $remaining
+        ];
+    }
+
+
+
+
+
+
+
 }

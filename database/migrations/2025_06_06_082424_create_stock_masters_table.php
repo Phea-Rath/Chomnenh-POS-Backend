@@ -17,11 +17,11 @@ return new class extends Migration
             $table->unsignedInteger("stock_type_id");  // must match referenced type
             $table->unsignedInteger("from_warehouse"); // must match referenced type
             $table->unsignedInteger("warehouse_id");   // make it consistent too
-            $table->unsignedInteger("order_id")->nullable();   // make it consistent too
             $table->date("stock_date");
             $table->string("stock_remark");
             $table->unsignedInteger("stock_created_by");
             $table->integer("id_transfer")->default(0);
+            $table->integer("quantity")->default(0);
             $table->boolean("is_deleted")->default(0);
             $table->timestamps();
 

@@ -8,5 +8,5 @@ use Illuminate\Database\Eloquent\Model;
 class Profile extends Model
 {
     use HasFactory;
-    protected $fillable = ["profile_name","telephone","start_date","term","end_date","created_by","image"];
+    protected $fillable = ["profile_name","telephone","bot_token","chat_id","qr_code","start_date","term","end_date","created_by","image"];
 }

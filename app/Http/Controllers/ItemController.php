@@ -48,6 +48,7 @@ class ItemController extends Controller
             ->leftJoin('users', 'users.id', '=', 'items.created_by')
             ->leftJoin('profiles', 'users.profile_id', '=', 'profiles.id')
             ->where('profiles.id', $proId)
+            ->where('items.item_type', 0)
             ->where('items.is_deleted', 0);
 
         // 2. Add Search Logic (Conditional)
@@ -92,93 +93,66 @@ class ItemController extends Controller
 
 
     public function storeAttr(Request $request)
-    {
+{
+    $attributes = json_decode($request->input('attributes'), true);
+    $category_id = $request->category_id;
+    $item_id = Items::max('item_id');
+    $edit_id = $request->input('edit_id');
+    $user = Auth::user();
 
-        $attributes = json_decode($request->input('attributes'), true);
-        $category_id = $request->category_id;
-        $item_id = Items::max("item_id");
-        $edit_id = $request->input('edit_id');
-        // dd($attributes);
-        foreach ($attributes as $attr) {
+    foreach ($attributes as $attr) {
 
-            // 🔍 Check if attribute already exists
-            $id = Attribute::where('name', $attr['name'])->pluck('id')->first();
+        // Check if attribute exists
+        $attributeId = Attribute::where('name', $attr['name'])->value('id');
 
-            if ($id) {
-                $arrValue = $attr['value'];
-
-                $values = array_map('trim', explode(',', $arrValue ));
-
-                $payload = [
-                    'item_id' => $edit_id ?? $item_id,
-                    'attribute_id' => $id,
-                ];
-
-                $attr_detail = AttributeDetail::create($payload);
-                foreach($values as $value){
-                    $id = DB::table('attribute_values')->where('value',$value)->value('id');
-                    if(!$id){
-                        $attribute_value = [
-                            'value' => $value,
-                        ];
-                    $id = AttributeValue::create($attribute_value)->id;
-                    }
-                    $attr_value_detail = [
-                        'attribute_detail_id'=>$attr_detail->id,
-                        'attribute_value_id'=>$id,
-                    ];
-                    AttributeValueDetail::create($attr_value_detail);
-                }
-
-                continue; // skip creating a new attribute
-            }
-            $user = Auth::user();
-            $uid = $user->id;
-
-            // 🆕 Create new attribute
+        // Create attribute if not exists
+        if (!$attributeId) {
             $attribute = Attribute::create([
                 'name' => $attr['name'],
                 'type' => $attr['type'] ?? null,
                 'category_id' => $category_id,
-                'created_by' => $uid
+                'created_by' => $user->id,
             ]);
-
-            // ➕ Create attribute value
-            $arrValue = config($attr['value']);
-
-                $values = is_array($arrValue)
-                    ? $arrValue
-                    : (isset($arrValue) ? [$arrValue] : []);
-
-
-                $payload = [
-                    'item_id' => $item_id,
-                    'attribute_id' => $attribute->id,
-                ];
-
-                $attr_detail = AttributeDetail::create($payload);
-                foreach($values as $value){
-                    $exist = DB::table('attribute_values')->where('value',$value);
-                    if(!$exist){
-                        $attribute_value = [
-                            'value' => $value,
-                        ];
-                    $exist = AttributeValue::create($attribute_value);
-                    }
-                    $attr_value_detail = [
-                        'attribute_detail_id'=>$attr_detail->id,
-                        'attribute_value'=>$exist->id,
-                    ];
-                    AttributeValueDetail::create($attr_value_detail);
-                }
+            $attributeId = $attribute->id;
         }
 
-        return response()->json([
-            'message' => 'Attributes processed successfully!',
-            'status' => 200,
-            'data' => $attr_detail,
-        ], 200);
+        // Create attribute detail
+        $attr_detail = AttributeDetail::create([
+            'item_id' => $edit_id ?? $item_id,
+            'attribute_id' => $attributeId,
+        ]);
+
+        // Handle values
+        $values = array_map('trim', explode(',', $attr['value']));
+
+        foreach ($values as $value) {
+
+            // Find or create attribute value
+            $valueId = DB::table('attribute_values')
+                ->where('value', $value)
+                ->value('id');
+
+            if (!$valueId) {
+                $valueId = AttributeValue::create([
+                    'value' => $value,
+                ])->id;
+            }
+
+            // Attach value to attribute detail
+            AttributeValueDetail::create([
+                'attribute_detail_id' => $attr_detail->id,
+                'attribute_value_id' => $valueId,
+            ]);
+        }
     }
+
+    return response()->json([
+        'message' => 'Attributes processed successfully!',
+        'status' => 200,
+        'data' => true,
+    ], 200);
+}
+
 
 
 

@@ -36,6 +36,7 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\WarehouseController;
 use App\Http\Controllers\QuotationController;
 use App\Http\Controllers\DeliverController;
+use App\Http\Controllers\ProductionController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Broadcast;
 
@@ -94,7 +95,7 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::resource('expanse_items', ExpanseItemController::class)->only(['index', 'show']);
     //I
     Route::get('/items_by_code', [ItemController::class, 'showGroupByCode']);
-    Route::get('/item_by_stock', [orderPageController::class, 'indexTransfer']);
+    Route::get('/item_by_stock', [orderPageController::class, 'stockByItem']);
     Route::get('/item_in_stock', [orderPageController::class, 'showInStockByItem']);
     Route::resource('items', ItemController::class)->only(['index', 'show', 'store', 'destroy']);
     Route::post('/items/{id}', [ItemController::class, 'update']);
@@ -103,6 +104,7 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::delete('/deleted/{id}', [ItemController::class, 'deleted']);
     //M
     Route::resource('menus', MenuController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
+    Route::post('/menus/{id}', [MenuController::class, 'update']);
     Route::get('/order_persent_montly', [OrderItemController::class, 'monthlyOrderPercentCompare']);
     //O
     Route::resource('order_masters', OrderMasterController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
@@ -132,6 +134,7 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::get('/purchase_by_day',[DashboardController::class, 'purchaseByDay']);
     Route::get('/purchase_by_hour',[DashboardController::class, 'purchaseByHour']);
     Route::resource('permission', PermissionController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
+    Route::resource('production', ProductionController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
     Route::delete('/permission/{user_id}/{menu_id}', [PermissionController::class, 'destroy']);
     Route::post('/purchase_report', [ReportController::class, 'purchaseReport']);
     Route::post('/purchase_report_user', [ReportController::class, 'purchaseReportByUser']);
@@ -144,6 +147,8 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::put('/receive_order/{id}', [OrderMasterController::class, 'receiveOrder']);
     Route::post("/register", [AuthController::class, "register"]);
     Route::resource('roles', \App\Http\Controllers\RoleController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
+    Route::resource('raw_materials', \App\Http\Controllers\RawMaterialController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
+    Route::post('/raw_material/{id}', [\App\Http\Controllers\RawMaterialController::class, 'update']);
     //S
     Route::get("/stock_card", [DashboardController::class, "showCard"]);
     Route::get("/stock_by_warehouse/{id}", [StockMasterController::class, "stockByWarehouse"]);
@@ -151,6 +156,7 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::resource('sale-items', orderPageController::class)->only(['index']);
     Route::get('/stock/{id}', [StockMasterController::class, 'getStockByOrderNo']);
     Route::get('/stock_transection', [StockMasterController::class, 'stockTransection']);
+    Route::get('/stock_transfer', [StockMasterController::class, 'stockTransfer']);
     Route::get('/stock_tracking', [StockMasterController::class, 'stockTracking']);
     Route::get('/popular_stock', [StockMasterController::class, 'popularStockIn']);
     Route::get('/quan_stock_by_attr', [StockDetailController::class, 'quantityInStockByItemId']);
@@ -207,14 +213,15 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
             return response()->json([
                 'error' => 'Image not found',
                 'path' => $path
-            ], 404);
-        }
+                ], 404);
+                }
 
-        $type = mime_content_type($path);
-        $data = base64_encode(file_get_contents($path));
+                $type = mime_content_type($path);
+                $data = base64_encode(file_get_contents($path));
 
-        return response("data:$type;base64,$data")
-            ->header('Content-Type', 'text/plain');
-    });
+                return response("data:$type;base64,$data")
+                ->header('Content-Type', 'text/plain');
+                });
 
+    Route::get('/total-cost/{quan}/{id}', [\App\Http\Controllers\StockDetailController::class, 'TotalCost']);
 });

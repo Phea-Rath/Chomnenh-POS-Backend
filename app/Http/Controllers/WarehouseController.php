@@ -21,7 +21,7 @@ class WarehouseController extends Controller
             ->whereIn('users.profile_id', [1, $proId])
             ->where('warehouses.is_deleted', 0)
             // ->whereIn('warehouses.created_by', [0, $user->id])
-            ->select('warehouses.*')
+            ->select('users.username as created_by_name','warehouses.*')
             //->paginate($page);
             ->get();
 
@@ -81,10 +81,9 @@ class WarehouseController extends Controller
         $proId = $user->profile_id;
         $warehouses = Warehouses::join('users', "warehouses.created_by", '=', 'users.id')
             ->join('profiles', 'users.profile_id', '=', 'profiles.id')
-            ->where('users.profile_id', '=', $proId)
-            ->select('warehouses.*')
+            ->select('users.username as created_by_name','warehouses.*')
             ->where('warehouses.is_deleted', 0)
-            ->where('created_by', $uid)->find($id);
+            ->where('warehouses.warehouse_id', $id)->first();
         if (!$warehouses) {
             return response()->json([
                 'message' => 'Warehouse not found!',

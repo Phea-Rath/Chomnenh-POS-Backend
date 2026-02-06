@@ -20,7 +20,7 @@ class StockTypeController extends Controller
             ->join('profiles', 'users.profile_id', '=', 'profiles.id')
             ->whereIn('users.profile_id', [1, $proId])
             ->where('stock_types.is_deleted', 0)
-            ->select('stock_types.*')
+            ->select('users.username as created_by_name','stock_types.*')
             // ->paginate($page);
             ->get();
         if (count($stock_types) == 0) {
@@ -71,9 +71,14 @@ class StockTypeController extends Controller
     {
         $user = Auth::user();
         $uid = $user->id;
-        $stock_types = StockTypes::where('created_by', $uid)
-            ->where('is_deleted', 0)
-            ->find($id);
+        $stock_types = DB::table('stock_types')
+            ->join('users', "stock_types.created_by", '=', 'users.id')
+            ->join('profiles', 'users.profile_id', '=', 'profiles.id')
+            ->where('stock_types.is_deleted', 0)
+            ->where('stock_types.stock_type_id', $id)
+            ->select('users.username as created_by_name','stock_types.*')
+            // ->paginate($page);
+            ->first();
         if (!$stock_types) {
             return response()->json([
                 'message' => 'StockType not found!',

@@ -21,7 +21,7 @@ class CustomerController extends Controller
 				->join('users', 'customers.created_by', '=', 'users.id')
 				->where('users.profile_id', $proId)
 				->where('customers.customer_id','!=',1)
-				->select('customers.*')
+				->select('users.username as create_by_name','customers.*')
 				->where('customers.is_deleted', 0)
 				->get();
 		} else {
@@ -29,7 +29,7 @@ class CustomerController extends Controller
 				->join('users', 'customers.created_by', '=', 'users.id')
 				->where('users.profile_id', $proId)
 				->where('customers.customer_id','!=',1)
-				->select('customers.*')
+				->select('users.username as create_by_name','customers.*')
 				->where('customers.is_deleted', 0)
 				->get();
 		}
@@ -112,7 +112,7 @@ class CustomerController extends Controller
 			$customers = DB::table('customers')
 				->join('users', 'customers.created_by', '=', 'users.id')
 				->where('users.profile_id', $proId)
-				->select('customers.*')
+				->select('users.username as create_by_name','customers.*')
 				->where('customers.customer_id', $id)
 				->where('customers.is_deleted', 0)
 				->get();
@@ -121,7 +121,7 @@ class CustomerController extends Controller
 				->join('users', 'customers.created_by', '=', 'users.id')
 				->where('users.profile_id', $proId)
 				->where('customers.created_by', $uid)
-				->select('customers.*')
+				->select('users.username as create_by_name','customers.*')
 				->where('customers.customer_id', $id)
 				->where('customers.is_deleted', 0)
 				->get();

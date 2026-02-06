@@ -23,7 +23,7 @@ class CategoryController extends Controller
             ->join('profiles', 'users.profile_id', '=', 'profiles.id')
             ->where('users.profile_id', '=', $proId)
             ->where('categories.is_deleted',0)
-            ->select('categories.*')
+            ->select('users.username as created_by_name','categories.*')
             // ->paginate($page);
             ->get();
         if (count($category) == 0) {
@@ -69,7 +69,14 @@ class CategoryController extends Controller
     {
         $user = Auth::user();
         $uid = $user->id;
-        $category = Categories::where('created_by', $uid)->find($id);
+        $category = DB::table('categories')
+            ->join('users', "categories.created_by", '=', 'users.id')
+            ->join('profiles', 'users.profile_id', '=', 'profiles.id')
+            ->where('categories.is_deleted',0)
+            ->where('categories.category_id',$id)
+            ->select('users.username as created_by_name','categories.*')
+            // ->paginate($page);
+            ->first();
         if (!$category) {
             return response()->json([
                 'message' => 'Category not found!',

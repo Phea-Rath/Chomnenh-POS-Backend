@@ -54,8 +54,9 @@ class NotificationController extends Controller
             AS in_stock ')
             )->where('warehouses.status', 'stock')
             ->where('stock_details.is_deleted', 0)
-            ->where('items.item_type', 0)
             ->where('items.is_deleted', 0)
+            ->where('stock_masters.is_deleted', 0)
+            ->whereNotIn('stock_masters.stock_type_id',[3,4,5])
             ->where('profiles.id', $proId)
             // ->where("users.id", $uid)
             ->where('warehouses.warehouse_id', function ($query) {
@@ -177,6 +178,8 @@ class NotificationController extends Controller
             ->join('users as u', 'sm.stock_created_by', '=', 'u.id')
             ->join('profiles as p', 'u.profile_id', '=', 'p.id')
             ->where('sd.item_id', $id)
+            ->where('sm.is_deleted', 0)
+            ->whereNotIn('sm.stock_type_id',[2,3,4]) // Ensure it's a waste item
             ->where('sd.expire_date', $request->input('expire_date_item'))
             ->where('p.id', $proId)
             ->exists();

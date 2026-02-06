@@ -22,6 +22,7 @@ class Purchase extends Model
         'total_amount',
         'total_paid',
         'balance',
+        'purchase_type',
         'created_by',
         'exchange_rate',
         'status',

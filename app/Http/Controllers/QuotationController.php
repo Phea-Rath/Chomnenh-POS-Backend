@@ -26,10 +26,13 @@ class QuotationController extends Controller
     }
     public function index()
     {
+        $user = Auth::user();
+        $proId = $user->profile_id;
         $quotations = Quotation::with([
                 'customer:customer_id,customer_name',
                 'details.item:item_id,item_name,item_cost'
             ])
+            ->where('profile_id', $proId)
             ->orderBy('created_at', 'desc')
             ->get()
             ->map(function ($q) {
