@@ -347,10 +347,65 @@ class DetailService {
         }
 
 
+    public function quanRaws($item_id) {
+        $user = auth()->user();
+        $proId = $user->profile_id;
+        $query = DB::table('stock_details as sd')
+            ->join('stock_masters as sm', 'sd.stock_id', '=', 'sm.stock_id')
+            ->join('items as i', 'sd.item_id', '=', 'i.item_id')
+            ->join('users as u', 'sm.stock_created_by', '=', 'u.id')
+            ->join('profiles as p', 'u.profile_id', '=', 'p.id')
+            ->where('sd.is_deleted', 0)
+            ->where('sm.is_deleted', 0)
+            ->where('i.is_deleted', 0)
+            ->where('i.item_id', $item_id)
+            ->where('p.id', $proId);
+
+
+        $items = $query->select(
+                DB::raw('SUM(CASE WHEN sm.stock_type_id = 1 THEN sd.quantity ELSE 0 END)
+                    + SUM(CASE WHEN sm.stock_type_id = 2 THEN sd.quantity ELSE 0 END)
+                    - SUM(CASE WHEN sm.stock_type_id = 3 THEN sd.quantity ELSE 0 END)
+                    - SUM(CASE WHEN sm.stock_type_id = 4 THEN sd.quantity ELSE 0 END)
+                    - SUM(CASE WHEN sm.stock_type_id = 5 THEN sd.quantity ELSE 0 END)
+                    AS in_stock'),
+                DB::raw('SUM(CASE WHEN sm.stock_type_id = 1 THEN sd.quantity ELSE 0 END) AS stock_return'),
+                DB::raw('SUM(CASE WHEN sm.stock_type_id = 2 THEN sd.quantity ELSE 0 END) AS stock_in'),
+                DB::raw('SUM(CASE WHEN sm.stock_type_id = 3 THEN sd.quantity ELSE 0 END) AS stock_out'),
+                DB::raw('SUM(CASE WHEN sm.stock_type_id = 4 THEN sd.quantity ELSE 0 END) AS stock_wasted'),
+                DB::raw('SUM(CASE WHEN sm.stock_type_id = 5 THEN sd.quantity ELSE 0 END) AS sold')
+            )
+            ->orderBy('i.item_id')
+            ->get();
+
+            $totalOrdered = DB::table('production_details as oi')
+            ->join('productions as om', 'oi.production_id', '=', 'om.id')
+            ->join('users as u', 'om.created_by', '=', 'u.id')
+            ->join('profiles as p', 'u.profile_id', '=', 'p.id')
+            ->where('p.id', $proId)
+            ->where('oi.item_id', $item_id)
+            ->where('oi.is_deleted', 0)
+            ->where('om.is_deleted', 0)
+            ->sum('oi.quantity');
+            if(!$totalOrdered){
+                $totalOrdered = 0;
+            }
+            foreach($items as $it){
+                $productionQuan = $totalOrdered;
+                if($productionQuan){
+                    $it->sold = $productionQuan;
+                    $it->in_stock = $it->in_stock - $productionQuan;
+                }
+            }
+
+            return $items;
+        }
+
+
         // dd($totalQuan);
     function calculateTotalCost($table, $item_label, $item_id, $requiredQuantity)
     {
-        $resQuantity = (int)$this->quanItems($item_id)[0]->in_stock ?? 0;
+        $resQuantity = (int)$this->quanRaws($item_id)[0]->in_stock ?? 0;
         $records = DB::table($table)
             ->where($item_label, $item_id)
             ->where('is_deleted', 0)

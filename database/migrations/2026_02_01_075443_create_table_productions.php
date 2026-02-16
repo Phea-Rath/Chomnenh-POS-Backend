@@ -18,6 +18,7 @@ return new class extends Migration
             $table->unsignedBigInteger('item_id');
             $table->decimal('quantity', 15, 2);
             $table->decimal('total_cost', 15, 2)->nullable();
+            $table->decimal('exchange_rate', 15, 2)->default(4000);
             $table->integer('created_by');
             $table->boolean('is_deleted')->default(0);
             $table->timestamps();

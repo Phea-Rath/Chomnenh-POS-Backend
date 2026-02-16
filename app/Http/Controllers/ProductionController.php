@@ -149,6 +149,7 @@ class ProductionController extends Controller
         $user = Auth::user();
         $uid = $user->id;
         $proId = $user->profile_id;
+        $exchange_rate = ExchangeRate::find($proId);
 
         $validated = $request->validate([
             'production_date' => 'required|date',
@@ -171,6 +172,7 @@ class ProductionController extends Controller
                 'item_id' => $validated['item_id'],
                 'quantity' => $validated['quantity'],
                 'total_cost' => $validated['total_cost'],
+                'exchange_rate' => $exchange_rate->usd_to_khr ?? 4000,
                 'created_by' => $uid,
             ]);
 
@@ -194,7 +196,6 @@ class ProductionController extends Controller
             $maxStockId = DB::table('stock_masters')->max('stock_id');
             $newStockId = ($maxStockId ?? 0) + 1;
             $stock_no = now()->format('Ymd') . '-' . str_pad(($maxStockId), 5, '0', STR_PAD_LEFT);
-
             // Create stock master
             DB::table('stock_masters')->insert([
                 'stock_id' => $newStockId,
@@ -206,6 +207,7 @@ class ProductionController extends Controller
                 'quantity' => $validated['quantity'],
                 'stock_remark' => 'Production Completed',
                 'stock_created_by' => $uid,
+                'exchange_rate' => $exchange_rate->usd_to_khr ?? 4000,
                 'is_deleted' => 0,
                 'created_at' => now(),
                 'updated_at' => now(),
@@ -231,7 +233,7 @@ class ProductionController extends Controller
 
             return response()->json([
                 'message' => 'Production created successfully!',
-                'status' => 201,
+                'status' => 200,
                 'data' => $production,
                 'details' => $details
             ], 201);

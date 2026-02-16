@@ -111,7 +111,7 @@ class OrderMasterController extends Controller
     ]);
 }
 
-    public function orderByUser()
+    public function orderByUser($id)
     {
         $user = auth::user();
         $uid = $user->id;
@@ -121,7 +121,7 @@ class OrderMasterController extends Controller
             ->join('delivers as dl','om.deliver_id','=',"dl.deliver_id")
             ->join('users', 'om.created_by', '=', 'users.id')
             ->where('om.is_deleted', 0)
-            ->where('om.created_by', $uid)
+            ->where('om.created_by', $id)
             ->where('om.is_active', 1)
             ->select('cu.customer_name','cu.customer_email', 'dl.deliver_name', 'dl.image as deliver_image',"om.*")->get();
 
@@ -184,7 +184,7 @@ class OrderMasterController extends Controller
             ->whereMonth('order_date', $month)
             ->whereYear('order_date', $now->format('Y'))
             ->count();
-        $order_no = 'ORD' . $proId . $year . $month . '-' . str_pad($orderCount + 1, 4, '0', STR_PAD_LEFT);
+        $order_no = 'ORD' . $uid . $proId . $year . $month . '-' . str_pad($orderCount + 1, 4, '0', STR_PAD_LEFT);
         $order_date = $now->format('Y-m-d');
 
         $validated = $request->validate([
@@ -701,10 +701,10 @@ class OrderMasterController extends Controller
         $order->delivery_fee = $delivery_fee;
         $order->order_total = $order->order_total + $delivery_fee;
         $order->save();
+        broadcast(new OnlineEvent('New Status', $proId))->toOthers();
         return response()->json([
             'message' => 'update delivery fee!',
             'status' => 200,
         ]);
-        broadcast(new OnlineEvent('New Status', $proId))->toOthers();
     }
 }

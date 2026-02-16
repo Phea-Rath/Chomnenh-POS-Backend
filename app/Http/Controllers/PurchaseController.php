@@ -107,6 +107,7 @@ class PurchaseController extends Controller
     {
         $user = Auth::user();
         $uid = $user->id;
+        $proId = $user->profile_id;
 
         $validated = $request->validate([
             'supplier_id'        => 'nullable|integer|exists:suppliers,supplier_id',
@@ -132,6 +133,7 @@ class PurchaseController extends Controller
 
 
 
+        $exchange_rate = ExchangeRate::find($proId);
         $purchaseNo = 'PO-' . now()->format('Ymd') . '-' . str_pad((Purchase::max('purchase_id') + 1), 5, '0', STR_PAD_LEFT);
 
         $purchase = Purchase::create([
@@ -146,7 +148,7 @@ class PurchaseController extends Controller
             'total_paid'    => $validated['total_paid'] ?? 0,
             'balance'       => $validated['balance'] ?? 0,
             'purchase_type' => $validated['purchase_type'] ?? 0,
-            'exchange_rate' => $validated['exchange_rate'] ?? 1,
+            'exchange_rate' => $exchange_rate->usd_to_khr ?? 4000,
             'status'        => $validated['status'],
             'created_by'    => $uid,
         ]);

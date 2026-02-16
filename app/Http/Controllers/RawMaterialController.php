@@ -10,6 +10,7 @@ use App\Models\Scales;
 use App\Models\Image;
 use App\Models\StockMaster;
 use App\Models\ItemImage;
+use App\Models\AttributeDetail;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
@@ -194,7 +195,7 @@ class RawMaterialController extends Controller
             'message' => 'Raw material created successfully!',
             'status' => 200,
             'data' => $data,
-        ], 201);
+        ], 200);
     }
 
     public function show(string $id)
@@ -208,7 +209,7 @@ class RawMaterialController extends Controller
             ->leftJoin('users', 'users.id', '=', 'items.created_by')
             ->leftJoin('profiles', 'users.profile_id', '=', 'profiles.id')
             ->where('profiles.id', $proId)
-            ->where('items.created_by', $id)
+            ->where('items.item_id', $id)
             ->where('items.is_deleted', 0)->select(
                 'users.username as create_by_name',
                 'items.item_id as id',
@@ -253,7 +254,7 @@ class RawMaterialController extends Controller
 
     public function update(Request $request, string $id, ItemController $itemService)
     {
-        $material = RawMaterial::find($id);
+        $material = Items::find($id);
 
         if (!$material) {
             return response()->json([
@@ -264,40 +265,52 @@ class RawMaterialController extends Controller
 
         $validated = $request->validate([
             'material_name' => 'required|string|max:255',
-            'material_image' => '',
+            'material_image' => 'nullable|image',
         ]);
 
-        $imageName = null;
-        if ($request->hasFile('material_image') && !empty($validated['material_image'])) {
-            $imageId = ItemImage::where('item_id', $id)->first()->image_id;
+        if ($request->hasFile('material_image')) {
+            $existingItemImage = ItemImage::where('item_id', $id)->first();
+            $existingImage = null;
+            if ($existingItemImage) {
+                $existingImage = Image::find($existingItemImage->image_id);
+                // return response()->json([
+                //     'message' => 'Raw material updated successfully',
+                //     'status' => 200,
+                //     'data' => $existingImage,
+                // ], 200);
+                // $existingItemImage->delete();
+            }
+
             $file = $request->file('material_image');
             $imageName = time() . '.' . $file->getClientOriginalExtension();
             $file->storeAs('public/images', $imageName);
-            $image = Image::create([
+            $newImage = Image::create([
                 'image' => $imageName,
             ]);
 
-            $image = ItemImage::create([
-                'item_id' => $data->item_id,
-                'image_id' => $image->id,
+            ItemImage::create([
+                'item_id' => $id,
+                'image_id' => $newImage->id,
             ]);
 
-            if($imageId){
-            Image::find($imageId)->delete();
-            Image::find($imageId)->each(function($img){
-                $imgPath = public_path('storage/images/' . $img->image);
-                if (file_exists($imgPath)) {
-                    @unlink($imgPath);
+            if ($existingImage) {
+                $oldPath = public_path('storage/images/' . $existingImage->image);
+                $existingImage->delete();
+                if (file_exists($oldPath)) {
+                    @unlink($oldPath);
                 }
-            });
-        }
+            }
         }
 
         $material->update([
-            'item_code' => $validated['material_name'],
+            'item_name' => $validated['material_name'],
         ]);
 
-        $itemService->storeAttr($request);
+        if ($request->filled('attributes')) {
+            AttributeDetail::where('item_id', $id)->delete();
+            $request->merge(['edit_id' => $id]);
+            $itemService->storeAttr($request);
+        }
 
         return response()->json([
             'message' => 'Raw material updated successfully',

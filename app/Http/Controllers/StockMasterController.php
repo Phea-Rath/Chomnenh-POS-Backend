@@ -596,6 +596,7 @@ class StockMasterController extends Controller
             'quantity' => array_sum(array_column($validated['items'], 'quantity')),
             'stock_date' => $stock_date,
             'stock_remark' => $validated['stock_remark'],
+            'exchange_rate' => $exchange_rate->usd_to_khr ?? 4000,
             'stock_created_by' => $uid,
         ]);
         $items = [];

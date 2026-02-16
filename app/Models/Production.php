@@ -17,6 +17,7 @@ class Production extends Model
         'total_cost',
         'is_deleted',
         'created_by',
+        'exchange_rate'
     ];
 
     public function productionDetails()

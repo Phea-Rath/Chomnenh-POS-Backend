@@ -262,6 +262,28 @@ class ProfileController extends Controller
             "data"    => $profile,
         ]);
     }
+    public function updateAddress(Request $request, string $id)
+    {
+        $profile = Profile::find($id);
+        $validate = $request->validate([
+            'address' => 'required|string|max:255'
+        ]);
+
+        if (!$profile) {
+            return response()->json([
+                'message' => 'Profile not found!',
+                'status'  => 404,
+            ]);
+        }
+
+        $profile->address = $validate['address'];
+        $profile->save();
+        return response()->json([
+            "message" => "Profile address updated successfully",
+            "status"  => 200,
+            "data"    => $profile,
+        ]);
+    }
     public function updateTelegramService(Request $request, string $id)
     {
         $profile = Profile::find($id);

@@ -72,6 +72,8 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::post('get_attr_unit', [AttributeController::class, 'getAttrUnit']);
     Route::resource('attributes', AttributeController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
     Route::resource('attribute_values', AttributeValueController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
+    Route::post('/analysis_profit', [ReportController::class, 'AnalysisProfit']);
+    Route::post('/analysis_profit_chart', [ReportController::class, 'AnalysisProfitChart']);
     Route::resource('ratings', RatingController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
     //B
     Route::resource('brands', BrandController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
@@ -117,13 +119,14 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::get('/quan_order_by_attr', [OrderItemController::class, 'quantityInOrderByItemId']);
     Route::get('/orders/max-id', [OrderMasterController::class, 'getMaxId']);
     Route::get('/order_transection', [OrderMasterController::class, 'orderTransection']);
-    Route::get('/order_by_user', [OrderMasterController::class, 'orderByUser']);
+    Route::get('/order_by_user/{id}', [OrderMasterController::class, 'orderByUser']);
     //P
     Route::post('/profile/image/{id}', [ProfileController::class, 'updateImage']);
     Route::put('/profile/number_phone/{id}', [ProfileController::class, 'updateNumberPhone']);
     Route::put('/profile/telegram_service/{id}', [ProfileController::class, 'updateTelegramService']);
     Route::post('/profile/qr_code/{id}', [ProfileController::class, 'updateImageQr']);
     Route::put('/profile/name/{id}', [ProfileController::class, 'updateName']);
+    Route::put('/profile/address/{id}', [ProfileController::class, 'updateAddress']);
     Route::resource('purchase', PurchaseController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
     Route::put('/purchase_cancel/{id}', [PurchaseController::class, 'purchaseCancel']);
     Route::put('/purchase_uncancel/{id}', [PurchaseController::class, 'purchaseUncancel']);
@@ -137,9 +140,11 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::resource('production', ProductionController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
     Route::delete('/permission/{user_id}/{menu_id}', [PermissionController::class, 'destroy']);
     Route::post('/purchase_report', [ReportController::class, 'purchaseReport']);
-    Route::post('/purchase_report_user', [ReportController::class, 'purchaseReportByUser']);
+    Route::post('/purchase_report_item', [ReportController::class, 'purchaseReportByItem']);
     Route::resource('purchase_details', PurchaseDetailController::class)->only(['index', 'show']);
     Route::resource('profiles', ProfileController::class)->only(['index', 'show', 'destroy']);
+    Route::post('/production_report', [ReportController::class, 'productionReport']);
+    Route::post('/production_report_raw', [ReportController::class, 'productionReportByRaw']);
 
     Route::get('/popular_expanse', [ExpanseItemController::class, 'popularExpanse']);
     Route::get('/popular_sales', [OrderItemController::class, 'popularSales']);
@@ -149,8 +154,11 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::resource('roles', \App\Http\Controllers\RoleController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
     Route::resource('raw_materials', \App\Http\Controllers\RawMaterialController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
     Route::post('/raw_material/{id}', [\App\Http\Controllers\RawMaterialController::class, 'update']);
+    Route::post('/raw_material_report', [ReportController::class, 'RawMaterialReport']);
     //S
     Route::get("/stock_card", [DashboardController::class, "showCard"]);
+    Route::post('/stock_report', [ReportController::class, 'stockReport']);
+    Route::post('/stock_report_item', [ReportController::class, 'stockReportByItem']);
     Route::get("/stock_by_warehouse/{id}", [StockMasterController::class, "stockByWarehouse"]);
     Route::post("/stock_graphic", [DashboardController::class, "showGraphic"]);
     Route::resource('sale-items', orderPageController::class)->only(['index']);
