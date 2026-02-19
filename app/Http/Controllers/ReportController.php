@@ -9,10 +9,22 @@ use App\Models\ExchangeRate;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use App\Services\ItemService;
+use App\Services\AttributeService;
 
 
 class ReportController extends Controller
 {
+    protected $attributeService;
+    protected $itemService;
+
+
+    public function __construct(AttributeService $attributeService, ItemService $itemService)
+    {
+        $this->attributeService = $attributeService;
+        $this->itemService = $itemService;
+    }
+
     public function saleReport(Request $request)
     {
         $user = Auth::user();
@@ -224,6 +236,7 @@ class ReportController extends Controller
         $request->validate([
             'created_by' => 'nullable|integer',
             'supplier_id' => 'nullable|integer|exists:suppliers,supplier_id',
+            'item_type' => 'nullable|integer',
             'item_id' => 'nullable|integer',
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date',
@@ -253,6 +266,7 @@ class ReportController extends Controller
             ->leftJoin('categories as cg', 'cg.category_id', '=', 'i.category_id')
             ->leftJoin('brands as br', 'br.brand_id', '=', 'i.brand_id')
             ->where('p.is_deleted', 0)
+            ->where('i.item_type', $request->item_type ?? 0)
             ->where('pf.id', $proId)
             ->groupBy(
                 'i.item_id',
@@ -489,8 +503,9 @@ class ReportController extends Controller
                 DB::raw('SUM(pd.quantity) as quantity'),
                 DB::raw('AVG(pd.cost_per_unit) as cost_per_unit'),
                 DB::raw('SUM(pd.total_cost) as total_cost'),
-                'cg.category_name',
-                'br.brand_name',
+                DB::raw('0 as primary_unit'),
+                DB::raw('0 as secondary_unit'),
+                DB::raw('0 as conversion_value'),
                 DB::raw('SUM(p.quantity) as production_quantity'),
                 DB::raw('SUM(p.total_cost) as production_total_cost')
             )
@@ -506,9 +521,7 @@ class ReportController extends Controller
             ->groupBy(
                 'rm.item_id',
                 'rm.barcode',
-                'rm.item_name',
-                'cg.category_name',
-                'br.brand_name'
+                'rm.item_name'
             );
 
         if ($request->filled('created_by')) {
@@ -528,6 +541,14 @@ class ReportController extends Controller
         }
 
         $results = $query->get();
+
+        foreach($results as $item){
+            $attrs = $this->attributeService->transformAttributes($item->item_id);
+            $item->primary_unit = $attrs[0]['name'] ?? null;
+            $item->secondary_unit = $attrs[1]['name'] ?? null;
+            $item->conversion_value = $attrs[1]['value'] ?? null;
+            $item->cost_per_unit = number_format($item->cost_per_unit, 2, '.', '');
+        }
 
         return response()->json([
             'message' => 'production report by raw get successfully',

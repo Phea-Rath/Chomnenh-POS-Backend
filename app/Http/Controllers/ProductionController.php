@@ -236,7 +236,7 @@ class ProductionController extends Controller
                 'status' => 200,
                 'data' => $production,
                 'details' => $details
-            ], 201);
+            ], 200);
         } catch (\Exception $e) {
             DB::rollBack();
             return response()->json([
