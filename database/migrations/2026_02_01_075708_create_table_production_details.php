@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::create('production_details', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('production_id');
-            $table->unsignedBigInteger('item_id');
+            $table->unsignedBigInteger('raw_material_id');
             $table->decimal('quantity', 15, 2);
             $table->decimal('cost_per_unit', 15, 2)->nullable();
             $table->decimal('total_cost', 15, 2)->nullable();
@@ -22,7 +22,7 @@ return new class extends Migration
             $table->boolean('is_deleted')->default(0);
             $table->timestamps();
             $table->foreign('production_id')->references('id')->on('productions')->onDelete('cascade');
-            $table->foreign('item_id')->references('item_id')->on('items');
+            $table->foreign('raw_material_id')->references('id')->on('raw_materials');
         });
     }
 

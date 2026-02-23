@@ -22,6 +22,11 @@ return new class extends Migration
         });
         //menu_type = 0 footer ,1 sidebar, 2 dashbaord
         \App\Models\Menus::insert([
+            //setting
+            ["menu_name" => "Users", 'menu_type' => 3, 'menu_icon' => '', 'menu_path' => "/dashboard/users"],
+            ["menu_name" => "Roles", 'menu_type' => 3, 'menu_icon' => '', 'menu_path' => "/dashboard/roles"],
+            ["menu_name" => "Permission", 'menu_type' => 3, 'menu_icon' => '', 'menu_path' => "/dashboard/permission"],
+            ['menu_name' => "Menus", 'menu_type' => 3, 'menu_icon' => '', 'menu_path' => "/dashboard/menus"],
             //SideBar
             ["menu_name" => "Home", 'menu_type' => 1, 'menu_icon' => '', 'menu_path' => "/dashboard"],
             ["menu_name" => "Prouducts", 'menu_type' => 1, 'menu_icon' => '', 'menu_path' => "/dashboard/list"],
@@ -57,11 +62,9 @@ return new class extends Migration
             ["menu_name" => "Purchase Report by Item", 'menu_type' => 4, 'menu_icon' => '', 'menu_path' => "/dashboard/report/purchase-item"],
             ["menu_name" => "Raw Material Report", 'menu_type' => 4, 'menu_icon' => '', 'menu_path' => "/dashboard/report/raw-materials"],
             ["menu_name" => "Analysis Profit", 'menu_type' => 4, 'menu_icon' => '', 'menu_path' => "/dashboard/report/analysis-profit"],
-            //setting
-            ["menu_name" => "Users", 'menu_type' => 3, 'menu_icon' => '', 'menu_path' => "/dashboard/users"],
-            ["menu_name" => "Roles", 'menu_type' => 3, 'menu_icon' => '', 'menu_path' => "/dashboard/roles"],
-            ["menu_name" => "Permission", 'menu_type' => 3, 'menu_icon' => '', 'menu_path' => "/dashboard/permission"],
-            ['menu_name' => "Menus", 'menu_type' => 3, 'menu_icon' => '', 'menu_path' => "/dashboard/menus"],
+            ["menu_name" => "Production Report", 'menu_type' => 4, 'menu_icon' => '', 'menu_path' => "/dashboard/report/production"],
+            ["menu_name" => "Production By Raw", 'menu_type' => 4, 'menu_icon' => '', 'menu_path' => "/dashboard/report/production-raw"],
+
         ]);
     }
 

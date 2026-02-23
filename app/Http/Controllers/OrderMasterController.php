@@ -213,7 +213,6 @@ class OrderMasterController extends Controller
             'items.*.price' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
             'items.*.quantity' => 'required|integer',
             'items.*.item_cost' => 'required|numeric',
-            'items.*.item_wholesale_price' => 'required|numeric',
         ]);
         // dd($validated);
         // Create the order master
@@ -237,8 +236,8 @@ class OrderMasterController extends Controller
             'order_discount' => $validated['order_discount'],
             'order_tax' => $validated['order_tax'] ?? 0,
             'order_total' => $validated['order_total'],
+            'exchange_rate' => (double)$exchange_rate->usd_to_khr,
             'created_by' => $uid,
-            'order_type' => null,
         ]);
 
         $order_id = $order_masters->order_id;
@@ -255,8 +254,6 @@ class OrderMasterController extends Controller
                 'price' => $item['price'],
                 'quantity' => $item['quantity'],
                 'item_cost' => $item['item_cost'] ?? 0,
-                'item_wholesale_price' => $item['item_wholesale_price'] ?? 0,
-                'exchange_rate' => (double)$exchange_rate->usd_to_khr,
             ]);
         }
 
@@ -388,7 +385,6 @@ class OrderMasterController extends Controller
             'order_total' => 'required|numeric|min:0|max:99999999.99',
             'balance' => 'required|numeric|min:0|max:99999999.99',
             'payment' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
-            // 'order_type' => 'required|string|max:255',
             'items' => 'required|array|min:1',
             'items.*.item_id' => 'required|integer',
             'items.*.item_name' => 'required|string|max:255',
@@ -402,7 +398,6 @@ class OrderMasterController extends Controller
 
         // Create the order master
         $order_masters->update([
-            // 'order_no' => $order_no,
             'order_tel' => $validated['order_tel'],
             'order_address' => $validated['order_address'],
             'deliver_id' => $validated['deliver_id'],
@@ -416,7 +411,6 @@ class OrderMasterController extends Controller
             'order_discount' => $validated['order_discount'],
             'order_tax' => $validated['order_tax'] ?? 0,
             'order_total' => $validated['order_total'],
-            'order_type' => null,
         ]);
 
         $order_items = [];
@@ -433,8 +427,6 @@ class OrderMasterController extends Controller
                 'price' => $item['price'],
                 'quantity' => $item['quantity'],
                 'item_cost' => $item['item_cost'] ?? 0,
-                'item_wholesale_price' => $item['item_wholesale_price'] ?? 0,
-                'exchange_rate' => (double)$exchange_rate->usd_to_khr,
             ]);
         }
 
@@ -483,7 +475,6 @@ class OrderMasterController extends Controller
             ]);
         }
         $orders->update([
-            'is_cancelled' => 1,
             'status' => 7,
         ]);
         broadcast(new OnlineEvent('New Status', $proId))->toOthers();
@@ -507,7 +498,6 @@ class OrderMasterController extends Controller
             ]);
         }
         $orders->update([
-            'is_cancelled' => 0,
             'status' => 1,
         ]);
 

@@ -40,42 +40,41 @@ class RawMaterialController extends Controller
         $limit = $request->input('limit', 10);
         $page = $request->input('page', 1);
 
-         $query = DB::table('items')
-            ->leftJoin('users', 'users.id', '=', 'items.created_by')
+         $query = DB::table('raw_materials')
+            ->leftJoin('users', 'users.id', '=', 'raw_materials.created_by')
             ->leftJoin('profiles', 'users.profile_id', '=', 'profiles.id')
             ->where('profiles.id', $proId)
-            ->where('items.item_type', 1)
-            ->where('items.is_deleted', 0);
+            ->where('raw_materials.is_deleted', 0);
 
         // 2. Add Search Logic (Conditional)
         if (!empty($search)) {
             $query->where(function($q) use ($search) {
-                $q->where('items.item_name', 'LIKE', "%{$search}%")
-                ->orWhere('items.item_code', 'LIKE', "%{$search}%");
+                $q->where('raw_materials.material_name', 'LIKE', "%{$search}%")
+                ->orWhere('raw_materials.material_code', 'LIKE', "%{$search}%");
                 // Add other columns here if needed, e.g., ->orWhere('items.description', 'LIKE', ...)
             });
         }
 
         $rawItems = $query->select(
                 'users.username as create_by_name',
-                'items.item_id as id',
-                'items.item_name as material_name',
-                'items.barcode as material_code',
-                'items.created_at',
-                'items.updated_at',
-                DB::raw('0 as material_image'),
-                DB::raw('0 as primary_unit'),
-                DB::raw('0 as secondary_unit'),
-                DB::raw('0 as conversion_value'),
+                'raw_materials.id',
+                'raw_materials.material_name',
+                'raw_materials.material_code',
+                'raw_materials.material_image',
+                'raw_materials.primary_unit',
+                'raw_materials.secondary_unit',
+                'raw_materials.conversion_value',
+                'raw_materials.created_at',
+                'raw_materials.updated_at',
                 DB::raw('0 as in_stock'),
             )
-            ->orderBy('items.item_id', 'DESC')
+            ->orderBy('raw_materials.id', 'DESC')
             ->paginate($limit, ['*'], 'page', $page);
 
         // 3. Handle Empty Results
         if ($rawItems->total() == 0) {
             return response()->json([
-                'message' => 'Items not found!',
+                'message' => 'Raw Material not found!',
                 'status' => 404,
                 'data' => []
             ]);
@@ -83,14 +82,13 @@ class RawMaterialController extends Controller
 
         $items = [];
         foreach ($rawItems as $item) {
-            $image = $this->itemService->getImage($item->id);
-            $attrs = $this->attrService->transformAttributes($item->id);
-            $item->material_image = $image[0]['image'];
-            $item->primary_unit = $attrs[0]['name'];
-            $item->secondary_unit = $attrs[1]['name'];
-            $item->conversion_value = $attrs[1]['value'];
-            $stock = $this->detailService->quanItems($item->id);
-            $item->in_stock = $stock[0]->in_stock;
+            if ($item->material_image) {
+                $filenameOnly = basename($item->material_image);
+                $item->material_image = url('storage/images/' . $filenameOnly);
+            }
+            $stock = $this->detailService->quanRaws($item->id);
+            $item->conversion_value  = number_format($item->conversion_value,'2','.','');
+            $item->in_stock = $stock[0]->in_stock ?? 0;
             $items[] = $item;
         }
 
@@ -106,7 +104,7 @@ class RawMaterialController extends Controller
     {
         $user = Auth::user();
         $uid = $user->id;
-        $itemCode = 'P-' . str_pad((Items::max('item_id') + 1), 5, '0', STR_PAD_LEFT);
+        $itemCode = 'P-' . str_pad((RawMaterial::max('id') + 1), 5, '0', STR_PAD_LEFT);
         $stock_no = now()->format('Ymd') . '-' . str_pad((StockMaster::max('stock_id') + 1), 5, '0', STR_PAD_LEFT);
         $stock_date = now()->format('Y-m-d');
          // Generate barcode
@@ -120,7 +118,7 @@ class RawMaterialController extends Controller
         // Count items created in the current month for barcode
         $monthStart = $currentDate->startOfMonth()->format('Y-m-d');
         $monthEnd = $currentDate->endOfMonth()->format('Y-m-d');
-        $itemCount = Items::whereBetween('created_at', [$monthStart, $monthEnd])->count() + 1;
+        $itemCount = RawMaterial::whereBetween('created_at', [$monthStart, $monthEnd])->count() + 1;
         $itemCountPadded = str_pad($itemCount, 5, '0', STR_PAD_LEFT); // Five-digit item count (e.g., 00001)
 
         // Construct barcode (e.g., 010225090100001)
@@ -129,49 +127,9 @@ class RawMaterialController extends Controller
         $validated = $request->validate([
             'material_name' => 'required|string|max:255',
             'material_image' => '',
-            // 'primary_unit' => 'required|string|max:100',
-            // 'secondary_unit' => 'nullable|string|max:100',
-            // 'conversion_value' => 'nullable|numeric',
-        ]);
-
-        $category = Categories::where('category_name','production')->first();
-        $brand = Brands::where('brand_name','production')->first();
-        $scale = Scales::where('scale_name','production')->first();
-        if(!$category){
-            $category = Categories::create([
-                'category_name' => 'production',
-                'created_by' => $uid,
-            ]);
-        }
-        if(!$brand){
-            $brand = Brands::create([
-                'brand_name' => 'production',
-                'created_by' => $uid,
-            ]);
-        }
-        if(!$scale){
-            $scale = Scales::create([
-                'scale_name' => 'production',
-                'created_by' => $uid,
-            ]);
-        }
-
-        $data = Items::create([
-            'item_name' => $validated['material_name'],
-            'item_code' => $itemCode,
-            'barcode' => $code,
-            'item_cost' => 0,
-            'item_price' => 0,
-            'wholesale_price' => 0,
-            'category_id' => $category->category_id,
-            'brand_id' => $brand->brand_id,
-            'scale_id' => $scale->scale_id,
-            'item_type' => 1,
-            'created_by' => $uid,
-            // 'primary_unit' => $validated['primary_unit'],
-            // 'secondary_unit' => $validated['secondary_unit'],
-            // 'conversion_value' => $validated['conversion_value'],
-            // 'material_image' => $imageName,
+            'primary_unit' => 'required|string|max:100',
+            'secondary_unit' => 'nullable|string|max:100',
+            'conversion_value' => 'nullable|numeric',
         ]);
 
         $imageName = null;
@@ -179,17 +137,19 @@ class RawMaterialController extends Controller
             $file = $request->file('material_image');
             $imageName = time() . '.' . $file->getClientOriginalExtension();
             $file->storeAs('public/images', $imageName);
-            $image = Image::create([
-                'image' => $imageName,
-            ]);
-
-            $image = ItemImage::create([
-                'item_id' => $data->item_id,
-                'image_id' => $image->id,
-            ]);
         }
 
-        $itemService->storeAttr($request);
+
+        $data = RawMaterial::create([
+            'material_code' => $code,
+            'material_name' => $validated['material_name'],
+            'created_by' => $uid,
+            'primary_unit' => $validated['primary_unit'],
+            'secondary_unit' => $validated['secondary_unit'],
+            'conversion_value' => $validated['conversion_value'],
+            'material_image' => $imageName,
+        ]);
+
 
         return response()->json([
             'message' => 'Raw material created successfully!',
@@ -202,48 +162,41 @@ class RawMaterialController extends Controller
     {
         $user = Auth::user();
         $uid = $user->id;
-        $role = $user->role;
         $proId = $user->profile_id;
+        $limit = $request->input('limit', 10);
+        $page = $request->input('page', 1);
 
-         $rawItems = DB::table('items')
-            ->leftJoin('users', 'users.id', '=', 'items.created_by')
+         $query = DB::table('raw_materials')
+            ->leftJoin('users', 'users.id', '=', 'raw_materials.created_by')
             ->leftJoin('profiles', 'users.profile_id', '=', 'profiles.id')
             ->where('profiles.id', $proId)
-            ->where('items.item_id', $id)
-            ->where('items.is_deleted', 0)->select(
-                'users.username as create_by_name',
-                'items.item_id as id',
-                'items.item_name as material_name',
-                'items.barcode as material_code',
-                'items.created_at',
-                'items.updated_at',
-                DB::raw('0 as material_image'),
-                DB::raw('0 as primary_unit'),
-                DB::raw('0 as secondary_unit'),
-                DB::raw('0 as conversion_value'),
-                DB::raw('0 as in_stock'),
-            )
-            ->first();
+            ->where('raw_materials.id', $id)
+            ->where('raw_materials.is_deleted', 0);
 
-        // 3. Handle Empty Results
-        if (!$rawItems) {
-            return response()->json([
-                'message' => 'Items not found!',
-                'status' => 404,
-                'data' => []
-            ]);
+        // 2. Add Search Logic (Conditional)
+        if (!empty($search)) {
+            $query->where(function($q) use ($search) {
+                $q->where('raw_materials.material_name', 'LIKE', "%{$search}%")
+                ->orWhere('raw_materials.material_code', 'LIKE', "%{$search}%");
+                // Add other columns here if needed, e.g., ->orWhere('items.description', 'LIKE', ...)
+            });
         }
 
-
-        $image = $this->itemService->getImage($rawItems->id);
-        $attrs = $this->attrService->transformAttributes($rawItems->id);
-        $rawItems->material_image = $image[0]['image'];
-        $rawItems->primary_unit = $attrs[0]['name'];
-        $rawItems->secondary_unit = $attrs[1]['name'];
-        $rawItems->conversion_value = $attrs[1]['value'];
-        $stock = $this->detailService->quanItems($rawItems->id);
-        $rawItems->in_stock = $stock[0]->in_stock;
-
+        $rawItems = $query->select(
+                'users.username as create_by_name',
+                'raw_materials.id',
+                'raw_materials.material_name',
+                'raw_materials.material_code',
+                'raw_materials.material_image',
+                'raw_materials.primary_unit',
+                'raw_materials.secondary_unit',
+                'raw_materials.conversion_value',
+                'raw_materials.created_at',
+                'raw_materials.updated_at',
+                DB::raw('0 as in_stock'),
+            )
+            ->orderBy('raw_materials.id', 'DESC')
+            ->paginate($limit, ['*'], 'page', $page);
 
         return response()->json([
             'message' => 'Raw material retrieved successfully!',
@@ -254,7 +207,7 @@ class RawMaterialController extends Controller
 
     public function update(Request $request, string $id, ItemController $itemService)
     {
-        $material = Items::find($id);
+        $material = RawMaterial::find($id);
 
         if (!$material) {
             return response()->json([
@@ -265,41 +218,40 @@ class RawMaterialController extends Controller
 
         $validated = $request->validate([
             'material_name' => 'required|string|max:255',
-            'material_image' => 'nullable|image',
+            'material_image' => '',
+            'primary_unit' => 'required|string|max:100',
+            'secondary_unit' => 'nullable|string|max:100',
+            'conversion_value' => 'nullable|numeric',
         ]);
 
+        $imageName = null;
         if ($request->hasFile('material_image')) {
-            $existingItemImage = ItemImage::where('item_id', $id)->first();
-            $existingImage = null;
-            if ($existingItemImage) {
-                $existingImage = Image::find($existingItemImage->image_id);
-                // return response()->json([
-                //     'message' => 'Raw material updated successfully',
-                //     'status' => 200,
-                //     'data' => $existingImage,
-                // ], 200);
-                // $existingItemImage->delete();
-            }
-
             $file = $request->file('material_image');
             $imageName = time() . '.' . $file->getClientOriginalExtension();
             $file->storeAs('public/images', $imageName);
-            $newImage = Image::create([
-                'image' => $imageName,
-            ]);
+        }
 
-            ItemImage::create([
-                'item_id' => $id,
-                'image_id' => $newImage->id,
-            ]);
-
-            if ($existingImage) {
-                $oldPath = public_path('storage/images/' . $existingImage->image);
-                $existingImage->delete();
+        if($imageName){
+            if ($material->material_image) {
+                $oldPath = public_path('storage/images/' . $material->material_image);
                 if (file_exists($oldPath)) {
                     @unlink($oldPath);
                 }
             }
+            $material->update([
+                'material_name' => $validated['material_name'],
+                'primary_unit' => $validated['primary_unit'],
+                'secondary_unit' => $validated['secondary_unit'],
+                'conversion_value' => $validated['conversion_value'],
+                'material_image' => $imageName,
+            ]);
+        }else{
+            $material->update([
+                'material_name' => $validated['material_name'],
+                'primary_unit' => $validated['primary_unit'],
+                'secondary_unit' => $validated['secondary_unit'],
+                'conversion_value' => $validated['conversion_value'],
+            ]);
         }
 
         $material->update([

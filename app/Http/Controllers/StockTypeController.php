@@ -6,6 +6,7 @@ use App\Models\StockTypes;
 use DB;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
 
 class StockTypeController extends Controller
 {
@@ -51,9 +52,20 @@ class StockTypeController extends Controller
             // 'created_by' => 'required|integer',
         ]);
 
-        // Create the post
+        $stockTypeName = Str::lower(trim($validated['stock_type_name']));
+        $exists = StockTypes::where('is_deleted', 0)
+            ->whereRaw('LOWER(TRIM(stock_type_name)) = ?', [$stockTypeName])
+            ->exists();
+
+        if ($exists) {
+            return response()->json([
+                'message' => 'Stock type name already exists!',
+                'status' => 409,
+            ], 409);
+        }
+
         $data = StockTypes::create([
-            'stock_type_name' => $validated['stock_type_name'],
+            'stock_type_name' => $stockTypeName,
             'created_by' => $uid,
         ]);
 

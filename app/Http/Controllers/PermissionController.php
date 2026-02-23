@@ -82,66 +82,48 @@ class PermissionController extends Controller
     {
         $validated = $request->validate([
             'user_id' => 'required|exists:users,id',
-            'menu_id' => 'required|exists:menus,menu_id',
-            'all_menu' => 'array',
-            'all_menu.*.user_id' => 'exists:users,id',
-            'all_menu.*.menu_id' => 'exists:menus,menu_id',
+            'menu_ids' => 'required|array',
         ]);
-        $allMenu = $validated['all_menu'] ?? [];
-        if (empty($allMenu)) {
-            $permission = Permission::create($validated);
+        $allMenu = $validated['menu_ids'] ?? [];
+
+        $deleted = DB::table("permission")->where('user_id', $validated['user_id'])->whereIn('menu_id', $allMenu)->delete();
+        if ($deleted === false) {
             return response()->json([
-                'message' => 'permission successfully',
-                'status' => 200,
-                'data' => $permission
-            ]);
-        } else {
-            $deleted = DB::table("permission")->where('user_id', $validated['user_id'])->delete();
-            if ($deleted === false) {
-                return response()->json([
-                    'message' => 'Failed to delete old permissions',
-                    'status' => 500,
-                    'data' => null
-                ], 500);
-            }
-            $new_menu = [];
-            foreach ($allMenu as $item) {
-                $new_menu[] = Permission::create([
-                    'user_id' => $item['user_id'],
-                    'menu_id' => $item['menu_id'],
-                ]);
-            }
-            return response()->json([
-                'message' => 'permissions updated successfully',
-                'status' => 200,
-                'data' => $new_menu
+                'message' => 'Failed to delete old permissions',
+                'status' => 500,
+                'data' => null
+            ], 500);
+        }
+        $new_menu = [];
+        foreach ($allMenu as $item) {
+            $new_menu[] = Permission::create([
+                'user_id' => $validated['user_id'],
+                'menu_id' => $item,
             ]);
         }
+        return response()->json([
+            'message' => 'permissions updated successfully',
+            'status' => 200,
+            'data' => $new_menu
+        ]);
+
     }
 
     // Remove a menu permission from a user
-    public function destroy($user_id, $menu_id)
+    public function destroy(Request $request, $user_id)
     {
-        if ($menu_id == 0) {
-            $deleted = DB::table("permission")
-                ->where('user_id', $user_id)
-                ->delete();
-            if ($deleted === 0) {
-                return response()->json([
-                    'message' => 'Permission not found',
-                    'status' => 404,
-                    'data' => null
-                ], 404);
-            }
+        $menus = $request->input();
+        if (empty($menus)) {
             return response()->json([
-                'message' => 'unpermission successfully',
-                'status' => 200,
+                'message' => 'No menu IDs provided',
+                'status' => 400,
                 'data' => null
-            ]);
+            ], 400);
         }
+
         $deleted = DB::table("permission")
             ->where('user_id', $user_id)
-            ->where("menu_id", $menu_id)
+            ->whereIn('menu_id', $menus)
             ->delete();
         if ($deleted === 0) {
             return response()->json([
@@ -153,7 +135,7 @@ class PermissionController extends Controller
         return response()->json([
             'message' => 'unpermission successfully',
             'status' => 200,
-            'data' => null
+            'data' => $deleted
         ]);
     }
 }

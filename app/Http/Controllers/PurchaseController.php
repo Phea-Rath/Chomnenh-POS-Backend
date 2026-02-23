@@ -191,6 +191,94 @@ class PurchaseController extends Controller
         ], 201);
     }
 
+
+    public function storeRaw(Request $request)
+    {
+        $user = Auth::user();
+        $uid = $user->id;
+        $proId = $user->profile_id;
+
+        $validated = $request->validate([
+            'supplier_id'        => 'nullable|integer|exists:suppliers,supplier_id',
+            'purchase_date'      => 'required|date',
+            'sub_total'          => 'required|numeric',
+            'tax_rate'           => 'nullable|numeric',
+            'tax_amount'         => 'nullable|numeric',
+            'shipping_fee'       => 'nullable|numeric',
+            'total_amount'       => 'required|numeric',
+            'total_paid'         => 'nullable|numeric',
+            'balance'            => 'nullable|numeric',
+            'exchange_rate'      => 'nullable|numeric',
+            'status'             => 'required|integer',
+            'purchase_type'      => 'required|integer',
+            'items'              => 'required|array|min:1',
+            'items.*.item_id'    => 'required|integer',
+            'items.*.quantity'   => 'required|integer|min:1',
+            'items.*.item_cost'  => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
+            'payments'           => 'array',
+            'payments.*.amount'  => 'numeric|min:0',
+            'payments.*.paid_at' => 'date',
+        ]);
+
+
+
+        $purchaseNo = 'PO-' . now()->format('Ymd') . '-' . str_pad((Purchase::max('purchase_id') + 1), 5, '0', STR_PAD_LEFT);
+
+        $purchase = Purchase::create([
+            'purchase_no'   => $purchaseNo,
+            'supplier_id'   => $supplierId ?? Suppliers::max('supplier_id'),
+            'purchase_date' => $validated['purchase_date'],
+            'sub_total'     => $validated['sub_total'],
+            'tax_rate'      => $validated['tax_rate'] ?? 0,
+            'tax_amount'    => $validated['tax_amount'] ?? 0,
+            'shipping_fee'  => $validated['shipping_fee'] ?? 0,
+            'total_amount'  => $validated['total_amount'],
+            'total_paid'    => $validated['total_paid'] ?? 0,
+            'balance'       => $validated['balance'] ?? 0,
+            'purchase_type' => $validated['purchase_type'] ?? 0,
+            'exchange_rate' => $validated['exchange_rate'],
+            'status'        => $validated['status'],
+            'created_by'    => $uid,
+        ]);
+
+        $details = [];
+        foreach ($validated['items'] as $item) {
+            $details[] = PurchaseRawDetail::create([
+                'purchase_id' => $purchase->purchase_id,
+                'raw_material_id'     => $item['item_id'],
+                'quantity'    => $item['quantity'],
+                'item_cost'  => $item['item_cost'],
+                'subtotal'    => $item['quantity'] * $item['item_cost'],
+            ]);
+        }
+
+        $payments = [];
+        if (!empty($validated['payments'])) {
+            foreach ($validated['payments'] as $payment) {
+                $payments[] = PurchasePayment::create([
+                    'purchase_id' => $purchase->purchase_id,
+                    'amount'      => $payment['amount'],
+                    'paid_at'     => $payment['paid_at'],
+                    'created_by'  => $uid,
+                ]);
+            }
+        }
+        // Update items_cost for each item in the Items table
+        foreach ($validated['items'] as $item) {
+            $itemData = Items::where('item_id', $item['item_id'])->first();
+            $itemData->item_cost = $item['item_cost'];
+            $itemData->save();
+        }
+
+        return response()->json([
+            'message'  => 'Purchase created successfully!',
+            'status'   => 201,
+            'data'     => $purchase,
+            'details'  => $details,
+            'payments' => $payments
+        ], 201);
+    }
+
     public function show($id)
     {
         $purchase = Purchase::where('purchase_id', $id)
@@ -301,6 +389,77 @@ class PurchaseController extends Controller
         ]);
     }
 
+
+    public function updateRaw(Request $request, $id)
+    {
+        $purchase = Purchase::find($id);
+        $user = Auth::user();
+        $uid = $user->id;
+
+        if (!$purchase || $purchase->is_deleted) {
+            return response()->json([
+                'message' => 'Purchase not found!',
+                'status'  => 404
+            ]);
+        }
+
+        $validated = $request->validate([
+            'supplier_id'   => 'required|integer',
+            'purchase_date' => 'required|date',
+            'sub_total'     => 'required|numeric',
+            'tax_rate'      => 'nullable|numeric',
+            'tax_amount'    => 'nullable|numeric',
+            'shipping_fee'  => 'nullable|numeric',
+            'total_amount'  => 'required|numeric',
+            'total_paid'    => 'nullable|numeric',
+            'balance'       => 'nullable|numeric',
+            'exchange_rate' => 'nullable|numeric',
+            'status'        => 'required|integer',
+            'items'         => 'required|array|min:1',
+            'items.*.item_id'    => 'required|integer',
+            'items.*.quantity'   => 'required|integer',
+            'items.*.item_cost' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
+            'payments'           => 'array',
+            'payments.*.amount'  => 'numeric|min:0',
+            'payments.*.paid_at' => 'date'
+        ]);
+
+        $purchase->update($validated);
+
+        PurchaseRawDetail::where('purchase_id', $id)->delete();
+
+        $details = [];
+        foreach ($validated['items'] as $item) {
+            $details[] = PurchaseRawDetail::create([
+                'purchase_id' => $id,
+                'item_id'     => $item['item_id'],
+                'quantity'    => $item['quantity'],
+                'item_cost'  => $item['item_cost'],
+                'subtotal'    => $item['quantity'] * $item['item_cost'],
+            ]);
+        }
+        PurchasePayment::where('purchase_id', $id)->delete();
+
+        $payments = [];
+        if (!empty($validated['payments'])) {
+            foreach ($validated['payments'] as $payment) {
+                $payments[] = PurchasePayment::create([
+                    'purchase_id' => $purchase->purchase_id,
+                    'amount'      => $payment['amount'],
+                    'paid_at'     => $payment['paid_at'],
+                    'created_by'  => $uid,
+                ]);
+            }
+        }
+
+        return response()->json([
+            'message' => 'Purchase updated successfully',
+            'status'  => 200,
+            'data'    => $purchase,
+            'details' => $details
+        ]);
+    }
+
     public function destroy($id)
     {
         $purchase = Purchase::find($id);
@@ -314,6 +473,7 @@ class PurchaseController extends Controller
 
         $purchase->update(['is_deleted' => 1]);
         PurchaseDetail::where('purchase_id', $id)->update(['is_deleted' => 1]);
+        PurchaseRawDetail::where('purchase_id', $id)->update(['is_deleted' => 1]);
         PurchasePayment::where('purchase_id', $id)->update(['is_deleted' => 1]);
 
         return response()->json([

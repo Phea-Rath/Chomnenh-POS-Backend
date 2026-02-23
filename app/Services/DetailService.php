@@ -350,15 +350,15 @@ class DetailService {
     public function quanRaws($item_id) {
         $user = auth()->user();
         $proId = $user->profile_id;
-        $query = DB::table('stock_details as sd')
+        $query = DB::table('stock_raw_details as sd')
             ->join('stock_masters as sm', 'sd.stock_id', '=', 'sm.stock_id')
-            ->join('items as i', 'sd.item_id', '=', 'i.item_id')
+            ->join('raw_materials as i', 'sd.raw_material_id', '=', 'i.id')
             ->join('users as u', 'sm.stock_created_by', '=', 'u.id')
             ->join('profiles as p', 'u.profile_id', '=', 'p.id')
             ->where('sd.is_deleted', 0)
             ->where('sm.is_deleted', 0)
             ->where('i.is_deleted', 0)
-            ->where('i.item_id', $item_id)
+            ->where('i.id', $item_id)
             ->where('p.id', $proId);
 
 
@@ -375,7 +375,7 @@ class DetailService {
                 DB::raw('SUM(CASE WHEN sm.stock_type_id = 4 THEN sd.quantity ELSE 0 END) AS stock_wasted'),
                 DB::raw('SUM(CASE WHEN sm.stock_type_id = 5 THEN sd.quantity ELSE 0 END) AS sold')
             )
-            ->orderBy('i.item_id')
+            ->orderBy('i.id')
             ->get();
 
             $totalOrdered = DB::table('production_details as oi')
@@ -383,7 +383,7 @@ class DetailService {
             ->join('users as u', 'om.created_by', '=', 'u.id')
             ->join('profiles as p', 'u.profile_id', '=', 'p.id')
             ->where('p.id', $proId)
-            ->where('oi.item_id', $item_id)
+            ->where('oi.raw_material_id', $item_id)
             ->where('oi.is_deleted', 0)
             ->where('om.is_deleted', 0)
             ->sum('oi.quantity');

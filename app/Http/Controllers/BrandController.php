@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 use App\Services\TelegramService;
+use Illuminate\Support\Str;
 
 class BrandController extends Controller
 {
@@ -58,12 +59,22 @@ class BrandController extends Controller
         $uid = $user->id;
         $validated = $request->validate([
             'brand_name' => 'required|string|max:255',
-            'created_by' => 'required|integer',
         ]);
 
-        // Create the post
+        $brandName = Str::lower(trim($validated['brand_name']));
+        $exists = Brands::where('is_deleted', 0)
+            ->whereRaw('LOWER(TRIM(brand_name)) = ?', [$brandName])
+            ->exists();
+
+        if ($exists) {
+            return response()->json([
+                'message' => 'Brand name already exists!',
+                'status' => 409,
+            ], 409);
+        }
+
         $data = Brands::create([
-            'brand_name' => $validated['brand_name'],
+            'brand_name' => $brandName,
             'created_by' => $uid,
         ]);
 

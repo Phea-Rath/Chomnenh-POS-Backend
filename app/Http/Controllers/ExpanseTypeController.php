@@ -6,6 +6,7 @@ use App\Models\ExpanseTypes;
 use DB;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
 
 class ExpanseTypeController extends Controller
 {
@@ -42,9 +43,21 @@ class ExpanseTypeController extends Controller
             'expanse_type_name' => 'required|string|max:255',
             'created_by' => 'required|integer',
         ]);
-        // dd($validated);
+
+        $expanseTypeName = Str::lower(trim($validated['expanse_type_name']));
+        $exists = ExpanseTypes::where('is_deleted', 0)
+            ->whereRaw('LOWER(TRIM(expanse_type_name)) = ?', [$expanseTypeName])
+            ->exists();
+
+        if ($exists) {
+            return response()->json([
+                'message' => 'Expanse type name already exists!',
+                'status' => 409,
+            ], 409);
+        }
+
         $data = ExpanseTypes::create([
-            'expanse_type_name' => $validated['expanse_type_name'],
+            'expanse_type_name' => $expanseTypeName,
             'created_by' => $uid,
         ]);
 

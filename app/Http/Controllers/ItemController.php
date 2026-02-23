@@ -37,7 +37,7 @@ class ItemController extends Controller
     {
         $user = Auth::user();
         $proId = $user->profile_id;
-        $limit = $request->input('limit', 12);
+        $limit = $request->input('limit', 10);
         $page = $request->input('page', 1);
 
         // 1. Capture the search term
@@ -189,9 +189,7 @@ class ItemController extends Controller
             'category_id' => 'required|integer',
             'brand_id' => 'required|integer',
             'scale_id' => 'required|integer',
-            'discount' => 'required|integer',
-            'colors' => 'nullable|array',
-            'colors.*' => 'string',
+            'discount' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
             'item_cost' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
             'item_price' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
             'wholesale_price' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
@@ -252,7 +250,6 @@ class ItemController extends Controller
                 'brand_id' => $validated['brand_id'],
                 'scale_id' => $validated['scale_id'],
                 'discount' => $validated['discount']??0,
-                'colors' => $validated['colors'] ? json_encode($validated['colors']) : null,
                 'item_type' => 0,
                 'item_cost' => $validated['item_cost'],
                 'item_price' => $validated['item_price'],
@@ -308,9 +305,7 @@ class ItemController extends Controller
             'category_id' => 'required|integer',
             'brand_id' => 'required|integer',
             'scale_id' => 'required|integer',
-            'discount' => 'required|numeric',
-            'colors' => 'nullable|array',
-            'colors.*' => 'string',
+            'discount' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
             'item_cost' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
             'item_price' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
             'wholesale_price' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',

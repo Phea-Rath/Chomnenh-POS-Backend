@@ -22,21 +22,27 @@ return new class extends Migration
             $table->integer("through")->nullable();
             $table->double("order_subtotal");
             $table->double("order_discount");
-            $table->string("sale_type");
+            $table->string("sale_type");//'sale, wholesale'
             $table->unsignedInteger("order_customer_id")->default(0);
             $table->string("order_payment_method");
             $table->string("order_payment_status");
             $table->double("order_total");
             $table->double("order_tax")->default(0);
+            $table->double("exchange_rate")->default(4000);
             $table->double("balance");
             $table->double("payment");
             $table->unsignedBigInteger("created_by");
-            $table->string("order_type")->nullable();
             $table->integer("status")->default(1);
+                // 1. pending
+                // 2. editing
+                // 3. packaged
+                // 4. pickup
+                // 5. delivering
+                // 6. completed
+                // 7. cancelled
             $table->boolean("is_active")->default(true);
             $table->boolean("is_deleted")->default(0);
             $table->boolean("online")->default(0);
-            $table->boolean("is_cancelled")->default(0);
             $table->timestamps();
             $table->foreign("created_by")->references("id")->on("users");
             $table->foreign("order_customer_id")->references("customer_id")->on("customers");

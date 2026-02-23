@@ -6,6 +6,7 @@ use App\Models\Scales;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class ScaleController extends Controller
 {
@@ -59,12 +60,22 @@ class ScaleController extends Controller
         $uid = $user->id;
         $validated = $request->validate([
             'scale_name' => 'required|string|max:255',
-            'created_by' => 'required|integer',
         ]);
 
-        // Create the post
+        $scaleName = Str::lower(trim($validated['scale_name']));
+        $exists = Scales::where('is_deleted', 0)
+            ->whereRaw('LOWER(TRIM(scale_name)) = ?', [$scaleName])
+            ->exists();
+
+        if ($exists) {
+            return response()->json([
+                'message' => 'Scale name already exists!',
+                'status' => 409,
+            ], 409);
+        }
+
         $data = Scales::create([
-            'scale_name' => $validated['scale_name'],
+            'scale_name' => $scaleName,
             'created_by' => $uid,
         ]);
 

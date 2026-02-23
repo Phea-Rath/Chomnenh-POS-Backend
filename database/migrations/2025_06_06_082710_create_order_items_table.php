@@ -16,14 +16,11 @@ return new class extends Migration
             $table->unsignedBigInteger("order_id");
             $table->unsignedBigInteger("item_id");
             $table->string("item_name");
-            $table->double("price");
-            $table->double("item_price");
+            $table->decimal("price", 20, 2);
+            $table->decimal("item_price", 20, 2);
             $table->integer("discount")->default(0);
-            $table->decimal('exchange_rate', 8, 2);
-            $table->decimal('item_cost', 8, 2);
-            $table->decimal('item_wholesale_price', 8, 2);
+            $table->decimal('item_cost', 20, 2);
             $table->integer("quantity");
-            $table->integer("status")->default(1);
             $table->boolean("is_deleted")->default(0);
             $table->timestamps();
             $table->foreign("order_id")->references("order_id")->on("order_masters")->onDelete("cascade");

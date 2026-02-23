@@ -82,7 +82,7 @@ class AuthController extends Controller
             "password" => "required|string",
             "start_date" => "date|nullable",
             "term" => "integer|nullable",
-            'image' => 'nullable|file|mimes:jpeg,png',
+            'image' => 'nullable|file|mimes:jpeg,png,jpg,svg|max:2048',
         ]);
 
 

@@ -26,10 +26,10 @@ return new class extends Migration
 
 
         $permissions = [
+            ['user_id' => 1,'menu_id' => 8,],
+            ['user_id' => 1,'menu_id' => 1,],
+            ['user_id' => 1,'menu_id' => 3,],
             ['user_id' => 1,'menu_id' => 4,],
-            ['user_id' => 1,'menu_id' => 26,],
-            ['user_id' => 1,'menu_id' => 25,],
-            ['user_id' => 1,'menu_id' => 23,],
         ];
 
 

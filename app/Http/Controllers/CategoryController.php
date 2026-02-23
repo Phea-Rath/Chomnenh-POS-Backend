@@ -6,6 +6,7 @@ use App\Models\Categories;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class CategoryController extends Controller
 {
@@ -49,9 +50,20 @@ class CategoryController extends Controller
             'category_name' => 'required|string|max:255',
         ]);
 
-        // Create the post
+        $categoryName = Str::lower(trim($validated['category_name']));
+        $exists = Categories::where('is_deleted', 0)
+            ->whereRaw('LOWER(TRIM(category_name)) = ?', [$categoryName])
+            ->exists();
+
+        if ($exists) {
+            return response()->json([
+                'message' => 'Category name already exists!',
+                'status' => 409,
+            ], 409);
+        }
+
         $data = Categories::create([
-            'category_name' => $validated['category_name'],
+            'category_name' => $categoryName,
             'created_by' => $uid,
         ]);
 

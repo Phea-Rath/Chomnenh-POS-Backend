@@ -628,6 +628,66 @@ class StockMasterController extends Controller
         ], 201);
     }
 
+
+
+    public function storeRaw(Request $request)
+    {
+        $user = Auth::user();
+        $uid = $user->id;
+        $proId = $user->profile_id;
+        $stock_no = now()->format('Ymd') . '-' . str_pad((StockMaster::max('stock_id') + 1), 5, '0', STR_PAD_LEFT);
+        $stock_date = now()->format('Y-m-d');
+        $validated = $request->validate([
+            'stock_type_id' => 'required|integer',
+            'from_warehouse' => 'required|integer',
+            'warehouse_id' => 'required|integer',
+            'stock_remark' => 'required|string|max:255',
+            'exchange_rate'      => 'nullable|numeric',
+            'items' => 'array||min:1',
+            'items.*.item_id' => 'required|integer',
+            'items.*.quantity' => 'required|integer',
+            'items.*.item_cost' => 'required|numeric',
+            'items.*.expire_date' => 'required|date',
+        ]);
+
+
+
+        $exchange_rate = ExchangeRate::find($proId);
+        // Create the post
+        $data = StockMaster::create([
+            'stock_no' => $stock_no,
+            'stock_type_id' => $validated['stock_type_id'],
+            'from_warehouse' => $validated['from_warehouse'],
+            'warehouse_id' => $validated['warehouse_id'],
+            'quantity' => array_sum(array_column($validated['items'], 'quantity')),
+            'stock_date' => $stock_date,
+            'stock_remark' => $validated['stock_remark'],
+            'exchange_rate' => $validated['exchange_rate'],
+            'stock_created_by' => $uid,
+        ]);
+        $items = [];
+        foreach ($validated['items'] as $item) {
+            // $attr = json_encode($item['attributes']);
+
+
+            $items[] = StockRawDetails::create([
+                'stock_id' => StockMaster::max('stock_id'),
+                'raw_material_id' => $item['item_id'],
+                'quantity' => $item['quantity'],
+                'item_cost' => $item['item_cost'],
+                'transection_date' => $stock_date,
+                'expire_date' => $item['expire_date'],
+            ]);
+        }
+
+        return response()->json([
+            'message' => 'StockMaster created successfully!',
+            'status' => 200,
+            'data' => $data,
+            'items' => $items,
+        ], 201);
+    }
+
     /**
      * Display the specified resource.
      */
@@ -780,6 +840,73 @@ class StockMasterController extends Controller
 
 
 
+    public function updateRaw(Request $request, string $id)
+    {
+        $user = Auth::user();
+        $proId = $user->profile_id;
+        $stock_masters = StockMaster::find($id);
+        $stock_date = now()->format('Y-m-d');
+
+        if (!$stock_masters) {
+            return response()->json([
+                "message" => "This stock masters not found!",
+            ], 404);
+        }
+
+        $validated = $request->validate([
+            'stock_type_id' => 'required|integer',
+            'from_warehouse' => 'required|integer',
+            'warehouse_id' => 'required|integer',
+            'stock_date' => 'required|date',
+            'stock_remark' => 'required|string|max:255',
+            'exchange_rate' => 'nullable|numeric',
+            'items' => 'array||min:1',
+            'items.*.item_id' => 'required|integer',
+            'items.*.quantity' => 'required|integer',
+            'items.*.expire_date' => 'required|date',
+            'items.*.item_cost' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
+        ]);
+        $stock_masters->update([
+            'stock_type_id' => $validated['stock_type_id'],
+            'from_warehouse' => $validated['from_warehouse'],
+            'warehouse_id' => $validated['warehouse_id'],
+            'stock_date' => $validated['stock_date'],
+            'quantity' => array_sum(array_column($validated['items'], 'quantity')),
+            'stock_remark' => $validated['stock_remark'],
+            'exchange_rate' => $validated['exchange_rate'],
+        ]);
+
+
+        $exchange_rate = ExchangeRate::find($proId);
+
+        // ✅ Update the master record using the object, not query builder
+
+        if ($stock_masters) {
+            StockRawDetails::where('stock_id', $id)->delete();
+        }
+        $items = [];
+        foreach ($validated['items'] as $item) {
+            $items[] = StockRawDetails::create([
+                'stock_id' => StockMaster::max('stock_id'),
+                'item_id' => $item['item_id'],
+                'quantity' => $item['quantity'],
+                'item_cost' => $item['item_cost'],
+                'expire_date' => $item['expire_date'],
+                'transection_date' => $stock_date,
+            ]);
+
+
+        }
+        return response()->json([
+            "message" => "StockMaster updated successfully",
+            "status" => 200,
+            "data" => $stock_masters,
+            "details" => $items,
+        ], 200);
+    }
+
+
+
     /**
      * Remove the specified resource from storage.
      */
@@ -795,6 +922,8 @@ class StockMasterController extends Controller
 
         // ✅ update all related stock details
         StockDetails::where('stock_id', $stockMaster->stock_id)
+            ->update(['is_deleted' => 1]);
+        StockRawDetails::where('stock_id', $stockMaster->stock_id)
             ->update(['is_deleted' => 1]);
 
         // ✅ update stock master

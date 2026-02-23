@@ -6,6 +6,7 @@ use App\Models\Warehouses;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class WarehouseController extends Controller
 {
@@ -57,9 +58,20 @@ class WarehouseController extends Controller
             // 'created_by' => 'required|integer',
         ]);
 
-        // Create the post
+        $warehouseName = Str::lower(trim($validated['warehouse_name']));
+        $exists = Warehouses::where('is_deleted', 0)
+            ->whereRaw('LOWER(TRIM(warehouse_name)) = ?', [$warehouseName])
+            ->exists();
+
+        if ($exists) {
+            return response()->json([
+                'message' => 'Warehouse name already exists!',
+                'status' => 409,
+            ], 409);
+        }
+
         $data = Warehouses::create([
-            'warehouse_name' => $validated['warehouse_name'],
+            'warehouse_name' => $warehouseName,
             'status' => $validated['status'],
             'created_by' => $uid,
         ]);

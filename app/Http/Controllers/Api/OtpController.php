@@ -70,13 +70,6 @@ class OtpController extends Controller
                 'mocean-resp-format' => 'json'
             ]);
 
-            // $result = $mocean->message()->send([
-            //     'mocean-to' => $phoneNumber,
-            //     'mocean-from' => 'ChomnenhPOS',
-            //     'mocean-text' => $message,
-            //     'mocean-resp-format' => 'json'
-            // ]);
-
             $responseData = $response;
 
             // Handle response
