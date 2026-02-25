@@ -90,16 +90,17 @@ class ProductionController extends Controller
         $detailsGrouped = [];
         if (!empty($productionIds)) {
             $detailRows = DB::table('production_details as pd')
-                ->leftJoin('items as rm', 'pd.item_id', '=', 'rm.item_id')
+                ->leftJoin('raw_materials as rm', 'pd.raw_material_id', '=', 'rm.id')
                 ->select(
                     'pd.id',
                     'pd.production_id',
-                    'pd.item_id',
+                    'pd.raw_material_id',
+                    'rm.material_image',
                     'pd.quantity',
                     'pd.cost_per_unit',
                     'pd.total_cost',
-                    'rm.item_name as material_name',
-                    'rm.barcode as material_code'
+                    'rm.material_name',
+                    'rm.material_code'
                 )
                 ->whereIn('pd.production_id', $productionIds)
                 ->where('pd.is_deleted', 0)
@@ -114,7 +115,7 @@ class ProductionController extends Controller
                 $detailsGrouped[$pid][] = [
                     'id' => $d->id,
                     'production_id' => $d->production_id,
-                    'raw_material_id' => $d->item_id,
+                    'raw_material_id' => $d->raw_material_id,
                     'quantity' => $d->quantity,
                     'cost_per_unit' => $d->cost_per_unit,
                     'total_cost' => $d->total_cost,
@@ -157,7 +158,7 @@ class ProductionController extends Controller
             'quantity' => 'required|integer|min:1',
             'total_cost' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
             'raw_materials' => 'required|array|min:1',
-            'raw_materials.*.raw_material_id' => 'required|integer|exists:items,item_id',
+            'raw_materials.*.raw_material_id' => 'required|integer|exists:raw_materials,id',
             'raw_materials.*.quantity' => 'required|numeric|min:0.01',
             'raw_materials.*.cost_per_unit' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
         ]);
@@ -182,7 +183,7 @@ class ProductionController extends Controller
 
                 $details[] = ProductionDetail::create([
                     'production_id' => $production->id,
-                    'item_id' => $material['raw_material_id'],
+                    'raw_material_id' => $material['raw_material_id'],
                     'quantity' => $material['quantity'],
                     'cost_per_unit' => $material['cost_per_unit'],
                     'total_cost' => $totalMaterialCost,

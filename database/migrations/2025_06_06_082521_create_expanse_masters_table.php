@@ -11,16 +11,16 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('expanse_masters', function (Blueprint $table) {
-             Schema::create('expanse_masters', function (Blueprint $table) {
-            $table->increments("expanse_id");
-            $table->string("expanse_no");
-            $table->date("expanse_date");
-            $table->string("expanse_by");
+        Schema::table('expense_masters', function (Blueprint $table) {
+             Schema::create('expense_masters', function (Blueprint $table) {
+            $table->increments("expense_id");
+            $table->string("expense_no");
+            $table->date("expense_date");
+            $table->string("expense_by");
             $table->double("amount");
             $table->integer("created_by");
-            $table->string("expanse_other");
-            $table->string("expanse_supplier");
+            $table->string("expense_other");
+            $table->string("expense_supplier");
             $table->boolean("is_active")->default(true);
             $table->boolean("is_deleted")->default(0);
             $table->timestamps();
@@ -33,7 +33,7 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('expanse_masters');
+        Schema::dropIfExists('expense_masters');
     }
 
 };

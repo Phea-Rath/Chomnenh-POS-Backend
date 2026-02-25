@@ -24,68 +24,92 @@ class QuotationController extends Controller
         $this->detailService = $detailService;
         $this->itemService = $itemService;
     }
-    public function index()
+    public function index(Request $request)
     {
         $user = Auth::user();
         $proId = $user->profile_id;
-        $quotations = Quotation::with([
-                'customer:customer_id,customer_name',
-                'details.item:item_id,item_name,item_cost'
-            ])
-            ->where('profile_id', $proId)
-            ->orderBy('created_at', 'desc')
-            ->get()
-            ->map(function ($q) {
-                return [
-                    // ✅ ALL quotation columns
-                    ...$q->toArray(),
+        $limit = $request->input('limit', 10);
+        $page = $request->input('page', 1);
+        $search = $request->input('search');
 
-                    // ✅ flatten customer_name
-                    'customer_name' => $q->customer?->customer_name,
-
-                    // ✅ override details with item_name and image included
-                    'details' => $q->details->map(function ($d) {
-                        $img = $this->itemService->getImage($d->item_id)[0]['image'] ?? null;
-                        return array_merge($d->toArray(), ['image' => $img]);
-                    }),
-                ];
+        $quotationRows = DB::table('quotations as q')
+            ->leftJoin('customers as c', 'q.customer_id', '=', 'c.customer_id')
+            ->select('q.*', 'c.customer_name')
+            ->where('q.profile_id', $proId)
+            ->orderBy('q.created_at', 'desc');
+        if ($search) {
+            $quotationRows->where(function ($query) use ($search) {
+                $query->where('q.quotation_number', 'like', "%{$search}%")
+                    ->orWhere('c.customer_name', 'like', "%{$search}%")
+                    ->orWhere('q.status', 'like', "%{$search}%");
             });
+        }
+        $quotationRows = $quotationRows->paginate($limit, ['*'], 'page', $page);
+
+        $quotationIds = $quotationRows->pluck('quotation_id')->toArray();
+
+        $detailRows = DB::table('quotation_details')
+            ->whereIn('quotation_id', $quotationIds ?: [0])
+            ->get()
+            ->groupBy('quotation_id');
+
+        $quotations = $quotationRows->map(function ($q) use ($detailRows) {
+            $details = collect($detailRows->get($q->quotation_id, []))->map(function ($d) {
+                $detail = (array) $d;
+                $img = $this->itemService->getImage($d->item_id)[0]['image'] ?? null;
+                $detail['image'] = $img;
+                return $detail;
+            })->values();
+
+            return [
+                ...(array) $q,
+                'details' => $details,
+            ];
+        })->values();
 
         return response()->json([
             'message' => 'Quotation list',
+            'status' => 200,
             'data' => $quotations
         ], 200);
     }
 
-
     public function show($id)
     {
-        $quotation = Quotation::with([
-                'customer:customer_id,customer_name',
-            ])
-            ->findOrFail($id);
+        $quotation = DB::table('quotations as q')
+            ->leftJoin('customers as c', 'q.customer_id', '=', 'c.customer_id')
+            ->select('q.*', 'c.customer_name')
+            ->where('q.quotation_id', $id)
+            ->first();
+
+        if (!$quotation) {
+            return response()->json([
+                'message' => 'Quotation not found',
+            ], 404);
+        }
+
+        $details = DB::table('quotation_details')
+            ->where('quotation_id', $id)
+            ->get()
+            ->map(function ($d) {
+                $detail = (array) $d;
+                $img = $this->itemService->getImage($d->item_id)[0]['image'] ?? null;
+                $detail['image'] = $img;
+                return $detail;
+            })
+            ->values();
 
         $data = [
-            // ✅ all quotation fields
-            ...$quotation->toArray(),
-
-            // ✅ flatten customer_name
-            'customer_name' => $quotation->customer?->customer_name,
-
-            // ✅ override details to include item_name
-            'details' => $quotation->details->map(function ($d) {
-                        $img = $this->itemService->getImage($d->item_id)[0]['image'] ?? null;
-                        return array_merge($d->toArray(), ['image' => $img]);
-                    }),
+            ...(array) $quotation,
+            'details' => $details,
         ];
 
         return response()->json([
             'message' => 'Quotation detail',
+            'status' => 200,
             'data' => $data
         ], 200);
     }
-
-
 
     public function store(Request $request)
     {
@@ -103,7 +127,7 @@ class QuotationController extends Controller
         // Count items created in the current month for barcode
         $monthStart = $currentDate->startOfMonth()->format('Y-m-d');
         $monthEnd = $currentDate->endOfMonth()->format('Y-m-d');
-        $itemCount = Quotation::whereBetween('created_at', [$monthStart, $monthEnd])->count() + 1;
+        $itemCount = DB::table('quotations')->whereBetween('created_at', [$monthStart, $monthEnd])->count() + 1;
         $itemCountPadded = str_pad($itemCount, 5, '0', STR_PAD_LEFT); // Five-digit item count (e.g., 00001)
 
         // Construct barcode (e.g., 010225090100001)
@@ -130,7 +154,7 @@ class QuotationController extends Controller
         DB::beginTransaction();
 
         try {
-            // ✅ Save quotation (master)
+            // Ã¢Å“â€¦ Save quotation (master)
             $quotation = Quotation::create([
                 'quotation_number' => $code,
                 'customer_id' => $request->customer_id,
@@ -148,7 +172,7 @@ class QuotationController extends Controller
                 'created_by' => auth()->id(),
             ]);
 
-            // ✅ Save quotation details
+            // Ã¢Å“â€¦ Save quotation details
             foreach ($request->items as $item) {
                 $totalPrice =
                     ($item['quantity'] * $item['price']) - ($item['discount'] ?? 0);
@@ -208,7 +232,7 @@ class QuotationController extends Controller
         try {
             $quotation = Quotation::findOrFail($id);
 
-            // ✅ Update quotation (master)
+            // Ã¢Å“â€¦ Update quotation (master)
             $quotation->update([
                 'customer_id' => $request->customer_id,
                 'date' => $request->date,
@@ -223,10 +247,10 @@ class QuotationController extends Controller
                 'notes' => $request->notes,
             ]);
 
-            // ✅ Remove old details
+            // Ã¢Å“â€¦ Remove old details
             QuotationDetail::where('quotation_id', $quotation->quotation_id)->delete();
 
-            // ✅ Insert new details
+            // Ã¢Å“â€¦ Insert new details
             foreach ($request->items as $item) {
                 $totalPrice =
                     ($item['quantity'] * $item['price']) - ($item['discount'] ?? 0);
@@ -268,10 +292,10 @@ class QuotationController extends Controller
         try {
             $quotation = Quotation::findOrFail($id);
 
-            // ✅ Delete details first
+            // Ã¢Å“â€¦ Delete details first
             QuotationDetail::where('quotation_id', $quotation->quotation_id)->delete();
 
-            // ✅ Delete quotation
+            // Ã¢Å“â€¦ Delete quotation
             $quotation->delete();
 
             DB::commit();

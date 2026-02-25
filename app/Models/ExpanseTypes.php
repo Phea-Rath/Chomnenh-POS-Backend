@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class ExpanseTypes extends Model
 {
-    protected $primaryKey = "expanse_type_id";
-    protected $fillable = ["expanse_type_name",'created_by'];
+    protected $primaryKey = "expense_type_id";
+    protected $table = "expense_types";
+    protected $fillable = ["expense_type_name",'created_by'];
 }

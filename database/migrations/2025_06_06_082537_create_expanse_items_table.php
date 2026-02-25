@@ -11,18 +11,18 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('expanse_items', function (Blueprint $table) {
+        Schema::create('expense_items', function (Blueprint $table) {
             $table->id();
-            $table->unsignedInteger("expanse_id");
-            $table->unsignedInteger("expanse_type_id");
+            $table->unsignedInteger("expense_id");
+            $table->unsignedInteger("expense_type_id");
             $table->string("description");
             $table->integer("quantity");
             $table->double("unit_price");
             $table->double("sub_total");
             $table->boolean("is_deleted")->default(0);
             $table->timestamps();
-            $table->foreign("expanse_id")->references("expanse_id")->on("expanse_masters")->onDelete("cascade");
-            $table->foreign("expanse_type_id")->references("expanse_type_id")->on("expanse_types")->onDelete("cascade");
+            $table->foreign("expense_id")->references("expense_id")->on("expense_masters")->onDelete("cascade");
+            $table->foreign("expense_type_id")->references("expense_type_id")->on("expense_types")->onDelete("cascade");
         });
     }
 
@@ -31,6 +31,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('expanse_items');
+        Schema::dropIfExists('expense_items');
     }
 };

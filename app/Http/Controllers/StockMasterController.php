@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Events\OnlineEvent;
 use App\Models\StockDetails;
+use App\Models\StockRawDetail;
 use App\Models\StockMaster;
 use App\Models\Items;
 use App\Models\ExchangeRate;
@@ -923,6 +924,28 @@ class StockMasterController extends Controller
         // ✅ update all related stock details
         StockDetails::where('stock_id', $stockMaster->stock_id)
             ->update(['is_deleted' => 1]);
+
+        // ✅ update stock master
+        $stockMaster->is_deleted = 1;
+        $stockMaster->save();
+
+        return response()->json([
+            'message' => 'StockMaster deleted successfully',
+            'status' => 200,
+            'data' => $stockMaster,
+        ], 200);
+    }
+    public function destroyRaw(string $id)
+    {
+        $stockMaster = StockMaster::find($id);
+
+        if (!$stockMaster) {
+            return response()->json([
+                'message' => 'This stock master not found!',
+            ], 404);
+        }
+
+        // ✅ update all related stock details
         StockRawDetails::where('stock_id', $stockMaster->stock_id)
             ->update(['is_deleted' => 1]);
 

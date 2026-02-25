@@ -11,7 +11,7 @@ class ProductionDetail extends Model
     protected $table = 'production_details';
     protected $fillable = [
         'production_id',
-        'item_id',
+        'raw_material_id',
         'quantity',
         'cost_per_unit',
         'total_cost',

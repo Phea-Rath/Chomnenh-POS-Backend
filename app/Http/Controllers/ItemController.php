@@ -496,7 +496,7 @@ class ItemController extends Controller
         $created_by = str_pad($uid, 2, '0', STR_PAD_LEFT); // Two-digit created_by (e.g., 02)
 
         // Count items created in the current month for barcode
-        $monthStart = $currentDate->startOfMonth()->format('Y-m-d');
+        $monthStart = $currentDate->startOfMonth()->format('Y-m-d'); 
         $monthEnd = $currentDate->endOfMonth()->format('Y-m-d');
         $itemCount = Items::whereBetween('created_at', [$monthStart, $monthEnd])->count() + 1;
         $itemCountPadded = str_pad($itemCount, 5, '0', STR_PAD_LEFT); // Five-digit item count (e.g., 00001)

@@ -106,10 +106,10 @@ class BrandController extends Controller
                 ->first();
         } else {
             $brands = DB::table('brands')
-                ->join('users', 'brand.created_by', '=', 'users.id')
+                ->join('users', 'brands.created_by', '=', 'users.id')
                 ->where('users.profile_id', $proId)
-                ->where('created_by', $uid)
-                ->select('users.username as created_by_name','brand.*')
+                ->where('brands.created_by', $uid)
+                ->select('users.username as created_by_name','brands.*')
                 // ->paginate($page);
                 ->where('brands.brand_id', $id)
                 ->where('brands.is_deleted', 0)

@@ -10,17 +10,47 @@ class MenuController extends Controller
 {
     public function index()
     {
-        $menus = Menus::all();
-        foreach ($menus as $item) {
+        $allMenus = Menus::all();
+
+        foreach ($allMenus as $item) {
             if ($item->menu_icon) {
                 $filenameOnly = basename($item->menu_icon);
                 $item->menu_icon = url('storage/images/' . $filenameOnly);
             }
         }
+
+        $groupedMenus = $allMenus->groupBy('parent_menu')->map(function ($group) {
+            return $group->values();
+        });
+
+        $newFormat = $allMenus->filter(function ($menu) {
+            return is_null($menu->parent_menu) || $menu->parent_menu === '';
+        })->map(function ($menu) use ($groupedMenus) {
+            return [
+                ...$menu->toArray(),
+                'menus' => $groupedMenus->get($menu->menu_id, collect())->values(),
+            ];
+        })->values();
+
+        $orphanMenus = $allMenus->filter(function ($menu) use ($allMenus) {
+            if (is_null($menu->parent_menu) || $menu->parent_menu === '') {
+                return false;
+            }
+
+            return !$allMenus->firstWhere('menu_id', $menu->parent_menu);
+        })->map(function ($menu) {
+            return [
+                ...$menu->toArray(),
+                'sub_menus' => [],
+            ];
+        })->values();
+
+        $newFormat = $newFormat->concat($orphanMenus)->values();
+
         return response()->json([
             'message' => 'menus get successfully',
             'status' => 200,
-            'data' =>$menus
+            'data' => $newFormat
         ]);
     }
 
@@ -126,6 +156,24 @@ class MenuController extends Controller
             'message' => 'menus deleted successfully',
             'status' => 200,
             'data' => $menu
+        ]);
+    }
+
+
+    public function getEMenuByUserId(Request $request)
+    {
+        $user = $request->user();
+        // Get format result path/token/profile_id
+        $path = env('EMENU_URL', 'http://www.chomnenhapp.com/');
+        $user = $request->user();
+        $proId = $user->profile_id;
+        $token = $request->bearerToken();
+
+        $url = $path . $token . '/' . $proId;
+        return response()->json([
+            'message' => 'token get successfully',
+            'status' => 200,
+            'data' => $url
         ]);
     }
 }

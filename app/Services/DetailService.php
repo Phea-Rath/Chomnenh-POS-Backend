@@ -101,7 +101,7 @@ class DetailService {
                 'categories.category_name',
                 'purchases.created_by as created_by'
             )
-            ->where('purchases.created_by', $uid)
+            // ->where('purchases.created_by', $uid)
             ->where('purchase_details.is_deleted', 0)
             ->where('purchase_details.purchase_id', $id)
             ->get();
@@ -142,6 +142,41 @@ class DetailService {
             }
             return $item;
         });
+
+        return $purchase_detail;
+    }
+
+
+    public function purchaseRawDetail($id) {
+        $user = Auth::user();
+        $uid = $user->id;
+
+        $purchase_detail = DB::table('purchase_raw_details')
+            ->join('purchases', 'purchase_raw_details.purchase_id', '=', 'purchases.purchase_id')
+            ->join('raw_materials', 'purchase_raw_details.raw_material_id', '=', 'raw_materials.id')
+            ->select(
+                'purchase_raw_details.*',
+                'raw_materials.material_code',
+                'raw_materials.material_name',
+                'raw_materials.material_image',
+                'raw_materials.is_deleted',
+                'purchases.created_by'
+            )
+            // ->where('purchases.created_by', $uid)
+            ->where('purchase_raw_details.is_deleted', 0)
+            ->where('purchase_raw_details.purchase_id', $id)
+            ->get();
+
+        if ($purchase_detail->isEmpty()) {
+            return response()->json([
+                "message" => "No purchase detail found",
+                "status" => 404,
+                "data" => []
+            ]);
+        }
+
+
+        // ✅ Attach images to each purchase item
 
         return $purchase_detail;
     }
@@ -425,9 +460,9 @@ class DetailService {
 
             // Save only the quantity we actually used
             $usedRecords[] = [
-                'detail_id' => $record->detail_id,
+                'detail_id' => $record->id,
                 'stock_id' => $record->stock_id,
-                'item_id' => $record->item_id,
+                'item_id' => $record->raw_material_id,
                 'created_at' => $record->created_at,
                 'item_cost' => $record->item_cost,
                 'used_quantity' => $takeRestQty,

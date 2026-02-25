@@ -337,8 +337,8 @@ public function stockByItem(Request $request)
             "images" => $images, // YOU CAN UPDATE LATER IF YOU ADD MULTIPLE IMAGES
             "category" => $item->category_name,
             "brand" => "unknown",
-            "rating" => 0,
-            "reviews" => 0,
+            // "rating" => 0,
+            // "reviews" => 0,
             "sold" => 0,
             "stock" => $item->in_stock,
             "discount" => 0,

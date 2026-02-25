@@ -1,7 +1,7 @@
 <?php
 
 namespace App\Http\Controllers;
-
+use Illuminate\Support\Facades\Schema;
 use App\Models\ExpanseItems;
 use App\Models\ExpanseMaster;
 use DB;
@@ -22,21 +22,25 @@ class ExpanseMasterController extends Controller
     $page   = $request->input('page', 1);
     $search = $request->input('search'); // 🔍 search keyword
 
+    $exclude = ['is_deleted', 'is_active'];
+    $columns = Schema::getColumnListing('expense_masters');
+    $selectColumns = array_diff($columns, $exclude);
     // Paginated masters
-    $masters = DB::table('expanse_masters as em')
+    $masters = DB::table('expense_masters as em')
         ->where('em.created_by', $uid)
         ->where('em.is_deleted', 0)
+        ->select($selectColumns)
 
         // 🔍 SEARCH FILTER
         ->when($search, function ($query) use ($search) {
             $query->where(function ($q) use ($search) {
-                $q->where('em.expanse_code', 'like', "%{$search}%")
-                  ->orWhere('em.expanse_name', 'like', "%{$search}%")
+                $q->where('em.expense_code', 'like', "%{$search}%")
+                  ->orWhere('em.expense_name', 'like', "%{$search}%")
                   ->orWhere('em.note', 'like', "%{$search}%");
             });
         })
 
-        ->orderBy('em.expanse_id', 'desc')
+        ->orderBy('em.expense_id', 'desc')
         ->paginate($limit, ['*'], 'page', $page);
 
     if ($masters->isEmpty()) {
@@ -47,16 +51,19 @@ class ExpanseMasterController extends Controller
         ]);
     }
 
+    $exclude = ['is_deleted'];
+    $columns = Schema::getColumnListing('expense_items');
+    $selectColumns = array_diff($columns, $exclude);
     // Load items ONLY for current page masters
-    $items = DB::table('expanse_items as ei')
-        ->join('expanse_types as et', 'ei.expanse_type_id', '=', 'et.expanse_type_id')
-        ->whereIn('ei.expanse_id', collect($masters->items())->pluck('expanse_id'))
+    $items = DB::table('expense_items as ei')
+        ->join('expense_types as et', 'ei.expense_type_id', '=', 'et.expense_type_id')
+        ->whereIn('ei.expense_id', collect($masters->items())->pluck('expense_id'))
         ->get()
-        ->groupBy('expanse_id');
+        ->groupBy('expense_id');
 
     // Attach items to each master
     $result = collect($masters->items())->map(function ($master) use ($items) {
-        $master->items = $items->get($master->expanse_id) ?? [];
+        $master->items = $items->get($master->expense_id) ?? [];
         return $master;
     });
 
@@ -90,39 +97,39 @@ class ExpanseMasterController extends Controller
     {
         $user = Auth::user();
         $uid = $user->id;
-        $expanse_no = 'EXP-' . str_pad((ExpanseMaster::max('expanse_id') + 1), 5, '0', STR_PAD_LEFT);
+        $expense_no = 'EXP-' . str_pad((ExpanseMaster::max('expense_id') + 1), 5, '0', STR_PAD_LEFT);
         $validate = $request->validate([
-            // 'expanse_no',
-            'expanse_date' => 'required|date',
-            'expanse_by' => 'required|string|max:255',
+            // 'expense_no',
+            'expense_date' => 'required|date',
+            'expense_by' => 'required|string|max:255',
             'amount' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
             // 'created_by',
-            'expanse_other' => 'required|string|max:500',
-            'expanse_supplier' => 'required|string|max:500',
-            // 'expanse_id',
+            'expense_other' => 'required|string|max:500',
+            'expense_supplier' => 'required|string|max:500',
+            // 'expense_id',
             'items' => 'required|array|min:1',
-            'items.*.expanse_type_id' => 'required|integer',
+            'items.*.expense_type_id' => 'required|integer',
             'items.*.description' => 'required|string|max:500',
             'items.*.quantity' => 'required|integer',
             'items.*.unit_price' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
             'items.*.sub_total' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/'
         ]);
 
-        $expanse_masters = ExpanseMaster::create([
-            'expanse_no' => $expanse_no,
-            'expanse_date' => $validate['expanse_date'],
-            'expanse_by' => $validate['expanse_by'],
+        $expense_masters = ExpanseMaster::create([
+            'expense_no' => $expense_no,
+            'expense_date' => $validate['expense_date'],
+            'expense_by' => $validate['expense_by'],
             'amount' => $validate['amount'],
             'created_by' => $uid,
-            'expanse_other' => $validate['expanse_other'],
-            'expanse_supplier' => $validate['expanse_supplier'],
+            'expense_other' => $validate['expense_other'],
+            'expense_supplier' => $validate['expense_supplier'],
         ]);
 
-        $expanse_items = [];
+        $expense_items = [];
         foreach ($validate['items'] as $item) {
-            $expanse_items[] = ExpanseItems::create([
-                'expanse_id' => ExpanseMaster::max('expanse_id'),
-                'expanse_type_id' => $item['expanse_type_id'],
+            $expense_items[] = ExpanseItems::create([
+                'expense_id' => ExpanseMaster::max('expense_id'),
+                'expense_type_id' => $item['expense_type_id'],
                 'description' => $item['description'],
                 'quantity' => $item['quantity'],
                 'unit_price' => $item['unit_price'],
@@ -130,13 +137,13 @@ class ExpanseMasterController extends Controller
             ]);
         }
 
-        return $this->show($expanse_masters->expanse_id);
+        return $this->show($expense_masters->expense_id);
         // return response()->json([
-        //     'message' => 'expanse created successfully!',
+        //     'message' => 'expense created successfully!',
         //     'status' => 200,
         //     'data' => [
-        //         'expanse_masters' => $expanse_masters,
-        //         'expanse_items' => $expanse_items,
+        //         'expense_masters' => $expense_masters,
+        //         'expense_items' => $expense_items,
         //     ],
         // ]);
     }
@@ -148,27 +155,27 @@ class ExpanseMasterController extends Controller
     {
         $user = Auth::user();
         $uid = $user->id;
-        $masters = DB::table('expanse_masters')
-            ->where('expanse_id', $id)
+        $masters = DB::table('expense_masters')
+            ->where('expense_id', $id)
             ->where('is_deleted', 0)
             ->where('created_by', $uid)
             ->where('is_active', 1)
             ->get();
 
-        $items = DB::table('expanse_items')
-            ->join('expanse_types', 'expanse_items.expanse_type_id', '=', 'expanse_types.expanse_type_id')
-            ->whereIn('expanse_id', $masters->pluck('expanse_id'))
+        $items = DB::table('expense_items')
+            ->join('expense_types', 'expense_items.expense_type_id', '=', 'expense_types.expense_type_id')
+            ->whereIn('expense_id', $masters->pluck('expense_id'))
             ->get()
-            ->groupBy('expanse_id');
+            ->groupBy('expense_id');
 
         // Attach items to each master
         $result = $masters->map(function ($master) use ($items) {
-            $master->items = $items->get($master->expanse_id) ?? [];
+            $master->items = $items->get($master->expense_id) ?? [];
             return $master;
         });
 
         return response()->json([
-            'message' => 'expanse masters fetched successfully!',
+            'message' => 'expense masters fetched successfully!',
             'status' => 200,
             'data' => $result[0]
         ]);
@@ -187,48 +194,48 @@ class ExpanseMasterController extends Controller
      */
     public function update(Request $request, string $id)
     {
-        $expanse_masters = ExpanseMaster::find($id);
-        if (!$expanse_masters) {
+        $expense_masters = ExpanseMaster::find($id);
+        if (!$expense_masters) {
             return response()->json([
-                'message' => 'expanse master not found!',
+                'message' => 'expense master not found!',
                 'status' => 404,
             ]);
         }
         $validate = $request->validate([
-            // 'expanse_no',
-            'expanse_date' => 'required|date',
-            'expanse_by' => 'required|string|max:255',
+            // 'expense_no',
+            'expense_date' => 'required|date',
+            'expense_by' => 'required|string|max:255',
             'amount' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
             // 'created_by',
-            'expanse_other' => 'required|string|max:500',
-            'expanse_supplier' => 'required|string|max:500',
-            // 'expanse_id',
+            'expense_other' => 'required|string|max:500',
+            'expense_supplier' => 'required|string|max:500',
+            // 'expense_id',
             'items' => 'required|array|min:1',
-            'items.*.expanse_type_id' => 'required|integer',
+            'items.*.expense_type_id' => 'required|integer',
             'items.*.description' => 'required|string|max:500',
             'items.*.quantity' => 'required|integer',
             'items.*.unit_price' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
             'items.*.sub_total' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/'
         ]);
 
-        $expanse_masters->update([
-            // 'expanse_no'=>$expanse_no,
-            'expanse_date' => $validate['expanse_date'],
-            'expanse_by' => $validate['expanse_by'],
+        $expense_masters->update([
+            // 'expense_no'=>$expense_no,
+            'expense_date' => $validate['expense_date'],
+            'expense_by' => $validate['expense_by'],
             'amount' => $validate['amount'],
-            'expanse_other' => $validate['expanse_other'],
-            'expanse_supplier' => $validate['expanse_supplier'],
+            'expense_other' => $validate['expense_other'],
+            'expense_supplier' => $validate['expense_supplier'],
         ]);
 
-        if ($expanse_masters) {
-            ExpanseItems::where('expanse_id', $id)->delete();
+        if ($expense_masters) {
+            ExpanseItems::where('expense_id', $id)->delete();
         }
 
-        $expanse_items = [];
+        $expense_items = [];
         foreach ($validate['items'] as $item) {
-            $expanse_items[] = ExpanseItems::create([
-                'expanse_id' => $expanse_masters->expanse_id,
-                'expanse_type_id' => $item['expanse_type_id'],
+            $expense_items[] = ExpanseItems::create([
+                'expense_id' => $expense_masters->expense_id,
+                'expense_type_id' => $item['expense_type_id'],
                 'description' => $item['description'],
                 'quantity' => $item['quantity'],
                 'unit_price' => $item['unit_price'],
@@ -239,11 +246,11 @@ class ExpanseMasterController extends Controller
         return $this->show($id);
 
         // return response()->json([
-        //     'message' => 'expanse updated successfully!',
+        //     'message' => 'expense updated successfully!',
         //     'status' => 200,
         //     'data' => [
-        //         'expanse_masters' => $expanse_masters,
-        //         'expanse_items' => $expanse_items,
+        //         'expense_masters' => $expense_masters,
+        //         'expense_items' => $expense_items,
         //     ],
         // ]);
     }
@@ -253,28 +260,28 @@ class ExpanseMasterController extends Controller
      */
     public function destroy(string $id)
     {
-        $expanse_masters = ExpanseMaster::find($id);
-        if (!$expanse_masters) {
+        $expense_masters = ExpanseMaster::find($id);
+        if (!$expense_masters) {
             return response()->json([
-                'message' => 'expanse master not found!',
+                'message' => 'expense master not found!',
                 'status' => 404,
             ]);
         }
-        $expanse_masters->update([
+        $expense_masters->update([
             'is_delete' => 1,
         ]);
-        $expanse_items = ExpanseItems::where('expanse_id', $id)->get();
-        if ($expanse_items) {
-            foreach ($expanse_items as $item) {
+        $expense_items = ExpanseItems::where('expense_id', $id)->get();
+        if ($expense_items) {
+            foreach ($expense_items as $item) {
                 $item->update([
                     'is_delete' => 1,
                 ]);
             }
         }
         return response()->json([
-            'message' => 'expanse master deleted successfully!',
+            'message' => 'expense master deleted successfully!',
             'status' => 200,
-            'data' => $expanse_masters
+            'data' => $expense_masters
         ]);
     }
 }

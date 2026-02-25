@@ -11,9 +11,9 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('expanse_types', function (Blueprint $table) {
-            $table->increments("expanse_type_id");
-            $table->string("expanse_type_name");
+        Schema::create('expense_types', function (Blueprint $table) {
+            $table->increments("expense_type_id");
+            $table->string("expense_type_name");
             $table->integer("created_by");
             $table->boolean("is_deleted")->default(0);
             $table->timestamps();
@@ -25,6 +25,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('expanse_types');
+        Schema::dropIfExists('expense_types');
     }
 };

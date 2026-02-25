@@ -15,24 +15,24 @@ class ExpanseTypeController extends Controller
         $user = Auth::user();
         $uid = $user->id;
         // $page = 2;
-        $expanse_types = DB::table('expanse_types')
+        $expense_types = DB::table('expense_types')
             ->where('is_deleted', 0)
             ->where('created_by', $uid)
             // ->paginate($page);
             ->get();
-        if (count($expanse_types) == 0) {
+        if (count($expense_types) == 0) {
             return response()->json([
                 'message' => 'ExpanseTypes not found!',
                 'status' => 404,
                 // 'data'=>$students->items(),
-                'data' => $expanse_types
+                'data' => $expense_types
             ]);
         }
         return response()->json([
             'message' => 'ExpanseTypes selected successfully',
             'status' => 200,
             // 'data'=>$students->items(),
-            'data' => array_reverse($expanse_types->toArray()),
+            'data' => array_reverse($expense_types->toArray()),
         ]);
     }
     public function store(Request $request)
@@ -40,13 +40,13 @@ class ExpanseTypeController extends Controller
         $user = Auth::user();
         $uid = $user->id;
         $validated = $request->validate([
-            'expanse_type_name' => 'required|string|max:255',
+            'expense_type_name' => 'required|string|max:255',
             'created_by' => 'required|integer',
         ]);
 
-        $expanseTypeName = Str::lower(trim($validated['expanse_type_name']));
+        $expenseTypeName = Str::lower(trim($validated['expense_type_name']));
         $exists = ExpanseTypes::where('is_deleted', 0)
-            ->whereRaw('LOWER(TRIM(expanse_type_name)) = ?', [$expanseTypeName])
+            ->whereRaw('LOWER(TRIM(expense_type_name)) = ?', [$expenseTypeName])
             ->exists();
 
         if ($exists) {
@@ -57,7 +57,7 @@ class ExpanseTypeController extends Controller
         }
 
         $data = ExpanseTypes::create([
-            'expanse_type_name' => $expanseTypeName,
+            'expense_type_name' => $expenseTypeName,
             'created_by' => $uid,
         ]);
 
@@ -76,10 +76,10 @@ class ExpanseTypeController extends Controller
     {
         $user = Auth::user();
         $uid = $user->id;
-        $expanse_types = ExpanseTypes::where('created_by', $uid)
+        $expense_types = ExpanseTypes::where('created_by', $uid)
             ->where('is_deleted', 0)
             ->find($id);
-        if (!$expanse_types) {
+        if (!$expense_types) {
             return response()->json([
                 'message' => 'ExpanseType not found!',
             ], 404);
@@ -87,32 +87,32 @@ class ExpanseTypeController extends Controller
         return response()->json([
             'message' => 'ExpanseType show successfully!',
             'status' => 200,
-            'data' => $expanse_types,
+            'data' => $expense_types,
         ], 201);
     }
     public function update(Request $request, string $id)
     {
         // $user = Auth::user();
         // $uid = $user->id;
-        $expanse_types = ExpanseTypes::find($id);
+        $expense_types = ExpanseTypes::find($id);
 
-        if (!$expanse_types) {
+        if (!$expense_types) {
             return response()->json([
-                "message" => "This expanse type not found!",
+                "message" => "This expense type not found!",
             ], 404);
         }
 
         $validated = $request->validate([
-            'expanse_type_name' => 'required|string|max:255',
+            'expense_type_name' => 'required|string|max:255',
             // 'created_by' => 'required|integer',
         ]);
 
-        $expanse_types->update($validated);
+        $expense_types->update($validated);
 
         return response()->json([
             "message" => "ExpanseType updated successfully",
             "status" => 200,
-            "data" => $expanse_types,
+            "data" => $expense_types,
         ], 200);
     }
 
@@ -122,19 +122,19 @@ class ExpanseTypeController extends Controller
      */
     public function destroy(string $id)
     {
-        $expanse_types = ExpanseTypes::find($id);
-        if (!$expanse_types) {
+        $expense_types = ExpanseTypes::find($id);
+        if (!$expense_types) {
             return response()->json([
-                "message" => "This expanse type not found!",
+                "message" => "This expense type not found!",
             ], 404);
         }
 
-        $expanse_types->is_deleted = 1;
-        $expanse_types->save();
+        $expense_types->is_deleted = 1;
+        $expense_types->save();
         return response()->json([
             "message" => "ExpanseType deleted successfully",
             "status" => 200,
-            "data" => $expanse_types,
+            "data" => $expense_types,
         ], 200);
     }
 }

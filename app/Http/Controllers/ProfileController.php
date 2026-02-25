@@ -113,7 +113,7 @@ class ProfileController extends Controller
             $profile->qr_code = url('storage/images/' . basename($profile->qr_code));
         }
 
-        return response()->json([
+        return response()->json([ 
             'message' => 'Profile retrieved successfully!',
             'status'  => 200,
             'data'    => $profile,

@@ -5,12 +5,15 @@ namespace App\Http\Controllers;
 use App\Models\Items;
 use App\Models\Purchase;
 use App\Models\PurchaseDetail;
+use App\Models\PurchaseRawDetail;
 use App\Models\Purchases;
+use App\Models\RawMaterial;
 use App\Models\PurchaseDetails;
 use App\Models\PurchasePayment;
 use App\Models\PurchasePayments;
 use App\Models\PurchaseAttribute;
 use App\Models\StockDetails;
+use App\Models\StockRawDetail;
 use App\Models\StockAttribute;
 use App\Models\Suppliers;
 use App\Services\DetailService;
@@ -318,6 +321,46 @@ class PurchaseController extends Controller
     }
 
 
+    public function showRaw($id)
+    {
+        $purchase = Purchase::where('purchase_id', $id)
+            ->where('is_deleted', 0)
+            ->first();
+
+        if (!$purchase) {
+            return response()->json([
+                'message' => 'Purchase not found!',
+                'status'  => 404,
+                'data'    => []
+            ]);
+        }
+
+        $details = $this->detailService->purchaseRawDetail($purchase->purchase_id);
+        // dd($details);
+
+        $payments = DB::table('purchase_payments')
+            ->select('id', 'amount', 'paid_at')
+            ->where('purchase_id', $purchase->purchase_id)
+            ->where('is_deleted', 0)
+            ->get();
+
+        // Merge purchase info with details + payments
+        $data = array_merge(
+            $purchase->toArray(),
+            [
+                'details'  => $details,
+                'payments' => $payments
+            ]
+        );
+
+        return response()->json([
+            'message' => 'Purchase fetched successfully!',
+            'status'  => 200,
+            'data'    => $data
+        ]);
+    }
+
+
     public function update(Request $request, $id)
     {
         $purchase = Purchase::find($id);
@@ -482,6 +525,29 @@ class PurchaseController extends Controller
         ]);
     }
 
+
+    public function destroyRaw($id)
+    {
+        $purchase = Purchase::find($id);
+
+        if (!$purchase) {
+            return response()->json([
+                'message' => 'Purchase not found!',
+                'status'  => 404
+            ]);
+        }
+
+        $purchase->update(['is_deleted' => 1]);
+        PurchaseRawDetail::where('purchase_id', $id)->update(['is_deleted' => 1]);
+        PurchaseRawDetail::where('purchase_id', $id)->update(['is_deleted' => 1]);
+        PurchasePayment::where('purchase_id', $id)->update(['is_deleted' => 1]);
+
+        return response()->json([
+            'message' => 'Purchase deleted successfully!',
+            'status'  => 200
+        ]);
+    }
+
     public function purchaseCancel($id)
     {
         $purchase = Purchase::find($id);
@@ -587,6 +653,93 @@ class PurchaseController extends Controller
 
                 Items::find($item->item_id)->update([
                     'cost_price' => (int)$item->item_cost,
+                ]);
+
+            }
+
+            DB::commit();
+            return response()->json([
+                'message' => 'Purchase confirmed and items inserted into stock successfully',
+                'status' => 200,
+                'data' => $purchase,
+                'stock_master_id' => $stockMasterId,
+                'stock_items' => $stockItems
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'message' => 'Error confirming purchase: ' . $e->getMessage(),
+                'status' => 500
+            ], 500);
+        }
+    }
+
+
+    public function purchaseConfirmRaw($id)
+    {
+        $purchaseDB = Purchase::find($id);
+        $purchase = $this->showRaw($id)->original['data'];
+        // dd($purchase);
+        if (!$purchase) {
+            return response()->json([
+                'message' => 'Purchase not found!',
+                'status'  => 404
+            ]);
+        }
+
+        // Use DB transaction for atomicity
+        DB::beginTransaction();
+        try {
+            $purchaseDB->update(['status' => 1]);
+
+            $user = Auth::user();
+            $uid = $user->id;
+            $proId = $user->profile_id;
+            $stock_date = now()->format('Y-m-d');
+
+            // Generate stock_no safely
+            $maxStockId = DB::table('stock_masters')->max('stock_id');
+            $newStockId = ($maxStockId ?? 0) + 1;
+            $stock_no = now()->format('Ymd') . '-' . str_pad(($maxStockId), 5, '0', STR_PAD_LEFT);
+
+            // Create stock master
+            DB::table('stock_masters')->insert([
+                'stock_id' => $newStockId,
+                'stock_no' => $stock_no,
+                'stock_type_id' => 2, // 2 = stock in
+                'from_warehouse' => 2, // Default or set as needed
+                'warehouse_id' => $purchaseDB->purchase_type == 0? 1 : 5, // Default or set as needed
+                'quantity' => collect($purchase['details'])->sum('quantity'),
+                'stock_date' => $stock_date,
+                'stock_remark' => 'Purchase Confirmed',
+                'stock_created_by' => $uid,
+                'is_deleted' => 0,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+            $stockMasterId = $newStockId;
+            // Get purchase details
+            // $details = PurchaseDetail::where('purchase_id', $purchase["purchase_id"])->where('is_deleted', 0)->get();
+            $details = $purchase['details'];
+            // Preload all items in one query for efficiency
+            $itemIds = $details->pluck('raw_material_id')->unique()->toArray();
+            $itemsMap = RawMaterial::whereIn('id', $itemIds)->get()->keyBy('id');
+
+            $exchange_rate = ExchangeRate::find($proId);
+            $stockItems = [];
+            foreach ($details as $item) {
+                $itemData = $itemsMap[$item->raw_material_id] ?? null;
+                if (!$itemData) continue; // skip if item not found
+                $stockItems[] = StockRawDetail::create([
+                    'stock_id' => (int)$stockMasterId,
+                    'raw_material_id' => $item->raw_material_id,
+                    'quantity' => (int)$item->quantity,
+                    'item_cost' => $item->item_cost,
+                    'expire_date' => null, // Set if available
+                    'transection_date' => $stock_date,
+                    'is_deleted' => 0,
+                    'created_at' => now(),
+                    'updated_at' => now(),
                 ]);
 
             }

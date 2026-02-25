@@ -242,62 +242,114 @@ class ReportController extends Controller
             'end_date' => 'nullable|date',
         ]);
 
-        $query = DB::table('purchase_details as pd')
-            ->select(
-                'i.item_id',
-                'i.barcode',
-                'i.item_name',
-                DB::raw('SUM(pd.quantity) as quantity'),
-                'i.item_price',
-                'cg.category_name',
-                'br.brand_name',
-                DB::raw('SUM(pd.subtotal) as subtotal'),
-                DB::raw('SUM(p.tax_amount) as tax_amount'),
-                DB::raw('SUM(p.shipping_fee) as shipping_fee'),
-                DB::raw('SUM(p.total_amount) as total_amount'),
-                DB::raw('SUM(p.total_paid) as total_paid'),
-                DB::raw('SUM(p.balance) as balance')
-            )
-            ->join('purchases as p', 'p.purchase_id', '=', 'pd.purchase_id')
-            ->join('users as u', 'u.id', '=', 'p.created_by')
-            ->join('profiles as pf', 'pf.id', '=', 'u.profile_id')
-            ->join('suppliers as sp', 'sp.supplier_id', '=', 'p.supplier_id')
-            ->join('items as i', 'i.item_id', '=', 'pd.item_id')
-            ->leftJoin('categories as cg', 'cg.category_id', '=', 'i.category_id')
-            ->leftJoin('brands as br', 'br.brand_id', '=', 'i.brand_id')
-            ->where('p.is_deleted', 0)
-            ->where('i.item_type', $request->item_type ?? 0)
-            ->where('pf.id', $proId)
-            ->groupBy(
-                'i.item_id',
-                'i.barcode',
-                'i.item_name',
-                'i.item_price',
-                'cg.category_name',
-                'br.brand_name'
-            );
+        $results = collect();
+        if($request->filled('item_type') && $request->item_type == 1){
+            $query = DB::table('purchase_raw_details as pd')
+                ->select(
+                    'i.id as item_id',
+                    'i.material_code as barcode',
+                    'i.material_name as item_name',
+                    DB::raw('SUM(pd.item_cost) as total_cost'),
+                    DB::raw('SUM(pd.quantity) as quantity'),
+                    DB::raw('SUM(pd.subtotal) as subtotal'),
+                    DB::raw('SUM(p.tax_amount) as tax_amount'),
+                    DB::raw('SUM(p.shipping_fee) as shipping_fee'),
+                    DB::raw('SUM(p.total_amount) as total_amount'),
+                    DB::raw('SUM(p.total_paid) as total_paid'),
+                    DB::raw('SUM(p.balance) as balance')
+                )
+                ->join('purchases as p', 'p.purchase_id', '=', 'pd.purchase_id')
+                ->join('users as u', 'u.id', '=', 'p.created_by')
+                ->join('profiles as pf', 'pf.id', '=', 'u.profile_id')
+                ->join('suppliers as sp', 'sp.supplier_id', '=', 'p.supplier_id')
+                ->join('raw_materials as i', 'i.id', '=', 'pd.raw_material_id')
+                ->where('p.is_deleted', 0)
+                ->where('pf.id', $proId)
+                ->groupBy(
+                    'i.id',
+                    'i.material_code',
+                    'i.material_name',
+                );
+            if ($request->filled('supplier_id')) {
+                $query->where('sp.supplier_id', $request->supplier_id);
+            }
 
-        if ($request->filled('supplier_id')) {
-            $query->where('sp.supplier_id', $request->supplier_id);
+            if ($request->filled('created_by')) {
+                $query->where('p.created_by', $request->created_by);
+            }
+
+            if ($request->filled('item_id')) {
+                $query->where('i.id', $request->item_id);
+            }
+
+            if ($request->filled('start_date') && $request->filled('end_date')) {
+                $query->whereBetween('p.purchase_date', [$request->start_date, $request->end_date]);
+            } elseif ($request->filled('start_date')) {
+                $query->where('p.purchase_date', '>=', $request->start_date);
+            } elseif ($request->filled('end_date')) {
+                $query->where('p.purchase_date', '<=', $request->end_date);
+            }
+
+            $results = $query->get();
+        }else{
+
+            $query = DB::table('purchase_details as pd')
+                ->select(
+                    'i.item_id',
+                    'i.barcode',
+                    'i.item_name',
+                    DB::raw('SUM(pd.quantity) as quantity'),
+                    'i.item_price',
+                    'cg.category_name',
+                    'br.brand_name',
+                    DB::raw('SUM(pd.item_cost) as total_cost'),
+                    DB::raw('SUM(pd.subtotal) as subtotal'),
+                    DB::raw('SUM(p.tax_amount) as tax_amount'),
+                    DB::raw('SUM(p.shipping_fee) as shipping_fee'),
+                    DB::raw('SUM(p.total_amount) as total_amount'),
+                    DB::raw('SUM(p.total_paid) as total_paid'),
+                    DB::raw('SUM(p.balance) as balance')
+                )
+                ->join('purchases as p', 'p.purchase_id', '=', 'pd.purchase_id')
+                ->join('users as u', 'u.id', '=', 'p.created_by')
+                ->join('profiles as pf', 'pf.id', '=', 'u.profile_id')
+                ->join('suppliers as sp', 'sp.supplier_id', '=', 'p.supplier_id')
+                ->join('items as i', 'i.item_id', '=', 'pd.item_id')
+                ->leftJoin('categories as cg', 'cg.category_id', '=', 'i.category_id')
+                ->leftJoin('brands as br', 'br.brand_id', '=', 'i.brand_id')
+                ->where('p.is_deleted', 0)
+                ->where('pf.id', $proId)
+                ->groupBy(
+                    'i.item_id',
+                    'i.barcode',
+                    'i.item_name',
+                    'i.item_price',
+                    'cg.category_name',
+                    'br.brand_name'
+                );
+
+            if ($request->filled('supplier_id')) {
+                $query->where('sp.supplier_id', $request->supplier_id);
+            }
+
+            if ($request->filled('created_by')) {
+                $query->where('p.created_by', $request->created_by);
+            }
+
+            if ($request->filled('item_id')) {
+                $query->where('i.item_id', $request->item_id);
+            }
+
+            if ($request->filled('start_date') && $request->filled('end_date')) {
+                $query->whereBetween('p.purchase_date', [$request->start_date, $request->end_date]);
+            } elseif ($request->filled('start_date')) {
+                $query->where('p.purchase_date', '>=', $request->start_date);
+            } elseif ($request->filled('end_date')) {
+                $query->where('p.purchase_date', '<=', $request->end_date);
+            }
+
+            $results = $query->get();
         }
-
-        if ($request->filled('created_by')) {
-            $query->where('p.created_by', $request->created_by);
-        }
-
-        if ($request->filled('item_id')) {
-            $query->where('i.item_id', $request->item_id);
-        }
-
-        if ($request->filled('start_date') && $request->filled('end_date')) {
-            $query->whereBetween('p.purchase_date', [$request->start_date, $request->end_date]);
-        } elseif ($request->filled('start_date')) {
-            $query->where('p.purchase_date', '>=', $request->start_date);
-        } elseif ($request->filled('end_date')) {
-            $query->where('p.purchase_date', '<=', $request->end_date);
-        }
-
-        $results = $query->get();
 
         return response()->json([
             'message' => 'purchase report by item get successfully',
@@ -437,14 +489,14 @@ class ReportController extends Controller
         $productionIds = $productions->pluck('id');
 
         $detailRows = DB::table('production_details as pd')
-            ->leftJoin('items as rm', 'rm.item_id', '=', 'pd.item_id')
+            ->leftJoin('raw_materials as rm', 'rm.id', '=', 'pd.raw_material_id')
             ->whereIn('pd.production_id', $productionIds)
             ->where('pd.is_deleted', 0)
             ->select(
                 'pd.production_id',
-                'pd.item_id as raw_material_id',
-                'rm.item_name as raw_material_name',
-                'rm.barcode as raw_material_code',
+                'pd.raw_material_id',
+                'rm.material_name as raw_material_name',
+                'rm.material_code as raw_material_code',
                 'pd.quantity',
                 'pd.cost_per_unit',
                 'pd.total_cost'
@@ -497,9 +549,9 @@ class ReportController extends Controller
 
         $query = DB::table('production_details as pd')
             ->select(
-                'rm.item_id',
-                'rm.barcode',
-                'rm.item_name',
+                'rm.id',
+                'rm.material_code',
+                'rm.material_name',
                 DB::raw('SUM(pd.quantity) as quantity'),
                 DB::raw('AVG(pd.cost_per_unit) as cost_per_unit'),
                 DB::raw('SUM(pd.total_cost) as total_cost'),
@@ -512,16 +564,14 @@ class ReportController extends Controller
             ->join('productions as p', 'p.id', '=', 'pd.production_id')
             ->join('users as u', 'u.id', '=', 'p.created_by')
             ->join('profiles as pf', 'pf.id', '=', 'u.profile_id')
-            ->join('items as rm', 'rm.item_id', '=', 'pd.item_id')
-            ->leftJoin('categories as cg', 'cg.category_id', '=', 'rm.category_id')
-            ->leftJoin('brands as br', 'br.brand_id', '=', 'rm.brand_id')
+            ->join('raw_materials as rm', 'rm.id', '=', 'pd.raw_material_id')
             ->where('p.is_deleted', 0)
             ->where('pd.is_deleted', 0)
             ->where('pf.id', $proId)
             ->groupBy(
-                'rm.item_id',
-                'rm.barcode',
-                'rm.item_name'
+                'rm.id',
+                'rm.material_code',
+                'rm.material_name',
             );
 
         if ($request->filled('created_by')) {
@@ -529,7 +579,7 @@ class ReportController extends Controller
         }
 
         if ($request->filled('item_id')) {
-            $query->where('rm.item_id', $request->item_id);
+            $query->where('rm.id', $request->item_id);
         }
 
         if ($request->filled('start_date') && $request->filled('end_date')) {
@@ -962,7 +1012,7 @@ class ReportController extends Controller
         $queryOrder = DB::table('order_items as oi')
             ->select(
                 DB::raw('SUM(om.order_total) as order_total'),
-                DB::raw('SUM(om.order_total * oi.exchange_rate) as order_total_kh')
+                DB::raw('SUM(om.order_total * om.exchange_rate) as order_total_kh')
             )
             ->join('order_masters as om', 'om.order_id', '=', 'oi.order_id')
             ->join('customers as c','c.customer_id','=','om.order_customer_id')
@@ -1121,8 +1171,8 @@ class ReportController extends Controller
 
             $data[] = [
                 'month' => $month,
-                'profit' => $revenue - $cost,
-                'revenue' => $revenue,
+                'profit' => number_format($revenue - $cost, 2),
+                'revenue' => number_format($revenue, 2),
                 'cost' => $cost
             ];
 

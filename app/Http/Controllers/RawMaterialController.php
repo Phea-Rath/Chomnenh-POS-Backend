@@ -127,6 +127,7 @@ class RawMaterialController extends Controller
         $validated = $request->validate([
             'material_name' => 'required|string|max:255',
             'material_image' => '',
+            'material_code' => 'unique:raw_materials,material_code',
             'primary_unit' => 'required|string|max:100',
             'secondary_unit' => 'nullable|string|max:100',
             'conversion_value' => 'nullable|numeric',
@@ -141,7 +142,7 @@ class RawMaterialController extends Controller
 
 
         $data = RawMaterial::create([
-            'material_code' => $code,
+            'material_code' => $validated['material_code'] ?? $code,
             'material_name' => $validated['material_name'],
             'created_by' => $uid,
             'primary_unit' => $validated['primary_unit'],

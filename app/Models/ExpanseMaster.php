@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class ExpanseMaster extends Model
 {
-    protected $primaryKey = 'expanse_id';
-    protected $fillable = ['expanse_no', 'expanse_date', 'expanse_by', 'expanse_type', 'amount', 'created_by', 'expanse_other', 'expanse_supplier', 'is_active', 'is_deleted'];
+    protected $primaryKey = 'expense_id';
+    protected $table = 'expense_masters';
+    protected $fillable = ['expense_no', 'expense_date', 'expense_by', 'expense_type', 'amount', 'created_by', 'expense_other', 'expense_supplier', 'is_active', 'is_deleted'];
 }

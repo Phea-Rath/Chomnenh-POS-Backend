@@ -6,6 +6,7 @@ use App\Models\Permission;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Collection;
 
 class PermissionController extends Controller
 {
@@ -22,27 +23,33 @@ class PermissionController extends Controller
         }
         $proId = $user->profile_id;
         $role = $user->role_id;
-        $permissions = [];
+        $permissions = collect();
         $query = Permission::join('users', 'users.id', '=', 'permission.user_id')
             ->join('profiles', 'profiles.id', '=', 'users.profile_id')
             ->join('menus', 'permission.menu_id', '=', 'menus.menu_id')
             // ->where('profile_id', $proId)
-            ->select('permission.user_id', 'permission.menu_id', 'menus.menu_name', 'menus.menu_type', 'menus.menu_icon', 'menus.menu_path');
+            ->select(
+                'permission.user_id',
+                'permission.menu_id',
+                'menus.menu_name',
+                'menus.menu_type',
+                'menus.menu_icon',
+                'menus.menu_path',
+                'menus.parent_menu',
+                'menus.order_menu'
+            );
         if ($role === 1) {
             $permissions = $query->get();
-        } else if ($role === 3 && $role === 3) {
+        } else if ($role === 3) {
             // filter by profile_id
             $permissions = $query->where('profile_id', $proId)->get();
         } else {
             // default: no result
-            $user = [];
+            $permissions = collect();
         }
-        foreach ($permissions as $item) {
-            if ($item->menu_icon) {
-                $filenameOnly = basename($item->menu_icon);
-                $item->menu_icon = url('storage/images/' . $filenameOnly);
-            }
-        }
+
+        $permissions = $this->formatPermissionMenus($permissions);
+
         return response()->json([
             'message' => 'permission get successfully',
             'status' => 200,
@@ -55,14 +62,20 @@ class PermissionController extends Controller
     {
         $permissions = Permission::where('user_id', $user_id)
             ->join('menus', 'permission.menu_id', '=', 'menus.menu_id')
-            ->select('user_id', 'permission.menu_id', 'menus.menu_name', 'menus.menu_type', 'menus.menu_icon', 'menus.menu_path')
+            ->select(
+                'user_id',
+                'permission.menu_id',
+                'menus.menu_name',
+                'menus.menu_type',
+                'menus.menu_icon',
+                'menus.menu_path',
+                'menus.parent_menu',
+                'menus.order_menu'
+            )
             ->get();
-        foreach ($permissions as $item) {
-            if ($item->menu_icon) {
-                $filenameOnly = basename($item->menu_icon);
-                $item->menu_icon = url('storage/images/' . $filenameOnly);
-            }
-        }
+
+        $permissions = $this->formatPermissionMenus($permissions);
+
         if ($permissions->isEmpty()) {
             return response()->json([
                 'message' => 'No permissions found for this user',
@@ -137,5 +150,83 @@ class PermissionController extends Controller
             'status' => 200,
             'data' => $deleted
         ]);
+    }
+
+    private function formatPermissionMenus(Collection $permissions): Collection
+    {
+        foreach ($permissions as $item) {
+            if ($item->menu_icon) {
+                $filenameOnly = basename($item->menu_icon);
+                $item->menu_icon = url('storage/images/' . $filenameOnly);
+            }
+        }
+
+        $permissions = $permissions->unique('menu_id')->values();
+
+        $menusById = $permissions->keyBy('menu_id');
+        $childrenByParent = $permissions->groupBy(function ($menu) {
+            return $this->normalizeParentKey($menu->parent_menu);
+        });
+
+        $roots = $permissions->filter(function ($menu) use ($menusById) {
+            if ($this->normalizeParentKey($menu->parent_menu) === '__root__') {
+                return true;
+            }
+
+            return !$menusById->has((string) $menu->parent_menu) && !$menusById->has((int) $menu->parent_menu);
+        })->sortBy([
+            ['order_menu', 'asc'],
+            ['menu_id', 'asc'],
+        ])->values();
+
+        return $roots->map(function ($menu) use ($childrenByParent) {
+            return $this->buildPermissionMenuNode($menu, $childrenByParent, []);
+        })->values();
+    }
+
+    private function buildPermissionMenuNode($menu, Collection $childrenByParent, array $visited): array
+    {
+        $menuId = (string) $menu->menu_id;
+        if (in_array($menuId, $visited, true)) {
+            return [
+                ...$this->serializePermissionMenu($menu),
+                'menus' => [],
+            ];
+        }
+
+        $visited[] = $menuId;
+        $children = $childrenByParent->get($menuId, collect())->sortBy([
+            ['order_menu', 'asc'],
+            ['menu_id', 'asc'],
+        ])->values()->map(function ($child) use ($childrenByParent, $visited) {
+            return $this->buildPermissionMenuNode($child, $childrenByParent, $visited);
+        })->all();
+
+        return [
+            ...$this->serializePermissionMenu($menu),
+            'menus' => $children,
+        ];
+    }
+
+    private function serializePermissionMenu($menu): array
+    {
+        return [
+            'menu_id' => $menu->menu_id,
+            'menu_name' => $menu->menu_name,
+            'menu_type' => $menu->menu_type,
+            'menu_icon' => $menu->menu_icon,
+            'menu_path' => $menu->menu_path,
+            'parent_menu' => $menu->parent_menu,
+            'order_menu' => $menu->order_menu,
+        ];
+    }
+
+    private function normalizeParentKey($parentMenu): string
+    {
+        if (is_null($parentMenu) || $parentMenu === '') {
+            return '__root__';
+        }
+
+        return (string) $parentMenu;
     }
 }

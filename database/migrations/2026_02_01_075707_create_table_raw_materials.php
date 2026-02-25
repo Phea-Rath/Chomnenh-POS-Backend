@@ -20,6 +20,7 @@ return new class extends Migration
             $table->string('primary_unit');
             $table->string('secondary_unit');
             $table->decimal('conversion_value', 12, 4);
+            $table->boolean('is_deleted')->default(false);
             $table->timestamps();
         });
     }

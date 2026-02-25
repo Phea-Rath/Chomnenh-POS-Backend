@@ -61,6 +61,7 @@ Route::post('/verify-otp', [OtpController::class, 'verifyOtp']);
 Broadcast::routes(['middleware' => ['auth:sanctum']]);
 Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');
+    Route::get('e-menu', [MenuController::class, 'getEMenuByUserId'])->middleware('auth:sanctum');
     Route::post('/guest/{phone_number}', [AuthController::class, 'guest'])->middleware('auth:sanctum');
     Route::get('/alert_order_online', [NotificationController::class, 'orderOnline']);
     Route::get('/alert_stock_waste', [NotificationController::class, 'index']);
@@ -85,16 +86,16 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::resource('delivers', DeliverController::class)->only(['index', 'show', 'store', 'destroy']);
     Route::post('delivers/{id}', [DeliverController::class,'update']);
     //E
-    Route::get('/expanse_by_week',[DashboardController::class, 'expanseWeek']);
-    Route::get('/expanse_by_month',[DashboardController::class, 'expanseMonth']);
-    Route::get('/expanse_by_day',[DashboardController::class, 'expanseDay']);
-    Route::get('/expanse_by_hour',[DashboardController::class, 'expanseHour']);
+    Route::get('/expense_by_week',[DashboardController::class, 'expenseWeek']);
+    Route::get('/expense_by_month',[DashboardController::class, 'expenseMonth']);
+    Route::get('/expense_by_day',[DashboardController::class, 'expenseDay']);
+    Route::get('/expense_by_hour',[DashboardController::class, 'expenseHour']);
     Route::put('exchange_rate/{id}', [ExchangeRateController::class, 'update']);
     Route::get('exchange_rate/{id}', [ExchangeRateController::class, 'show']);
-    Route::post('/expanse_report', [ReportController::class, 'expanseReport']);
-    Route::resource('expanse_masters', ExpanseMasterController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
-    Route::resource('expanse_types', ExpanseTypeController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
-    Route::resource('expanse_items', ExpanseItemController::class)->only(['index', 'show']);
+    Route::post('/expense_report', [ReportController::class, 'expenseReport']);
+    Route::resource('expense_masters', ExpanseMasterController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
+    Route::resource('expense_types', ExpanseTypeController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
+    Route::resource('expense_items', ExpanseItemController::class)->only(['index', 'show']);
     //I
     Route::get('/items_by_code', [ItemController::class, 'showGroupByCode']);
     Route::get('/item_by_stock', [orderPageController::class, 'stockByItem']);
@@ -130,9 +131,11 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::resource('purchase', PurchaseController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
     Route::post('/purchase_raw', [PurchaseController::class, 'storeRaw']);
     Route::put('/purchase_raw/{id}', [PurchaseController::class, 'updateRaw']);
+    Route::delete('/purchase_raw/{id}', [PurchaseController::class, 'destroyRaw']);
     Route::put('/purchase_cancel/{id}', [PurchaseController::class, 'purchaseCancel']);
     Route::put('/purchase_uncancel/{id}', [PurchaseController::class, 'purchaseUncancel']);
     Route::put('/purchase_confirm/{id}', [PurchaseController::class, 'purchaseConfirm']);
+    Route::put('/purchase_confirm_raw/{id}', [PurchaseController::class, 'purchaseConfirmRaw']);
     Route::put('/purchase_payment/{id}', [PurchaseController::class, 'purchasePayment']);
     Route::get('/purchase_by_week',[DashboardController::class, 'purchaseByWeek']);
     Route::get('/purchase_by_month',[DashboardController::class, 'purchaseByMonth']);
@@ -148,7 +151,7 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::post('/production_report', [ReportController::class, 'productionReport']);
     Route::post('/production_report_raw', [ReportController::class, 'productionReportByRaw']);
 
-    Route::get('/popular_expanse', [ExpanseItemController::class, 'popularExpanse']);
+    Route::get('/popular_expense', [ExpanseItemController::class, 'popularExpanse']);
     Route::get('/popular_sales', [OrderItemController::class, 'popularSales']);
     //R
     Route::put('/receive_order/{id}', [OrderMasterController::class, 'receiveOrder']);
@@ -192,6 +195,7 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::resource('stock_masters', StockMasterController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
     Route::post('/stock_masters_raw', [StockMasterController::class, 'storeRaw']);
     Route::put('/stock_masters_raw/{id}', [StockMasterController::class, 'updateRaw']);
+    Route::delete('/stock_masters_raw/{id}', [StockMasterController::class, 'destroyRaw']);
     Route::get('/stock_masters_pagination', [StockMasterController::class, 'indexPagination']);
     Route::get('/stock_sale_pagination', [orderPageController::class, 'salesPagination']);
     Route::get('/stock_details_items', [StockDetailController::class, 'groupByItems']);

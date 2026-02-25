@@ -16,27 +16,27 @@ class ExpanseItemController extends Controller
     {
         $user = Auth::user();
         $uid = $user->id;
-        $expanse_items = DB::table('expanse_items')
-            ->join('expanse_types', 'expanse_items.expanse_type_id', '=', 'expanse_types.expanse_type_id')
+        $expense_items = DB::table('expense_items')
+            ->join('expense_types', 'expense_items.expense_type_id', '=', 'expense_types.expense_type_id')
             ->where('created_by', $uid)
-            ->where('expanse_items.is_deleted', 0)
+            ->where('expense_items.is_deleted', 0)
             ->get();
-        if (!$expanse_items) {
+        if (!$expense_items) {
             return response()->json([
-                'message' => 'expanse item get fail!',
+                'message' => 'expense item get fail!',
                 'status' => 404
             ]);
         }
         return response()->json([
-            'message' => 'expanse item geted successfully!',
+            'message' => 'expense item geted successfully!',
             'status' => 200,
-            'data' => $expanse_items
+            'data' => $expense_items
         ]);
     }
 
     public function PopularExpanse()
     {
-        $items = DB::table('expanse_items')
+        $items = DB::table('expense_items')
             ->select(
                 'description',
                 DB::raw('SUM(sub_total) as total_price'),
@@ -48,7 +48,7 @@ class ExpanseItemController extends Controller
             ->get();
 
         return response()->json([
-            'message' => 'popular expanse item geted successfully!',
+            'message' => 'popular expense item geted successfully!',
             'status' => 200,
             'data' => $items
         ]);
@@ -76,20 +76,20 @@ class ExpanseItemController extends Controller
     {
         $user = Auth::user();
         $uid = $user->id;
-        $expanse_items = DB::table('expanse_items')->where('expanse_id', $id)
-            ->join('expanse_types', 'expanse_items.expanse_type_id', '=', 'expanse_types.expanse_type_id')
+        $expense_items = DB::table('expense_items')->where('expense_id', $id)
+            ->join('expense_types', 'expense_items.expense_type_id', '=', 'expense_types.expense_type_id')
             ->where('created_by', $uid)
             ->get();
-        if (!$expanse_items) {
+        if (!$expense_items) {
             return response()->json([
-                'message' => 'expanse item get fail!',
+                'message' => 'expense item get fail!',
                 'status' => 404
             ]);
         }
         return response()->json([
-            'message' => 'expanse item geted successfully!',
+            'message' => 'expense item geted successfully!',
             'status' => 200,
-            'data' => $expanse_items
+            'data' => $expense_items
         ]);
     }
 
