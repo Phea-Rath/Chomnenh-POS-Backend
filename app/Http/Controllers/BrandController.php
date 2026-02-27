@@ -108,7 +108,7 @@ class BrandController extends Controller
             $brands = DB::table('brands')
                 ->join('users', 'brands.created_by', '=', 'users.id')
                 ->where('users.profile_id', $proId)
-                ->where('brands.created_by', $uid)
+                // ->where('brands.created_by', $uid)
                 ->select('users.username as created_by_name','brands.*')
                 // ->paginate($page);
                 ->where('brands.brand_id', $id)

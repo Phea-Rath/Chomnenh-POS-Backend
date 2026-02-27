@@ -103,11 +103,15 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::resource('items', ItemController::class)->only(['index', 'show', 'store', 'destroy']);
     Route::post('/items/{id}', [ItemController::class, 'update']);
     Route::post('/import_items', [ItemController::class, 'importItem']);
+    Route::get('/item-list', [ItemController::class, 'indexMobile']);
+    Route::get('/item-by-id/{id}', [ItemController::class, 'showMobile']);
     Route::put('/cancel_removed_item/{id}', [ItemController::class, 'cancelDel']);
     Route::delete('/deleted/{id}', [ItemController::class, 'deleted']);
     //M
     Route::resource('menus', MenuController::class)->only(['index', 'show', 'store', 'update']);
     Route::post('/menus/{id}', [MenuController::class, 'update']);
+    Route::get('/menusByCurrentUser', [PermissionController::class, 'getPermissionMenuByCurrentUser']);
+    Route::get('/menusByUser/{id}', [PermissionController::class, 'getPermissionMenuByUser']);
     Route::get('/order_persent_montly', [OrderItemController::class, 'monthlyOrderPercentCompare']);
     //O
     Route::resource('order_masters', OrderMasterController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
@@ -117,6 +121,8 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::put('/edit_delivery_fee/{id}/{delivery_fee}', [OrderMasterController::class, 'addDeliveryFee']);
     Route::resource('order_items', OrderItemController::class)->only(['index', 'show']);
     Route::put('/order_uncancel/{id}', [OrderMasterController::class, 'uncancel']);
+    Route::get('/order-list', [OrderMasterController::class, 'indexMobile']);
+    Route::get('/order-by-id/{id}', [OrderMasterController::class, 'showMobile']);
     Route::get('/quan_order_by_attr', [OrderItemController::class, 'quantityInOrderByItemId']);
     Route::get('/orders/max-id', [OrderMasterController::class, 'getMaxId']);
     Route::get('/order_transection', [OrderMasterController::class, 'orderTransection']);
@@ -129,6 +135,8 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::put('/profile/name/{id}', [ProfileController::class, 'updateName']);
     Route::put('/profile/address/{id}', [ProfileController::class, 'updateAddress']);
     Route::resource('purchase', PurchaseController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
+    Route::get('/purchase-list', [PurchaseController::class, 'indexMobile']);
+    Route::get('/purchase-by-id/{id}', [PurchaseController::class, 'showMobile']);
     Route::post('/purchase_raw', [PurchaseController::class, 'storeRaw']);
     Route::put('/purchase_raw/{id}', [PurchaseController::class, 'updateRaw']);
     Route::delete('/purchase_raw/{id}', [PurchaseController::class, 'destroyRaw']);
@@ -174,6 +182,8 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::get('/popular_stock', [StockMasterController::class, 'popularStockIn']);
     Route::get('/quan_stock_by_attr', [StockDetailController::class, 'quantityInStockByItemId']);
     Route::post('/suppliers/{id}', [SupplierController::class, 'update']);
+    Route::get('/stock-list', [StockMasterController::class, 'indexMobile']);
+    Route::get('/stock-by-id/{id}', [StockMasterController::class, 'showMobile']);
     Route::resource('suppliers', SupplierController::class)->only(['index', 'show', 'store', 'destroy']);
     //report
     Route::post('/sale_report', [ReportController::class, 'saleReport']);

@@ -162,6 +162,13 @@ class ExpanseMasterController extends Controller
             ->where('is_active', 1)
             ->get();
 
+            if ($masters->isEmpty()) {
+            return response()->json([
+                'message' => 'expense master not found!',
+                'status' => 404,
+                'data' => []
+            ]);
+        }
         $items = DB::table('expense_items')
             ->join('expense_types', 'expense_items.expense_type_id', '=', 'expense_types.expense_type_id')
             ->whereIn('expense_id', $masters->pluck('expense_id'))

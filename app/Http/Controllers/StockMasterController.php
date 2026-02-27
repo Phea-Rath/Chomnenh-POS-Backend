@@ -27,6 +27,156 @@ class StockMasterController extends Controller
         $this->itemService = $itemService;
     }
 
+    public function indexMobile(Request $request){
+        $user = Auth::user();
+        $proId = $user->profile_id;
+        $limit = (int) $request->input('limit', 10);
+        $page = (int) $request->input('page', 1);
+        $search = $request->input('search');
+
+        $query = DB::table('stock_masters as sm')
+            ->join('warehouses as from_w', 'sm.from_warehouse', '=', 'from_w.warehouse_id')
+            ->join('warehouses as to_w', 'sm.warehouse_id', '=', 'to_w.warehouse_id')
+            ->join('stock_types as st', 'sm.stock_type_id', '=', 'st.stock_type_id')
+            ->join('users as s', 'sm.stock_created_by', '=', 's.id')
+            ->join('profiles as p', 's.profile_id', '=', 'p.id')
+            ->where('sm.is_deleted', 0)
+            ->where('p.id', $proId);
+
+        if (!empty($search)) {
+            $query->where(function ($q) use ($search) {
+                $q->where('sm.stock_no', 'LIKE', "%{$search}%")
+                    ->orWhere('from_w.warehouse_name', 'LIKE', "%{$search}%")
+                    ->orWhere('to_w.warehouse_name', 'LIKE', "%{$search}%")
+                    ->orWhere('st.stock_type_name', 'LIKE', "%{$search}%")
+                    ->orWhere('s.username', 'LIKE', "%{$search}%");
+            });
+        }
+
+        $rawStocks = $query->select('sm.stock_id')
+            ->orderBy('sm.stock_id', 'DESC')
+            ->paginate($limit, ['*'], 'page', $page);
+
+        if ($rawStocks->total() === 0) {
+            return response()->json([
+                'message' => 'Stock not found!',
+                'status' => 404,
+                'data' => [],
+            ], 404);
+        }
+
+        $stocks = [];
+        foreach ($rawStocks as $stock) {
+            $formatted = $this->formatMobileStock((int) $stock->stock_id, $proId);
+            if ($formatted) {
+                $stocks[] = $formatted;
+            }
+        }
+
+        return response()->json([
+            'message' => 'Stock selected successfully',
+            'status' => 200,
+            'data' => $stocks,
+            'pagination' => [
+                'current_page' => $rawStocks->currentPage(),
+                'per_page' => $rawStocks->perPage(),
+                'total' => $rawStocks->total(),
+                'last_page' => $rawStocks->lastPage(),
+            ],
+        ]);
+    }
+    public function showMobile($id){
+        $user = Auth::user();
+        $proId = $user->profile_id;
+
+        $data = $this->formatMobileStock((int) $id, $proId);
+
+        if (!$data) {
+            return response()->json([
+                'message' => 'Stock not found!',
+                'status' => 404,
+                'data' => null,
+            ], 404);
+        }
+
+        return response()->json([
+            'message' => 'Stock selected successfully',
+            'status' => 200,
+            'data' => $data,
+        ]);
+    }
+
+    private function formatMobileStock(int $stockId, int $profileId): ?array
+    {
+        $stock = DB::table('stock_masters as sm')
+            ->join('warehouses as from_w', 'sm.from_warehouse', '=', 'from_w.warehouse_id')
+            ->join('warehouses as to_w', 'sm.warehouse_id', '=', 'to_w.warehouse_id')
+            ->join('stock_types as st', 'sm.stock_type_id', '=', 'st.stock_type_id')
+            ->join('users as s', 'sm.stock_created_by', '=', 's.id')
+            ->join('profiles as p', 's.profile_id', '=', 'p.id')
+            ->where('sm.stock_id', $stockId)
+            ->where('sm.is_deleted', 0)
+            ->where('p.id', $profileId)
+            ->select(
+                'sm.stock_id',
+                'sm.stock_no',
+                'sm.stock_date',
+                'sm.created_at',
+                'sm.from_warehouse',
+                'sm.warehouse_id',
+                'sm.stock_type_id',
+                'from_w.warehouse_name as from_warehouse_name',
+                'to_w.warehouse_name as to_warehouse_name',
+                'st.stock_type_name',
+                's.username as created_by_name'
+            )
+            ->first();
+
+        if (!$stock) {
+            return null;
+        }
+
+        $items = DB::table('stock_details as sd')
+            ->join('items as i', 'sd.item_id', '=', 'i.item_id')
+            ->where('sd.stock_id', $stockId)
+            ->where('sd.is_deleted', 0)
+            ->select(
+                'sd.item_id',
+                'i.item_name',
+                'sd.quantity'
+            )
+            ->orderBy('sd.detail_id', 'asc')
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'item_id' => (int) $item->item_id,
+                    'name' => $item->item_name,
+                    'quantity' => (int) $item->quantity,
+                ];
+            })
+            ->values()
+            ->toArray();
+
+        return [
+            'stock_no' => $stock->stock_no,
+            'from_warehouse' => [
+                'id' => (int) $stock->from_warehouse,
+                'name' => $stock->from_warehouse_name,
+            ],
+            'to_warehouse' => [
+                'id' => (int) $stock->warehouse_id,
+                'name' => $stock->to_warehouse_name,
+            ],
+            'stock_type' => [
+                'id' => (int) $stock->stock_type_id,
+                'name' => strtoupper($stock->stock_type_name),
+            ],
+            'items' => $items,
+            'created_by_name' => $stock->created_by_name,
+            'stock_date' => $stock->created_at ?? $stock->stock_date,
+        ];
+    }
+
     public function index()
 {
     $user = Auth::user();
@@ -155,7 +305,7 @@ class StockMasterController extends Controller
             )
             ->where('p.id', $proId)
             ->where('sm.is_deleted', 0)
-            ->where('sm.stock_created_by', $uid)
+            // ->where('sm.stock_created_by', $uid)
 
             // 🔍 SEARCH FILTER
             ->when($search, function ($query) use ($search) {
@@ -333,7 +483,7 @@ class StockMasterController extends Controller
         ->whereNotIn('sm.from_warehouse', [2, 3, 4])
         ->whereNotIn('sm.warehouse_id', [2, 3, 4])
         ->where('sm.is_deleted', 0)
-        ->where('sm.stock_created_by', $uid)
+        // ->where('sm.stock_created_by', $uid)
 
         // 🔍 SEARCH FILTER
         ->when($search, function ($query) use ($search) {
@@ -714,7 +864,6 @@ class StockMasterController extends Controller
         )
         ->where('sm.stock_id', $id)
         ->where('sm.is_deleted', 0)
-        ->where('sm.stock_created_by', $uid)
         ->where('p.id', $proId)
         ->first();
 
@@ -743,7 +892,7 @@ class StockMasterController extends Controller
         $uid = $user->id;
         // Use first() to get a single record, not a query builder
         $stock_master = DB::table('stock_masters')
-            ->where('stock_created_by', $uid)
+            // ->where('stock_created_by', $uid)
             ->where('order_id', $id)
             ->where('is_deleted', 0)
             ->first();

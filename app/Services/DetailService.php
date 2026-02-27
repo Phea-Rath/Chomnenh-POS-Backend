@@ -34,7 +34,7 @@ class DetailService {
                 'categories.category_name',
                 'stock_masters.stock_created_by as created_by'
             )
-            ->where('stock_masters.stock_created_by', $uid)
+            // ->where('stock_masters.stock_created_by', $uid)
             ->where('stock_details.is_deleted', 0)
             ->where('stock_details.stock_id', $id)
             ->get();
@@ -201,7 +201,7 @@ class DetailService {
                 'categories.category_name',
                 'purchases.created_by as created_by'
             )
-            ->where('purchases.created_by', $uid)
+            // ->where('purchases.created_by', $uid)
             ->where('purchase_details.is_deleted', 0)
             ->where('purchase_details.id', $id)
             ->get();
@@ -275,7 +275,7 @@ class DetailService {
             )
             // ->where('order_masters.created_by', $uid)
             ->where('order_items.is_deleted', 0)
-            ->where('order_items.order_id', $id)
+            // ->where('order_items.order_id', $id)
             ->get();
 
         if ($order_item->isEmpty()) {
@@ -499,11 +499,4 @@ class DetailService {
             'notFulfilledQty' => $remaining
         ];
     }
-
-
-
-
-
-
-
 }

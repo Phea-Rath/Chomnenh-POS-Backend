@@ -196,6 +196,12 @@ class UserController extends Controller
                 "password" => bcrypt($fields["password"])
             ]);
         }
+
+        return response()->json([
+            "message" => "User updated successfully",
+            "status" => 200,
+            "data" => $user,
+        ], 200);
     }
 
     public function disabledUser($id){
@@ -227,7 +233,7 @@ class UserController extends Controller
         $user->save();
 
         return response()->json([
-            'message'=>'User disabled successfully!',
+            'message'=>'User enabled successfully!',
             'status'=> 200,
             'data'=>$user
         ],201);

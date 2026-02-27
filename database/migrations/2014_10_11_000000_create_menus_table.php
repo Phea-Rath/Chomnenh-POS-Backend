@@ -34,7 +34,7 @@ return new class extends Migration
             // sidebar
             ['menu_name' => 'Dashboard', 'menu_type' => 1, 'menu_icon' => '', 'parent_menu' => null, 'order_menu' => 1, 'menu_path' => '/dashboard'],
             ['menu_name' => 'Prouducts', 'menu_type' => 1, 'menu_icon' => '', 'parent_menu' => null, 'order_menu' => 2, 'menu_path' => '/dashboard/list'],
-            ['menu_name' => 'Orders', 'menu_type' => 1, 'menu_icon' => '', 'parent_menu' => null, 'order_menu' => 3, 'menu_path' => '/dashboard/orders'],
+            ['menu_name' => 'Orders', 'menu_type' => 1, 'menu_icon' => '', 'parent_menu' => null, 'order_menu' => 3, 'menu_path' => '/dashboard/order-list'],
             ['menu_name' => 'Setting', 'menu_type' => 1, 'menu_icon' => '', 'parent_menu' => null, 'order_menu' => 4, 'menu_path' => '/dashboard/setting'],
             ['menu_name' => 'Category', 'menu_type' => 1, 'menu_icon' => '', 'parent_menu' => null, 'order_menu' => 5, 'menu_path' => '/dashboard/category'],
             ['menu_name' => 'Brand', 'menu_type' => 1, 'menu_icon' => '', 'parent_menu' => null, 'order_menu' => 6, 'menu_path' => '/dashboard/brand'],

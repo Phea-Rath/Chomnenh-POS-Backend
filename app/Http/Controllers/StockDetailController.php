@@ -50,23 +50,6 @@ class StockDetailController extends Controller
             ]);
         }
 
-        foreach($stock_detail as $stock){
-            $attrs = DB::table('stock_attributes')->where('stock_detail_id',$stock->detail_id)->get();
-            // dd($attrs);
-
-            $stock_attrs = [];
-            foreach($attrs as $attr){
-
-                $data = ['item_id'=>$attr->item_id,'name_id'=>$attr->attribute_id,'value_id'=>$attr->attribute_value_id];
-                $request = new Request($data);
-                array_push($stock_attrs, $this->attributeService
-                ->attrUnit($request)[0]);
-
-            }
-            // dd($stock_attrs);
-            $stock->attributes = $stock_attrs;
-        }
-
         // ✅ Get all item_ids from collection
         $itemIds = $stock_detail->pluck('item_id')->unique();
 

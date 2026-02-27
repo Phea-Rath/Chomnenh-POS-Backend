@@ -267,6 +267,7 @@ public function stockByItem(Request $request)
 {
     $user = Auth::user();
     $uid = $user->id;
+    $proId = $user->profile_id;
     $limit = (int) $request->input('limit', 10);
     $page = (int) $request->input('page', 1);
     $search = trim((string) $request->input('search', ''));
@@ -293,7 +294,7 @@ public function stockByItem(Request $request)
         ->where('stock_details.is_deleted', 0)
         ->where('warehouses.status', 'stock')
         ->where('items.item_type', 0)
-        ->where('profiles.id', $uid)
+        ->where('profiles.id', $proId)
         ->groupBy(
             'items.item_id',
             'items.item_code',

@@ -38,6 +38,215 @@ class OrderMasterController extends Controller
         $this->itemService = $itemService;
     }
 
+    public function indexMobile(Request $request)
+    {
+        $user = Auth::user();
+        $proId = $user->profile_id;
+        $limit = (int) $request->input('limit', 10);
+        $page = (int) $request->input('page', 1);
+        $search = $request->input('search');
+
+        $query = DB::table('order_masters as om')
+            ->join('users as u', 'om.created_by', '=', 'u.id')
+            ->join('profiles as p', 'u.profile_id', '=', 'p.id')
+            ->leftJoin('customers as cu', 'om.order_customer_id', '=', 'cu.customer_id')
+            ->leftJoin('delivers as dl', 'om.deliver_id', '=', 'dl.deliver_id')
+            ->where('om.is_deleted', 0)
+            ->where('om.is_active', 1)
+            ->where('p.id', $proId);
+
+        if (!empty($search)) {
+            $query->where(function ($q) use ($search) {
+                $q->where('om.order_no', 'LIKE', "%{$search}%")
+                    ->orWhere('cu.customer_name', 'LIKE', "%{$search}%")
+                    ->orWhere('cu.customer_email', 'LIKE', "%{$search}%")
+                    ->orWhere('cu.customer_tel', 'LIKE', "%{$search}%")
+                    ->orWhere('dl.deliver_name', 'LIKE', "%{$search}%");
+            });
+        }
+
+        $rawOrders = $query->select('om.order_id')
+            ->orderBy('om.order_id', 'DESC')
+            ->paginate($limit, ['*'], 'page', $page);
+
+        if ($rawOrders->total() === 0) {
+            return response()->json([
+                'success' => false,
+                'status_code' => 404,
+                'data' => [
+                    'orders' => [],
+                    'pagination' => [
+                        'current_page' => $rawOrders->currentPage(),
+                        'per_page' => $rawOrders->perPage(),
+                        'total' => $rawOrders->total(),
+                        'last_page' => $rawOrders->lastPage(),
+                    ],
+                ],
+            ], 404);
+        }
+
+        $orders = [];
+        foreach ($rawOrders as $row) {
+            $formatted = $this->formatMobileOrder((int) $row->order_id, $proId);
+            if ($formatted) {
+                $orders[] = $formatted;
+            }
+        }
+
+        return response()->json([
+            'message' => 'Orders retrieved successfully',
+            'status' => 200,
+            'data' => [
+                'orders' => $orders,
+                'pagination' => [
+                    'current_page' => $rawOrders->currentPage(),
+                    'per_page' => $rawOrders->perPage(),
+                    'total' => $rawOrders->total(),
+                    'last_page' => $rawOrders->lastPage(),
+                ],
+            ],
+        ]);
+    }
+    public function showMobile($id)
+    {
+        $user = Auth::user();
+        $proId = $user->profile_id;
+
+        $data = $this->formatMobileOrder((int) $id, $proId);
+        if (!$data) {
+            return response()->json([
+                'message' => 'Order not found',
+                'status' => 404,
+                'data' => null,
+            ], 404);
+        }
+
+        return response()->json([
+            'message' => 'Order retrieved successfully',
+            'status' => 200,
+            'data' => $data,
+        ]);
+
+    }
+
+    private function formatMobileOrder(int $orderId, int $profileId): ?array
+    {
+        $order = DB::table('order_masters as om')
+            ->join('users as u', 'om.created_by', '=', 'u.id')
+            ->join('profiles as p', 'u.profile_id', '=', 'p.id')
+            ->leftJoin('customers as cu', 'om.order_customer_id', '=', 'cu.customer_id')
+            ->leftJoin('delivers as dl', 'om.deliver_id', '=', 'dl.deliver_id')
+            ->where('om.order_id', $orderId)
+            ->where('om.is_deleted', 0)
+            ->where('om.is_active', 1)
+            ->where('p.id', $profileId)
+            ->select(
+                'om.*',
+                'cu.customer_id',
+                'cu.customer_name',
+                'cu.customer_email',
+                'cu.customer_tel',
+                'cu.customer_address',
+                'u.username as created_by_name',
+                'dl.deliver_id',
+                'dl.deliver_name',
+                'dl.image as deliver_image'
+            )
+            ->first();
+
+        if (!$order) {
+            return null;
+        }
+
+        $orderItems = DB::table('order_items as oi')
+            ->leftJoin('items as i', 'oi.item_id', '=', 'i.item_id')
+            ->leftJoin('item_images as ii', 'ii.item_id', '=', 'i.item_id')
+            ->leftJoin('images as im', 'im.id', '=', 'ii.image_id')
+            ->where('oi.order_id', $orderId)
+            ->where('oi.is_deleted', 0)
+            ->select(
+                'oi.id',
+                'oi.item_name',
+                'oi.item_id',
+                'oi.item_price',
+                'oi.quantity',
+                'oi.discount',
+                'oi.price',
+                'i.item_code',
+                DB::raw('MIN(im.id) as first_image_id'),
+                DB::raw('MIN(im.image) as first_image')
+            )
+            ->groupBy(
+                'oi.id',
+                'oi.item_name',
+                'oi.item_id',
+                'oi.item_price',
+                'oi.quantity',
+                'oi.discount',
+                'oi.price',
+                'i.item_code'
+            )
+            ->orderBy('oi.id', 'asc')
+            ->get();
+
+        $items = $orderItems->map(function ($item) {
+            return [
+                'id' => (int) $item->id,
+                'product_name' => $item->item_name,
+                'item_code' => $item->item_code,
+                'price' => (float) $item->item_price,
+                'quantity' => (int) $item->quantity,
+                'discount' => (float) $item->discount,
+                'total' => (float) $item->price,
+                'image' => $item->first_image ? url('storage/images/' . basename($item->first_image)) : null,
+            ];
+        })->values()->toArray();
+
+        $deliveryImage = $order->deliver_image ? url('storage/images/' . basename($order->deliver_image)) : null;
+        $grandTotalUsd = (float) $order->order_total;
+        $exchangeRate = (float) $order->exchange_rate;
+
+        return [
+            'order_header' => [
+                'id' => (int) $order->order_id,
+                'online' => (bool) $order->online,
+                'through' => null,
+                'order_no' => $order->order_no,
+                'sale_type' => $order->sale_type,
+                'exchange_rate' => $exchangeRate,
+                'payment_method' => $order->order_payment_method,
+                'created_by_name' => $order->created_by_name,
+                'date' => $order->created_at,
+            ],
+            'pricing_summary' => [
+                'base_currency' => 'USD',
+                'exchange_rate' => $exchangeRate,
+                'subtotal' => (float) $order->order_subtotal,
+                'discount_amount' => (float) $order->order_discount,
+                'tax_amount' => (float) $order->order_tax,
+                'delivery_fee' => (float) $order->delivery_fee,
+                'paymented' => (float) $order->payment,
+                'balance' => (float) $order->balance,
+                'grand_total_usd' => $grandTotalUsd,
+                'grand_total_khr' => round($grandTotalUsd * $exchangeRate, 2),
+                'order_payment_status' => $order->order_payment_status,
+            ],
+            'items' => $items,
+            'customer' => [
+                'id' => $order->customer_id ? (int) $order->customer_id : null,
+                'name' => $order->customer_name,
+                'email' => $order->customer_email,
+                'phone' => $order->customer_tel ?? $order->order_tel,
+                'address' => $order->customer_address ?? $order->order_address,
+            ],
+            'delivery' => [
+                'id' => $order->deliver_id ? (int) $order->deliver_id : null,
+                'deliver_name' => $order->deliver_name,
+                'image' => $deliveryImage,
+            ],
+        ];
+    }
+
     public function index(Request $request)
 {
     $user  = Auth::user();
@@ -210,7 +419,7 @@ class OrderMasterController extends Controller
             'items.*.item_name' => 'required|string|max:255',
             'items.*.item_price' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
             'items.*.discount' => 'required|numeric',
-            'items.*.price' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
+            'items.*.total_price' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
             'items.*.quantity' => 'required|integer',
             'items.*.item_cost' => 'required|numeric',
         ]);
@@ -251,7 +460,7 @@ class OrderMasterController extends Controller
                 'item_name' => $item['item_name'],
                 'item_price' => $item['item_price'],
                 'discount' => $item['discount'],
-                'price' => $item['price'],
+                'total_price' => $item['total_price'],
                 'quantity' => $item['quantity'],
                 'item_cost' => $item['item_cost'] ?? 0,
             ]);
@@ -390,10 +599,9 @@ class OrderMasterController extends Controller
             'items.*.item_name' => 'required|string|max:255',
             'items.*.discount' => 'required|integer',
             'items.*.unit_price' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
-            'items.*.price' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
+            'items.*.total_price' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
             'items.*.quantity' => 'required|integer',
             'items.*.item_cost' => 'required|numeric',
-            'items.*.item_wholesale_price' => 'required|numeric',
         ]);
 
         // Create the order master
@@ -424,7 +632,7 @@ class OrderMasterController extends Controller
                 'item_name' => $item['item_name'],
                 'item_price' => $item['unit_price'],
                 'discount' => $item['discount'],
-                'price' => $item['price'],
+                'total_price' => $item['total_price'],
                 'quantity' => $item['quantity'],
                 'item_cost' => $item['item_cost'] ?? 0,
             ]);
@@ -563,11 +771,7 @@ class OrderMasterController extends Controller
             DB::raw('0 AS image'),
             DB::raw('0 AS images'),
             DB::raw('0 AS attributes'),
-            DB::raw('SUM(CASE
-                WHEN om.sale_type = "sale"
-                THEN oi.quantity * oi.item_price
-                ELSE oi.quantity * oi.item_wholesale_price
-            END) AS amount_sold'),
+            DB::raw('SUM(oi.quantity * oi.item_price) AS amount_sold'),
             DB::raw('SUM(oi.quantity) AS total_quantity_sold')
         )
         ->where('om.is_deleted', 0)

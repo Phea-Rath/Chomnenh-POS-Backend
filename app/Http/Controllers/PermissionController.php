@@ -90,6 +90,85 @@ class PermissionController extends Controller
         ]);
     }
 
+    public function getPermissionMenuByCurrentUser()
+    {
+        $user = Auth::user();
+        if (!$user) {
+            return response()->json([
+                'message' => 'User not authenticated',
+                'status' => 401,
+                'data' => []
+            ], 401);
+        }
+
+        $menus = DB::table('menus as m')
+            ->leftJoin('permission as p', function ($join) use ($user) {
+                $join->on('m.menu_id', '=', 'p.menu_id')
+                    ->where('p.user_id', '=', $user->id);
+            })
+            ->select(
+                'm.menu_id',
+                'm.menu_name',
+                'm.menu_type',
+                'm.menu_icon',
+                'm.menu_path',
+                'm.parent_menu',
+                'm.order_menu',
+                DB::raw('CASE WHEN p.menu_id IS NULL THEN 0 ELSE 1 END as active')
+            )
+            ->orderBy('m.order_menu', 'asc')
+            ->orderBy('m.menu_id', 'asc')
+            ->get();
+
+        $menus = $this->formatPermissionMenus($menus);
+
+        return response()->json([
+            'message' => 'permission menus get successfully',
+            'status' => 200,
+            'data' => $menus
+        ]);
+    }
+
+
+    public function getPermissionMenuByUser($id)
+    {
+        $user = Auth::user();
+        if (!$user) {
+            return response()->json([
+                'message' => 'User not authenticated',
+                'status' => 401,
+                'data' => []
+            ], 401);
+        }
+
+        $menus = DB::table('menus as m')
+            ->leftJoin('permission as p', function ($join) use ($id) {
+                $join->on('m.menu_id', '=', 'p.menu_id')
+                    ->where('p.user_id', '=', $id);
+            })
+            ->select(
+                'm.menu_id',
+                'm.menu_name',
+                'm.menu_type',
+                'm.menu_icon',
+                'm.menu_path',
+                'm.parent_menu',
+                'm.order_menu',
+                DB::raw('CASE WHEN p.menu_id IS NULL THEN 0 ELSE 1 END as active')
+            )
+            ->orderBy('m.order_menu', 'asc')
+            ->orderBy('m.menu_id', 'asc')
+            ->get();
+
+        $menus = $this->formatPermissionMenus($menus);
+
+        return response()->json([
+            'message' => 'permission menus get successfully',
+            'status' => 200,
+            'data' => $menus
+        ]);
+    }
+
     // Assign a menu permission to a user
     public function store(Request $request)
     {
@@ -210,7 +289,7 @@ class PermissionController extends Controller
 
     private function serializePermissionMenu($menu): array
     {
-        return [
+        $data = [
             'menu_id' => $menu->menu_id,
             'menu_name' => $menu->menu_name,
             'menu_type' => $menu->menu_type,
@@ -219,6 +298,12 @@ class PermissionController extends Controller
             'parent_menu' => $menu->parent_menu,
             'order_menu' => $menu->order_menu,
         ];
+
+        if (isset($menu->active)) {
+            $data['active'] = (int) $menu->active;
+        }
+
+        return $data;
     }
 
     private function normalizeParentKey($parentMenu): string
@@ -230,3 +315,4 @@ class PermissionController extends Controller
         return (string) $parentMenu;
     }
 }
+

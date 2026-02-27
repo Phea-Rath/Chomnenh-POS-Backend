@@ -33,6 +33,198 @@ class ItemController extends Controller
         $this->itemService = $itemService;
     }
 
+    public function indexMobile(Request $request)
+    {
+        $user = Auth::user();
+        $proId = $user->profile_id;
+        $limit = (int) $request->input('limit', 10);
+        $page = (int) $request->input('page', 1);
+        $search = $request->input('search');
+
+        $query = DB::table('items')
+            ->leftJoin('users', 'users.id', '=', 'items.created_by')
+            ->leftJoin('profiles', 'profiles.id', '=', 'users.profile_id')
+            ->where('profiles.id', $proId)
+            ->where('items.item_type', 0)
+            ->where('items.is_deleted', 0);
+
+        if (!empty($search)) {
+            $query->where(function ($q) use ($search) {
+                $q->where('items.item_name', 'LIKE', "%{$search}%")
+                    ->orWhere('items.item_code', 'LIKE', "%{$search}%")
+                    ->orWhere('items.barcode', 'LIKE', "%{$search}%");
+            });
+        }
+
+        $rawItems = $query->select('items.item_id')
+            ->orderBy('items.item_id', 'DESC')
+            ->paginate($limit, ['*'], 'page', $page);
+
+        if ($rawItems->total() === 0) {
+            return response()->json([
+                'message' => 'Items not found!',
+                'status' => 404,
+                'data' => [
+                    'items' => [],
+                    'pagination' => [
+                        'current_page' => $rawItems->currentPage(),
+                        'per_page' => $rawItems->perPage(),
+                        'total' => $rawItems->total(),
+                        'last_page' => $rawItems->lastPage(),
+                    ],
+                ],
+            ], 404);
+        }
+
+        $items = [];
+        foreach ($rawItems as $item) {
+            $mobileItem = $this->formatMobileItem((int) $item->item_id, $proId);
+            if ($mobileItem) {
+                $items[] = $mobileItem;
+            }
+        }
+
+        return response()->json([
+            'message' => 'Items selected successfully',
+            'status' => 200,
+            'data' => [
+                'items' => $items,
+                'pagination' => [
+                    'current_page' => $rawItems->currentPage(),
+                    'per_page' => $rawItems->perPage(),
+                    'total' => $rawItems->total(),
+                    'last_page' => $rawItems->lastPage(),
+                ],
+            ],
+        ]);
+    }
+    public function showMobile($id)
+    {
+        $user = Auth::user();
+        $proId = $user->profile_id;
+
+        $data = $this->formatMobileItem((int) $id, $proId);
+
+        if (!$data) {
+            return response()->json([
+                'message' => 'Item not found!',
+                'status' => 404,
+                'data' => null,
+            ], 404);
+        }
+
+        return response()->json([
+            'message' => 'Items selected successfully',
+            'status' => 200,
+            'data' => $data,
+        ]);
+    }
+
+    private function formatMobileItem(int $itemId, int $profileId): ?array
+    {
+        $item = DB::table('items')
+            ->leftJoin('categories', 'categories.category_id', '=', 'items.category_id')
+            ->leftJoin('brands', 'brands.brand_id', '=', 'items.brand_id')
+            ->leftJoin('users', 'users.id', '=', 'items.created_by')
+            ->leftJoin('profiles', 'profiles.id', '=', 'users.profile_id')
+            ->where('profiles.id', $profileId)
+            ->where('items.item_id', $itemId)
+            ->where('items.item_type', 0)
+            ->where('items.is_deleted', 0)
+            ->select(
+                'items.item_id',
+                'items.item_code',
+                'items.barcode',
+                'items.item_name',
+                'items.discount',
+                'items.item_price',
+                'items.wholesale_price',
+                'items.item_cost',
+                'items.category_id',
+                'items.brand_id',
+                'categories.category_name',
+                'brands.brand_name',
+                'users.username as created_by_name',
+                'items.created_at',
+                'items.updated_at'
+            )
+            ->first();
+
+        if (!$item) {
+            return null;
+        }
+
+        $imageRows = DB::table('item_images')
+            ->join('images', 'images.id', '=', 'item_images.image_id')
+            ->where('item_images.item_id', $itemId)
+            ->select('images.id as image_id', 'images.image')
+            ->orderBy('images.id', 'asc')
+            ->get();
+
+        $images = [];
+        foreach ($imageRows as $row) {
+            $images[] = [
+                'image_id' => (int) $row->image_id,
+                'image' => url('storage/images/' . $row->image),
+            ];
+        }
+
+        $rawAttributes = $this->attributeService->transformAttributes($itemId);
+        $attributes = [];
+        foreach ($rawAttributes as $attribute) {
+            $value = $attribute['value'] ?? null;
+            if (is_array($value)) {
+                $value = implode(', ', array_map(function ($v) {
+                    return $v['value'] ?? '';
+                }, $value));
+            }
+
+            $attributes[] = [
+                'id' => $attribute['id'] ?? null,
+                'name' => $attribute['name'] ?? null,
+                'type' => $attribute['type'] ?? 'string',
+                'value' => $value,
+            ];
+        }
+
+        $discount = (float) $item->discount;
+        $retail = (float) $item->item_price;
+        $wholesale = (float) $item->wholesale_price;
+
+        return [
+            'id' => (int) $item->item_id,
+            'item_code' => $item->item_code,
+            'barcode' => $item->barcode,
+            'item_name' => $item->item_name,
+            'discount' => $discount,
+            'pricing' => [
+                'base_currency' => 'USD',
+                'retail' => [
+                    'price' => $retail,
+                    'discount_price' => round($retail - ($retail * $discount / 100), 2),
+                ],
+                'wholesale' => [
+                    'price' => $wholesale,
+                    'discount_price' => round($wholesale - ($wholesale * $discount / 100), 2),
+                ],
+                'item_cost' => (float) $item->item_cost,
+            ],
+            'category' => [
+                'id' => (int) $item->category_id,
+                'name' => $item->category_name,
+            ],
+            'brand' => [
+                'id' => (int) $item->brand_id,
+                'name' => $item->brand_name,
+            ],
+            'attributes' => $attributes,
+            'images' => $images,
+            'created_by_name' => $item->created_by_name,
+            'created_at' => $item->created_at,
+            'updated_at' => $item->updated_at,
+        ];
+    }
+
     public function index(Request $request)
     {
         $user = Auth::user();
@@ -312,7 +504,6 @@ class ItemController extends Controller
             'item_images' => 'nullable|array',
             'item_images.*' => '',
             'edit_image_id' => 'nullable',
-            'edit_image_id.*' => 'nullable',
         ]);
 
         // Handle uploaded images (replace existing if new ones provided)
@@ -496,7 +687,7 @@ class ItemController extends Controller
         $created_by = str_pad($uid, 2, '0', STR_PAD_LEFT); // Two-digit created_by (e.g., 02)
 
         // Count items created in the current month for barcode
-        $monthStart = $currentDate->startOfMonth()->format('Y-m-d'); 
+        $monthStart = $currentDate->startOfMonth()->format('Y-m-d');
         $monthEnd = $currentDate->endOfMonth()->format('Y-m-d');
         $itemCount = Items::whereBetween('created_at', [$monthStart, $monthEnd])->count() + 1;
         $itemCountPadded = str_pad($itemCount, 5, '0', STR_PAD_LEFT); // Five-digit item count (e.g., 00001)

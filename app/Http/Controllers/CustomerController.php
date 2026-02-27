@@ -115,16 +115,16 @@ class CustomerController extends Controller
 				->select('users.username as create_by_name','customers.*')
 				->where('customers.customer_id', $id)
 				->where('customers.is_deleted', 0)
-				->get();
+				->first();
 		} else {
 			$customers = DB::table('customers')
 				->join('users', 'customers.created_by', '=', 'users.id')
 				->where('users.profile_id', $proId)
-				->where('customers.created_by', $uid)
+				// ->where('customers.created_by', $uid)
 				->select('users.username as create_by_name','customers.*')
 				->where('customers.customer_id', $id)
 				->where('customers.is_deleted', 0)
-				->get();
+				->first();
 		}
 		if (!$customers) {
 			return response()->json([
