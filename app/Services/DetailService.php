@@ -25,6 +25,7 @@ class DetailService {
             ->select(
                 'stock_details.*',
                 'items.item_code',
+                'items.barcode',
                 'items.item_name',
                 'items.item_price',
                 'items.wholesale_price',
@@ -50,6 +51,7 @@ class DetailService {
             foreach($stock_detail as $stock){
 
                $stock->attributes =  $this->attributeService->transformAttributes($stock->item_id);
+               $stock->stock = $this->quanItems($stock->item_id)[0];
 
             }
 
@@ -275,7 +277,7 @@ class DetailService {
             )
             // ->where('order_masters.created_by', $uid)
             ->where('order_items.is_deleted', 0)
-            // ->where('order_items.order_id', $id)
+            ->where('order_items.order_id', $id)
             ->get();
 
         if ($order_item->isEmpty()) {

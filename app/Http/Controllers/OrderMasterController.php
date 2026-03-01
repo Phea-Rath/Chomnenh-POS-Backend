@@ -460,7 +460,7 @@ class OrderMasterController extends Controller
                 'item_name' => $item['item_name'],
                 'item_price' => $item['item_price'],
                 'discount' => $item['discount'],
-                'total_price' => $item['total_price'],
+                'price' => $item['total_price'],
                 'quantity' => $item['quantity'],
                 'item_cost' => $item['item_cost'] ?? 0,
             ]);
@@ -632,7 +632,7 @@ class OrderMasterController extends Controller
                 'item_name' => $item['item_name'],
                 'item_price' => $item['unit_price'],
                 'discount' => $item['discount'],
-                'total_price' => $item['total_price'],
+                'price' => $item['total_price'],
                 'quantity' => $item['quantity'],
                 'item_cost' => $item['item_cost'] ?? 0,
             ]);

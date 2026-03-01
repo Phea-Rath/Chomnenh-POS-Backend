@@ -32,7 +32,6 @@ class ReportController extends Controller
         $request->validate([
             'order_customer' => 'nullable|integer',
             'user_id' => 'nullable|integer',
-            'item_id' => 'nullable|integer',
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date',
         ]);
@@ -56,12 +55,20 @@ class ReportController extends Controller
             ->join('customers as c','c.customer_id','=','om.order_customer_id')
             ->join('users as u', 'u.id', '=', 'om.created_by')
             ->join('profiles as p', 'u.profile_id', '=', 'p.id')
-            // ->join('items as i', 'oi.item_id', '=', 'i.item_id')
-            // ->join('categories as cg', 'i.category_id', '=', 'cg.category_id')
-            // ->join('brands as br', 'i.brand_id', '=', 'br.brand_id')
-            // ->join('scales as sc', 'i.scale_id', '=', 'sc.scale_id')
-            // ->join('sizes as sz', 'i.size_id', '=', 'sz.size_id')
-            ->where('p.id', $proId);
+            ->where('p.id', $proId)
+            ->where('om.is_deleted', 0)
+            ->groupBy(
+                'om.order_no',
+                'om.order_tel',
+                'om.order_date',
+                'c.customer_name',
+                'om.order_subtotal',
+                'om.order_discount',
+                'om.delivery_fee',
+                'om.order_total',
+                'om.payment',
+                'om.balance'
+            );
 
         // Filter by customer if provided
         if ($request->filled('order_customer')) {
@@ -71,10 +78,6 @@ class ReportController extends Controller
         if ($request->filled('user_id')) {
             $query->where('om.created_by', $request->user_id);
         }
-        // Filter by item name if provided
-        // if ($request->filled('item_id')) {
-        //     $query->where('i.item_id', $request->item_id);
-        // }
 
         // Filter by date range if provided
         if ($request->filled('start_date') && $request->filled('end_date')) {
@@ -116,7 +119,7 @@ class ReportController extends Controller
                 'i.item_price',
                 'cg.category_name',
                 'br.brand_name',
-                DB::raw('SUM(oi.price) AS price'),
+                DB::raw('SUM(oi.price * oi.quantity) AS total_price'),
                 DB::raw('SUM(om.order_discount) as order_discount'),
                 // 'om.order_date',
                 // 'c.customer_name as order_customer'
@@ -171,59 +174,59 @@ class ReportController extends Controller
     }
 
 
-    public function expanseReport(Request $request)
+    public function expenseReport(Request $request)
     {
         $user = Auth::user();
         $proId = $user->profile_id;
 
         $request->validate([
-            'expanse_by' => 'nullable|integer',
-            'expanse_type_id' => 'nullable|integer',
+            'expense_by' => 'nullable|integer',
+            'expense_type_id' => 'nullable|integer',
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date',
         ]);
 
-        $query = \DB::table('expanse_items as ei')
+        $query = \DB::table('expense_items as ei')
             ->select(
-                'em.expanse_no',
-                'em.expanse_date',
-                'em.expanse_by',
-                'em.expanse_supplier',
-                'et.expanse_type_name',
+                'em.expense_no',
+                'em.expense_date',
+                'em.expense_by',
+                'em.expense_supplier',
+                'et.expense_type_name',
                 'ei.quantity',
                 'ei.unit_price',
                 'ei.sub_total',
                 'em.created_by'
             )
-            ->join('expanse_masters as em', 'ei.expanse_id', '=', 'em.expanse_id')
-            ->join('expanse_types as et', 'ei.expanse_type_id', '=', 'et.expanse_type_id')
+            ->join('expense_masters as em', 'ei.expense_id', '=', 'em.expense_id')
+            ->join('expense_types as et', 'ei.expense_type_id', '=', 'et.expense_type_id')
             ->join('users as u', 'u.id', '=', 'em.created_by')
             ->join('profiles as p', 'u.profile_id', '=', 'p.id')
             ->where('p.id', $proId);
 
-        // Filter by expanse_by if provided
-        if ($request->filled('expanse_by')) {
-            $query->where('em.created_by', $request->expanse_by);
+        // Filter by expense_by if provided
+        if ($request->filled('expense_by')) {
+            $query->where('em.created_by', $request->expense_by);
         }
 
-        // Filter by expanse_type_id if provided
-        if ($request->filled('expanse_type_id')) {
-            $query->where('ei.expanse_type_id', $request->expanse_type_id);
+        // Filter by expense_type_id if provided
+        if ($request->filled('expense_type_id')) {
+            $query->where('ei.expense_type_id', $request->expense_type_id);
         }
 
         // Filter by date range if provided
         if ($request->filled('start_date') && $request->filled('end_date')) {
-            $query->whereBetween('em.expanse_date', [$request->start_date, $request->end_date]);
+            $query->whereBetween('em.expense_date', [$request->start_date, $request->end_date]);
         } elseif ($request->filled('start_date')) {
-            $query->where('em.expanse_date', '>=', $request->start_date);
+            $query->where('em.expense_date', '>=', $request->start_date);
         } elseif ($request->filled('end_date')) {
-            $query->where('em.expanse_date', '<=', $request->end_date);
+            $query->where('em.expense_date', '<=', $request->end_date);
         }
 
         $results = $query->get();
 
         return response()->json([
-            'message' => 'expanse report get successfully',
+            'message' => 'expense report get successfully',
             'status' => 200,
             'data' => $results
         ]);
@@ -1032,7 +1035,7 @@ class ReportController extends Controller
         $resultOrder = $queryOrder->first();
 
 
-        $queryExpense = DB::table('expanse_masters as em')
+        $queryExpense = DB::table('expense_masters as em')
             ->select(
                 DB::raw('SUM(em.amount) as total_amount'),
             )
@@ -1042,11 +1045,11 @@ class ReportController extends Controller
 
         // Filter by date range if provided
         if ($request->filled('start_date') && $request->filled('end_date')) {
-            $queryExpense->whereBetween('em.expanse_date', [$request->start_date, $request->end_date]);
+            $queryExpense->whereBetween('em.expense_date', [$request->start_date, $request->end_date]);
         } elseif ($request->filled('start_date')) {
-            $queryExpense->where('em.expanse_date', '>=', $request->start_date);
+            $queryExpense->where('em.expense_date', '>=', $request->start_date);
         } elseif ($request->filled('end_date')) {
-            $queryExpense->where('em.expanse_date', '<=', $request->end_date);
+            $queryExpense->where('em.expense_date', '<=', $request->end_date);
         }
 
         $resultExpense = $queryExpense->first();
@@ -1145,14 +1148,14 @@ class ReportController extends Controller
             )
             ->pluck('cost_used', 'ym');
 
-        $expenseByMonth = DB::table('expanse_masters as em')
+        $expenseByMonth = DB::table('expense_masters as em')
             ->join('users as u', 'u.id', '=', 'em.created_by')
             ->join('profiles as p', 'u.profile_id', '=', 'p.id')
             ->where('p.id', $proId)
-            ->whereBetween('em.expanse_date', [$startDate, $endDate])
-            ->groupBy(DB::raw("DATE_FORMAT(em.expanse_date, '%Y-%m')"))
+            ->whereBetween('em.expense_date', [$startDate, $endDate])
+            ->groupBy(DB::raw("DATE_FORMAT(em.expense_date, '%Y-%m')"))
             ->select(
-                DB::raw("DATE_FORMAT(em.expanse_date, '%Y-%m') as ym"),
+                DB::raw("DATE_FORMAT(em.expense_date, '%Y-%m') as ym"),
                 DB::raw('SUM(em.amount) as expense')
             )
             ->pluck('expense', 'ym');
