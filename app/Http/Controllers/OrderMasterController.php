@@ -484,7 +484,7 @@ class OrderMasterController extends Controller
             $itemsList = '';
                 foreach ($validated['items'] as $item) {
                     $itemsList .=
-                        "\t\t• <b>{$item['item_name']}</b> |  Qty: {$item['quantity']}  |  Price: <b>\$" . ($item['price'] * $item['quantity'])."</b>\n";
+                        "\t\t• <b>{$item['item_name']}</b> |  Qty: {$item['quantity']}  |  Price: <b>\$" . ($item['total_price'])."</b>\n";
                 }
 
 

@@ -137,6 +137,8 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::resource('purchase', PurchaseController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
     Route::get('/purchase-list', [PurchaseController::class, 'indexMobile']);
     Route::get('/purchase-by-id/{id}', [PurchaseController::class, 'showMobile']);
+    Route::get('/purchase_raw_list', [PurchaseController::class, 'indexRaw']);
+    Route::get('/purchase_raw/{id}', [PurchaseController::class, 'showRaw']);
     Route::post('/purchase_raw', [PurchaseController::class, 'storeRaw']);
     Route::put('/purchase_raw/{id}', [PurchaseController::class, 'updateRaw']);
     Route::delete('/purchase_raw/{id}', [PurchaseController::class, 'destroyRaw']);

@@ -206,78 +206,160 @@ class PurchaseController extends Controller
     }
 
     public function index(Request $request)
-{
-    $user  = Auth::user();
-    $uid   = $user->id;
-    $proId = $user->profile_id;
+    {
+        $user  = Auth::user();
+        $uid   = $user->id;
+        $proId = $user->profile_id;
 
-    $limit  = $request->input('limit', 10);
-    $page   = $request->input('page', 1);
-    $search = $request->input('search'); // 🔍 search keyword
+        $limit  = $request->input('limit', 10);
+        $page   = $request->input('page', 1);
+        $search = $request->input('search'); // 🔍 search keyword
 
-    $purchases = DB::table('purchases as p')
-        ->join('suppliers as s', 'p.supplier_id', '=', 's.supplier_id')
-        ->join('users as u', 'p.created_by', '=', 'u.id')
-        ->join('profiles as pr', 'u.profile_id', '=', 'pr.id')
-        ->select(
-            'p.*',
-            's.supplier_name',
-            'u.username as created_by_name'
-        )
-        ->where('p.is_deleted', 0)
-        ->where('u.id', $uid)
-        ->where('pr.id', $proId)
+        $purchases = DB::table('purchases as p')
+            ->join('suppliers as s', 'p.supplier_id', '=', 's.supplier_id')
+            ->join('users as u', 'p.created_by', '=', 'u.id')
+            ->join('profiles as pr', 'u.profile_id', '=', 'pr.id')
+            ->select(
+                'p.*',
+                's.supplier_name',
+                'u.username as created_by_name'
+            )
+            ->where('p.is_deleted', 0)
+            ->where('u.id', $uid)
+            ->where('pr.id', $proId)
+            ->whereExists(function ($query) {
+                $query->select(DB::raw(1))
+                    ->from('purchase_details as pd')
+                    ->whereColumn('pd.purchase_id', 'p.purchase_id')
+                    ->where('pd.is_deleted', 0);
+            })
 
-        // 🔍 SEARCH FILTER
-        ->when($search, function ($query) use ($search) {
-            $query->where(function ($q) use ($search) {
-                $q->where('p.purchase_no', 'like', "%{$search}%")
-                  ->orWhere('s.supplier_name', 'like', "%{$search}%")
-                  ->orWhere('u.username', 'like', "%{$search}%")
-                  ->orWhere('p.note', 'like', "%{$search}%");
-            });
-        })
+            // 🔍 SEARCH FILTER
+            ->when($search, function ($query) use ($search) {
+                $query->where(function ($q) use ($search) {
+                    $q->where('p.purchase_no', 'like', "%{$search}%")
+                    ->orWhere('s.supplier_name', 'like', "%{$search}%")
+                    ->orWhere('u.username', 'like', "%{$search}%")
+                    ->orWhere('p.note', 'like', "%{$search}%");
+                });
+            })
 
-        ->orderBy('p.purchase_id', 'desc')
-        ->paginate($limit, ['*'], 'page', $page);
+            ->orderBy('p.purchase_id', 'desc')
+            ->paginate($limit, ['*'], 'page', $page);
 
-    if ($purchases->isEmpty()) {
+        if ($purchases->isEmpty()) {
+            return response()->json([
+                'message' => 'No purchases found!',
+                'status'  => 404,
+                'data'    => []
+            ]);
+        }
+        // Enrich ONLY current page purchases
+        $data = collect($purchases->items())->map(function ($purchase) {
+            $details = $this->detailService->purchaseDetail($purchase->purchase_id);
+
+            $payments = DB::table('purchase_payments')
+                ->where('purchase_id', $purchase->purchase_id)
+                ->where('is_deleted', 0)
+                ->get();
+
+            return [
+                ...((array) $purchase),
+                'details'  => $details,
+                'payments' => $payments
+            ];
+        });
+
         return response()->json([
-            'message' => 'No purchases found!',
-            'status'  => 404,
-            'data'    => []
+            'message' => 'Purchases fetched successfully',
+            'status'  => 200,
+            'data'    => $data->toArray(),
+            'pagination' => [
+                'current_page' => $purchases->currentPage(),
+                'per_page'     => $purchases->perPage(),
+                'total'        => $purchases->total(),
+                'last_page'    => $purchases->lastPage(),
+            ]
         ]);
     }
 
-    // Enrich ONLY current page purchases
-    $data = collect($purchases->items())->map(function ($purchase) {
 
-        $details = $this->detailService->purchaseDetail($purchase->purchase_id);
+    public function indexRaw(Request $request)
+    {
+        $user  = Auth::user();
+        $uid   = $user->id;
+        $proId = $user->profile_id;
 
-        $payments = DB::table('purchase_payments')
-            ->where('purchase_id', $purchase->purchase_id)
-            ->where('is_deleted', 0)
-            ->get();
+        $limit  = $request->input('limit', 10);
+        $page   = $request->input('page', 1);
+        $search = $request->input('search'); // 🔍 search keyword
 
-        return [
-            ...((array) $purchase),
-            'details'  => $details,
-            'payments' => $payments
-        ];
-    });
+        $purchases = DB::table('purchases as p')
+            ->join('suppliers as s', 'p.supplier_id', '=', 's.supplier_id')
+            ->join('users as u', 'p.created_by', '=', 'u.id')
+            ->join('profiles as pr', 'u.profile_id', '=', 'pr.id')
+            ->select(
+                'p.*',
+                's.supplier_name',
+                'u.username as created_by_name'
+            )
+            ->where('p.is_deleted', 0)
+            ->where('u.id', $uid)
+            ->where('pr.id', $proId)
+            ->whereExists(function ($query) {
+                $query->select(DB::raw(1))
+                    ->from('purchase_raw_details as prd')
+                    ->whereColumn('prd.purchase_id', 'p.purchase_id')
+                    ->where('prd.is_deleted', 0);
+            })
 
-    return response()->json([
-        'message' => 'Purchases fetched successfully',
-        'status'  => 200,
-        'data'    => $data->toArray(),
-        'pagination' => [
-            'current_page' => $purchases->currentPage(),
-            'per_page'     => $purchases->perPage(),
-            'total'        => $purchases->total(),
-            'last_page'    => $purchases->lastPage(),
-        ]
-    ]);
-}
+            // 🔍 SEARCH FILTER
+            ->when($search, function ($query) use ($search) {
+                $query->where(function ($q) use ($search) {
+                    $q->where('p.purchase_no', 'like', "%{$search}%")
+                    ->orWhere('s.supplier_name', 'like', "%{$search}%")
+                    ->orWhere('u.username', 'like', "%{$search}%")
+                    ->orWhere('p.note', 'like', "%{$search}%");
+                });
+            })
+
+            ->orderBy('p.purchase_id', 'desc')
+            ->paginate($limit, ['*'], 'page', $page);
+
+        if ($purchases->isEmpty()) {
+            return response()->json([
+                'message' => 'No purchases found!',
+                'status'  => 404,
+                'data'    => []
+            ]);
+        }
+        // Enrich ONLY current page purchases
+        $data = collect($purchases->items())->map(function ($purchase) {
+            $details = $this->detailService->purchaseRawDetail($purchase->purchase_id);
+            $payments = DB::table('purchase_payments')
+                ->where('purchase_id', $purchase->purchase_id)
+                ->where('is_deleted', 0)
+                ->get();
+
+            return [
+                ...((array) $purchase),
+                'details'  => $details,
+                'payments' => $payments
+            ];
+        });
+
+        return response()->json([
+            'message' => 'Purchases fetched successfully',
+            'status'  => 200,
+            'data'    => $data->toArray(),
+            'pagination' => [
+                'current_page' => $purchases->currentPage(),
+                'per_page'     => $purchases->perPage(),
+                'total'        => $purchases->total(),
+                'last_page'    => $purchases->lastPage(),
+            ]
+        ]);
+    }
 
 
     public function store(Request $request)

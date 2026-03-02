@@ -673,58 +673,12 @@ class ReportController extends Controller
         }
 
         $stocks = $query->orderByDesc('sm.stock_id')->get();
-        $stockIds = $stocks->pluck('stock_id');
 
-        $detailRows = DB::table('stock_details as sd')
-            ->leftJoin('items as i', 'i.item_id', '=', 'sd.item_id')
-            ->whereIn('sd.stock_id', $stockIds)
-            ->where('sd.is_deleted', 0)
-            ->select(
-                'sd.stock_id',
-                'sd.detail_id',
-                'sd.item_id',
-                'i.item_name',
-                'i.item_code',
-                'i.barcode',
-                'sd.quantity',
-                'sd.item_cost',
-                DB::raw('sd.quantity * sd.item_cost as subtotal')
-            )
-            ->get()
-            ->groupBy('stock_id');
 
         return response()->json([
             'message' => 'Stock report generated successfully!',
             'status' => 200,
-            'data' => $stocks->map(function ($stock) use ($detailRows) {
-                $details = $detailRows->get($stock->stock_id, collect());
-                $totalCost = $details->sum('subtotal');
-
-                return [
-                    'stock_no' => $stock->stock_no,
-                    'stock_date' => $stock->stock_date,
-                    'stock_type_id' => $stock->stock_type_id,
-                    'stock_type_name' => $stock->stock_type_name,
-                    'from_warehouse' => $stock->from_warehouse_name,
-                    'to_warehouse' => $stock->to_warehouse_name,
-                    'stock_remark' => $stock->stock_remark,
-                    'quantity' => (float) $stock->quantity,
-                    'total_cost' => number_format($totalCost, 2, '.', ''),
-                    'exchange_rate' => $stock->exchange_rate,
-                    'created_by' => $stock->created_by_name,
-                    'details' => $details->map(function ($detail) {
-                        return [
-                            'item_id' => $detail->item_id,
-                            'barcode' => $detail->barcode,
-                            'item_code' => $detail->item_code,
-                            'item_name' => $detail->item_name,
-                            'quantity' => (float) $detail->quantity,
-                            'item_cost' => number_format($detail->item_cost, 2, '.', ''),
-                            'subtotal' => number_format($detail->subtotal, 2, '.', ''),
-                        ];
-                    })->values(),
-                ];
-            })
+            'data' => $stocks,
         ], 200);
     }
     public function stockReportByItem(Request $request)
@@ -748,9 +702,9 @@ class ReportController extends Controller
                 'i.item_code',
                 'cg.category_name',
                 'br.brand_name',
-                DB::raw('SUM(sd.quantity) as quantity'),
-                DB::raw('AVG(sd.item_cost) as item_cost'),
-                DB::raw('SUM(sd.quantity * sd.item_cost) as subtotal'),
+                // DB::raw('SUM(sd.quantity) as quantity'),
+                // DB::raw('AVG(sd.item_cost) as item_cost'),
+                // DB::raw('SUM(sd.quantity * sd.item_cost) as subtotal'),
                 DB::raw('SUM(CASE WHEN sm.stock_type_id = 1 THEN sd.quantity ELSE 0 END) AS stock_return'),
                 DB::raw('SUM(CASE WHEN sm.stock_type_id = 2 THEN sd.quantity ELSE 0 END) AS stock_in'),
                 DB::raw('SUM(CASE WHEN sm.stock_type_id = 3 THEN sd.quantity ELSE 0 END) AS stock_out'),

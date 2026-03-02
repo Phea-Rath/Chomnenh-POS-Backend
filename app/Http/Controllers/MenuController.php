@@ -76,6 +76,7 @@ class MenuController extends Controller
             'menu_type' => 'required',
             'menu_icon' => '',
             'menu_path' => 'required|string',
+            'order_menu' => 'required|integer',
         ]);
 
         $imageName = null;
@@ -89,6 +90,7 @@ class MenuController extends Controller
             'menu_type' => $validated['menu_type'],
             'menu_icon' => $imageName,
             'menu_path' => $validated['menu_path'],
+            'order_menu' => $validated['order_menu'],
         ]);
         if (!empty($menu)) {
             Permission::create([
@@ -115,6 +117,7 @@ class MenuController extends Controller
             'menu_type' => 'sometimes',
             'menu_icon' => '',
             'menu_path' => 'sometimes|string',
+            'order_menu' => 'required|integer',
         ]);
         $imageName = null;
         if ($request->hasFile('menu_icon')) {
@@ -128,12 +131,14 @@ class MenuController extends Controller
             'menu_type' => $validated['menu_type'],
             'menu_icon' => $imageName,
             'menu_path' => $validated['menu_path'],
+            'order_menu' => $validated['order_menu'],
             ]);
         }else{
             $menu->update([
             'menu_name' => $validated['menu_name'],
             'menu_type' => $validated['menu_type'],
             'menu_path' => $validated['menu_path'],
+            'order_menu' => $validated['order_menu'],
         ]);
         }
 
