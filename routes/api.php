@@ -37,6 +37,7 @@ use App\Http\Controllers\WarehouseController;
 use App\Http\Controllers\QuotationController;
 use App\Http\Controllers\DeliverController;
 use App\Http\Controllers\ProductionController;
+use App\Http\Controllers\PaymentController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Broadcast;
 
@@ -61,6 +62,10 @@ Route::post('/verify-otp', [OtpController::class, 'verifyOtp']);
 Broadcast::routes(['middleware' => ['auth:sanctum']]);
 Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');
+    Route::get('aba-checkout', [PaymentController::class, 'checkout'])->middleware('auth:sanctum');
+    Route::get('aba-callback', [PaymentController::class, 'callback'])->middleware('auth:sanctum');
+    Route::get('get-qrcode', [PaymentController::class, 'getQrCode'])->middleware('auth:sanctum');
+    Route::get('verify-payment/{md5}', [PaymentController::class, 'verifyPayment'])->middleware('auth:sanctum');
     Route::get('e-menu', [MenuController::class, 'getEMenuByUserId'])->middleware('auth:sanctum');
     Route::post('/guest/{phone_number}', [AuthController::class, 'guest'])->middleware('auth:sanctum');
     Route::get('/alert_order_online', [NotificationController::class, 'orderOnline']);
@@ -109,7 +114,17 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::delete('/deleted/{id}', [ItemController::class, 'deleted']);
     //M
     Route::resource('menus', MenuController::class)->only(['index', 'show', 'store', 'update']);
+    Route::get('/menu-sidebar', [MenuController::class, 'getMenuSidebarByCurrentUser']);
+    Route::get('/menu-home', [MenuController::class, 'getMenuHomeByCurrentUser']);
+    Route::get('/menu-setting', [MenuController::class, 'getMenuSettingByCurrentUser']);
+    Route::get('/menu-report', [MenuController::class, 'getMenuReportByCurrentUser']);
+    Route::get('/menu-sidebar/{id}', [MenuController::class, 'getMenuSidebarByUserId']);
+    Route::get('/menu-home/{id}', [MenuController::class, 'getMenuHomeByUserId']);
+    Route::get('/menu-setting/{id}', [MenuController::class, 'getMenuSettingByUserId']);
+    Route::get('/menu-report/{id}', [MenuController::class, 'getMenuReportByUserId']);
     Route::post('/menus/{id}', [MenuController::class, 'update']);
+    Route::get('/menusByCurrentUser', [PermissionController::class, 'getPermissionMenuByCurrentUser']);
+    Route::get('/menusByUser/{id}', [PermissionController::class, 'getPermissionMenuByUser']);
     Route::get('/menusByCurrentUser', [PermissionController::class, 'getPermissionMenuByCurrentUser']);
     Route::get('/menusByUser/{id}', [PermissionController::class, 'getPermissionMenuByUser']);
     Route::get('/order_persent_montly', [OrderItemController::class, 'monthlyOrderPercentCompare']);
@@ -137,6 +152,8 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::resource('purchase', PurchaseController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
     Route::get('/purchase-list', [PurchaseController::class, 'indexMobile']);
     Route::get('/purchase-by-id/{id}', [PurchaseController::class, 'showMobile']);
+    Route::get('/purchase-raw-list', [PurchaseController::class, 'indexMobileRaw']);
+    Route::get('/purchase-raw-by-id/{id}', [PurchaseController::class, 'showMobileRaw']);
     Route::get('/purchase_raw_list', [PurchaseController::class, 'indexRaw']);
     Route::get('/purchase_raw/{id}', [PurchaseController::class, 'showRaw']);
     Route::post('/purchase_raw', [PurchaseController::class, 'storeRaw']);
@@ -180,12 +197,15 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::get('/stock/{id}', [StockMasterController::class, 'getStockByOrderNo']);
     Route::get('/stock_transection', [StockMasterController::class, 'stockTransection']);
     Route::get('/stock_transfer', [StockMasterController::class, 'stockTransfer']);
+    Route::get('/stock_transfer_list', [StockMasterController::class, 'stockTransferMobile']);
     Route::get('/stock_tracking', [StockMasterController::class, 'stockTracking']);
     Route::get('/popular_stock', [StockMasterController::class, 'popularStockIn']);
     Route::get('/quan_stock_by_attr', [StockDetailController::class, 'quantityInStockByItemId']);
     Route::post('/suppliers/{id}', [SupplierController::class, 'update']);
     Route::get('/stock-list', [StockMasterController::class, 'indexMobile']);
+    Route::get('/stock-raw-list', [StockMasterController::class, 'indexRawMobile']);
     Route::get('/stock-by-id/{id}', [StockMasterController::class, 'showMobile']);
+    Route::get('/stock-raw-by-id/{id}', [StockMasterController::class, 'showRawMobile']);
     Route::resource('suppliers', SupplierController::class)->only(['index', 'show', 'store', 'destroy']);
     //report
     Route::post('/sale_report', [ReportController::class, 'saleReport']);

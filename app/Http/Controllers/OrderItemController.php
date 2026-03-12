@@ -108,6 +108,7 @@ class OrderItemController extends Controller
     {
         $user = Auth::user();
         $uid = $user->id;
+        $proId = $user->profile_id;
 
         $now = \Carbon\Carbon::now();
         $currentStart = $now->copy()->startOfMonth()->toDateString();
@@ -117,16 +118,18 @@ class OrderItemController extends Controller
 
         $currentTotal = (float) DB::table('order_items')
             ->join('order_masters', 'order_items.order_id', '=', 'order_masters.order_id')
+            ->join('users', 'order_masters.created_by', '=', 'users.id')
+              ->where('users.profile_id', $proId)
             ->where('order_items.is_deleted', 0)
             ->whereBetween(DB::raw('DATE(order_masters.created_at)'), [$currentStart, $currentEnd])
-            ->selectRaw('SUM(CASE WHEN order_masters.sale_type = "sale" THEN order_items.item_price * order_items.quantity ELSE order_items.item_wholesale_price * order_items.quantity END) as total')
+            ->selectRaw('SUM(order_items.item_price * order_items.quantity) as total')
             ->value('total') ?? 0.0;
 
         $previousTotal = (float) DB::table('order_items')
             ->join('order_masters', 'order_items.order_id', '=', 'order_masters.order_id')
             ->where('order_items.is_deleted', 0)
             ->whereBetween(DB::raw('DATE(order_masters.created_at)'), [$prevStart, $prevEnd])
-            ->selectRaw('SUM(CASE WHEN order_masters.sale_type = "sale" THEN order_items.item_price * order_items.quantity ELSE order_items.item_wholesale_price * order_items.quantity END) as total')
+            ->selectRaw('SUM(order_items.item_price * order_items.quantity) as total')
             ->value('total') ?? 0.0;
 
         $sum = $currentTotal + $previousTotal;
@@ -154,22 +157,21 @@ class OrderItemController extends Controller
     {
         $user = Auth::user();
         $uid = $user->id;
+        $proId = $user->profile_id;
 
         $order_items = DB::table('order_items')
             ->join('items', 'order_items.item_id', '=', 'items.item_id')
             ->join('brands', 'items.brand_id', '=', 'brands.brand_id')
             ->join('order_masters', 'order_items.order_id', '=', 'order_masters.order_id')
+            ->join('users', 'order_masters.created_by', '=', 'users.id')
+              ->where('users.profile_id', $proId)
             ->where('order_items.is_deleted', 0)
             ->select(
                 'order_items.item_id','brands.brand_name','items.item_name',
                 DB::raw('
                     SUM(
-                        CASE
-                            WHEN order_masters.sale_type = "sale"
-                                THEN order_items.item_price*order_items.quantity
-                            ELSE
-                                order_items.item_wholesale_price*order_items.quantity
-                        END
+                        order_items.item_price*order_items.quantity
+
                     ) AS total_price
                 '),
                 DB::raw('

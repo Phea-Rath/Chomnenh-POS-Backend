@@ -18,7 +18,7 @@ return new class extends Migration
             $table->unsignedInteger("from_warehouse"); // must match referenced type
             $table->unsignedInteger("warehouse_id");   // make it consistent too
             $table->date("stock_date");
-            $table->string("stock_remark");
+            $table->string("stock_remark")->nullable();
             $table->decimal("exchange_rate",10,2)->default(4000);
             $table->unsignedInteger("stock_created_by");
             $table->integer("id_transfer")->default(0);

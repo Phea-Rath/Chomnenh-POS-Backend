@@ -17,7 +17,7 @@ class ExpanseTypeController extends Controller
         // $page = 2;
         $expense_types = DB::table('expense_types')
             ->where('is_deleted', 0)
-            ->where('created_by', $uid)
+            // ->where('created_by', $uid)
             // ->paginate($page);
             ->get();
         if (count($expense_types) == 0) {
@@ -41,7 +41,7 @@ class ExpanseTypeController extends Controller
         $uid = $user->id;
         $validated = $request->validate([
             'expense_type_name' => 'required|string|max:255',
-            'created_by' => 'required|integer',
+            // 'created_by' => 'required|integer',
         ]);
 
         $expenseTypeName = Str::lower(trim($validated['expense_type_name']));

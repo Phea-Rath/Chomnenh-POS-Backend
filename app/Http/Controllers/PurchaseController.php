@@ -225,7 +225,7 @@ class PurchaseController extends Controller
                 'u.username as created_by_name'
             )
             ->where('p.is_deleted', 0)
-            ->where('u.id', $uid)
+            // ->where('u.id', $uid)
             ->where('pr.id', $proId)
             ->whereExists(function ($query) {
                 $query->select(DB::raw(1))
@@ -304,7 +304,7 @@ class PurchaseController extends Controller
                 'u.username as created_by_name'
             )
             ->where('p.is_deleted', 0)
-            ->where('u.id', $uid)
+            // ->where('u.id', $uid)
             ->where('pr.id', $proId)
             ->whereExists(function ($query) {
                 $query->select(DB::raw(1))
@@ -731,7 +731,7 @@ class PurchaseController extends Controller
         foreach ($validated['items'] as $item) {
             $details[] = PurchaseRawDetail::create([
                 'purchase_id' => $id,
-                'item_id'     => $item['item_id'],
+                'raw_material_id'     => $item['item_id'],
                 'quantity'    => $item['quantity'],
                 'item_cost'  => $item['item_cost'],
                 'subtotal'    => $item['quantity'] * $item['item_cost'],

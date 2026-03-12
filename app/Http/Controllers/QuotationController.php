@@ -70,7 +70,13 @@ class QuotationController extends Controller
         return response()->json([
             'message' => 'Quotation list',
             'status' => 200,
-            'data' => $quotations
+            'data' => $quotations,
+            'pagination' => [
+                'total' => $quotationRows->total(),
+                'per_page' => $quotationRows->perPage(),
+                'current_page' => $quotationRows->currentPage(),
+                'last_page' => $quotationRows->lastPage(),
+            ],
         ], 200);
     }
 
@@ -325,11 +331,13 @@ class QuotationController extends Controller
             ], 404);
         }
 
+        if($status == 'approved'){
+            return $this->approved($id);
+        }
+
         $quote->status = $status;
         $quote->save();
-        if($status == 'approved'){
-            $this->approved($id);
-        }
+
         return response()->json([
             'message' => 'Quotation updated status',
             'status' => 200,
@@ -346,70 +354,101 @@ class QuotationController extends Controller
         $year = $now->format('y');
 
 
-        $exchange_rate = ExchangeRate::find($proId);
-        $orderCount = OrderMaster::where('created_by', $uid)
-            ->whereMonth('order_date', $month)
-            ->whereYear('order_date', $now->format('Y'))
-            ->count();
-        $order_no = 'ORD' . $proId . $year . $month . '-' . str_pad($orderCount + 1, 4, '0', STR_PAD_LEFT);
-        $order_date = $now->format('Y-m-d');
-
         $quote = Quotation::with([
                 'customer:customer_id,customer_name',
                 'details.item:item_id,item_name,item_cost'
             ])->findOrFail($id);
 
-        $order_masters = OrderMaster::create([
-            'order_no' => $order_no,
-            'order_customer_id' => $quote->customer_id ?? null,
-            'sale_type' => 'wholesale' ?? null,
-            'online' => 0,
-            'status' => 6,
-            'order_tel' => null,
-            'deliver_id' => 1,
-            'order_address' => null,
-            'order_date' => now()->format('Y-m-d'),
-            'delivery_fee' => $quote->delivery_fee,
-            'order_payment_status' => 'paid',
-            'order_payment_method' => 'cash',
-            'balance' => 0,
-            'payment' => $quote->grand_total,
-            'order_subtotal' => $quote->order_total,
-            'order_discount' => $quote->total_discount,
-            'order_tax' => $quote->tax ?? 0,
-            'order_total' => $quote->grand_total,
-            'created_by' => $uid,
-            'order_type' => null,
-        ]);
-
-        $order_id = $order_masters->order_id;
-        $order_items = [];
-        // $order_details = [];
-
+        $outOfStockItems = [];
         foreach ($quote->details as $item) {
-            $order_items[] = OrderItems::create([
-                'order_id' => $order_id,
-                'item_id' => $item['item_id'],
-                'item_name' => $item['item_name'],
-                'item_price' => $item['price'],
-                'discount' => $item['discount'],
-                'price' => $item['total_price'],
-                'quantity' => $item['quantity'],
-                'item_cost' => $item['item']->item_cost ?? 0,
-                'item_wholesale_price' => $item['price'] ?? 0,
-                'exchange_rate' => (double)$exchange_rate->usd_to_khr,
-            ]);
+            $inStock = (double)($this->detailService->quanItems($item->item_id)[0]->in_stock ?? 0);
+            $requiredQty = (double)($item->quantity ?? 0);
+
+            if ($requiredQty > $inStock) {
+                $outOfStockItems[] = [
+                    'item_id' => $item->item_id,
+                    'item_name' => $item->item_name,
+                    'required_quantity' => $requiredQty,
+                    'available_quantity' => $inStock,
+                ];
+            }
         }
 
-        $quoteUpdate = Quotation::find($id);
-        $quoteUpdate->status = 'approved';
-        $quoteUpdate->save();
+        if (!empty($outOfStockItems)) {
+            return response()->json([
+                'message' => 'Stock is not enough for some items',
+                'status' => 422,
+                'out_of_stock_items' => $outOfStockItems,
+            ], 422);
+        }
 
-        // return response()->json([
-        //     'message' => 'Quotation approved successfull',
-        //     'status' => 200,
-        //     'data' => $order_masters
-        // ], 201);
+        DB::beginTransaction();
+        try {
+            $exchange_rate = ExchangeRate::find($proId);
+            $orderCount = OrderMaster::where('created_by', $uid)
+                ->whereMonth('order_date', $month)
+                ->whereYear('order_date', $now->format('Y'))
+                ->count();
+            $order_no = 'ORD' . $proId . $year . $month . '-' . str_pad($orderCount + 1, 4, '0', STR_PAD_LEFT);
+
+            $order_masters = OrderMaster::create([
+                'order_no' => $order_no,
+                'order_customer_id' => $quote->customer_id ?? null,
+                'sale_type' => 'wholesale' ?? null,
+                'online' => 0,
+                'status' => 6,
+                'order_tel' => null,
+                'deliver_id' => 1,
+                'order_address' => null,
+                'order_date' => now()->format('Y-m-d'),
+                'delivery_fee' => $quote->delivery_fee,
+                'order_payment_status' => 'paid',
+                'order_payment_method' => 'cash',
+                'balance' => 0,
+                'payment' => $quote->grand_total,
+                'order_subtotal' => $quote->order_total,
+                'order_discount' => $quote->total_discount,
+                'order_tax' => $quote->tax ?? 0,
+                'order_total' => $quote->grand_total,
+                'created_by' => $uid,
+                'order_type' => null,
+            ]);
+
+            $order_id = $order_masters->order_id;
+            $order_items = [];
+            foreach ($quote->details as $item) {
+                $order_items[] = OrderItems::create([
+                    'order_id' => $order_id,
+                    'item_id' => $item['item_id'],
+                    'item_name' => $item['item_name'],
+                    'item_price' => $item['price'],
+                    'discount' => $item['discount'],
+                    'price' => $item['total_price'],
+                    'quantity' => $item['quantity'],
+                    'item_cost' => $item['item']->item_cost ?? 0,
+                    'item_wholesale_price' => $item['price'] ?? 0,
+                    'exchange_rate' => (double)($exchange_rate->usd_to_khr ?? 0),
+                ]);
+            }
+
+            $quote->status = 'approved';
+            $quote->save();
+
+            DB::commit();
+
+            return response()->json([
+                'message' => 'Quotation approved successfully',
+                'status' => 200,
+                'data' => $order_masters,
+            ], 200);
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return response()->json([
+                'message' => 'Failed to approve quotation',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
     }
 
 }

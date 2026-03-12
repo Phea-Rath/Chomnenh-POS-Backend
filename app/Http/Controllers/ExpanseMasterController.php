@@ -16,7 +16,7 @@ class ExpanseMasterController extends Controller
     public function index(Request $request)
 {
     $user = Auth::user();
-    $uid  = $user->id;
+    $proId = $user->profile_id;
 
     $limit  = $request->input('limit', 10);
     $page   = $request->input('page', 1);
@@ -25,18 +25,21 @@ class ExpanseMasterController extends Controller
     $exclude = ['is_deleted', 'is_active'];
     $columns = Schema::getColumnListing('expense_masters');
     $selectColumns = array_diff($columns, $exclude);
+    $selectColumns = array_map(fn($col) => "em.$col", $selectColumns);
+
     // Paginated masters
     $masters = DB::table('expense_masters as em')
-        ->where('em.created_by', $uid)
+        ->join('users as u', 'em.created_by', '=', 'u.id')
+        ->where('u.profile_id', $proId)
         ->where('em.is_deleted', 0)
         ->select($selectColumns)
 
         // 🔍 SEARCH FILTER
         ->when($search, function ($query) use ($search) {
             $query->where(function ($q) use ($search) {
-                $q->where('em.expense_code', 'like', "%{$search}%")
-                  ->orWhere('em.expense_name', 'like', "%{$search}%")
-                  ->orWhere('em.note', 'like', "%{$search}%");
+                $q->where('em.expense_no', 'like', "%{$search}%")
+                  ->orWhere('em.expense_by', 'like', "%{$search}%")
+                  ->orWhere('em.expense_supplier', 'like', "%{$search}%");
             });
         })
 
@@ -99,14 +102,11 @@ class ExpanseMasterController extends Controller
         $uid = $user->id;
         $expense_no = 'EXP-' . str_pad((ExpanseMaster::max('expense_id') + 1), 5, '0', STR_PAD_LEFT);
         $validate = $request->validate([
-            // 'expense_no',
             'expense_date' => 'required|date',
             'expense_by' => 'required|string|max:255',
             'amount' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
-            // 'created_by',
-            'expense_other' => 'required|string|max:500',
+            'expense_other' => 'nullable|string|max:500',
             'expense_supplier' => 'required|string|max:500',
-            // 'expense_id',
             'items' => 'required|array|min:1',
             'items.*.expense_type_id' => 'required|integer',
             'items.*.description' => 'required|string|max:500',
@@ -154,12 +154,14 @@ class ExpanseMasterController extends Controller
     public function show(string $id)
     {
         $user = Auth::user();
-        $uid = $user->id;
-        $masters = DB::table('expense_masters')
-            ->where('expense_id', $id)
-            ->where('is_deleted', 0)
-            ->where('created_by', $uid)
-            ->where('is_active', 1)
+        $proId = $user->profile_id;
+        $masters = DB::table('expense_masters as em')
+            ->join('users as u', 'em.created_by', '=', 'u.id')
+            ->where('em.expense_id', $id)
+            ->where('em.is_deleted', 0)
+            ->where('u.profile_id', $proId)
+            ->where('em.is_active', 1)
+            ->select('em.*')
             ->get();
 
             if ($masters->isEmpty()) {
@@ -209,14 +211,11 @@ class ExpanseMasterController extends Controller
             ]);
         }
         $validate = $request->validate([
-            // 'expense_no',
             'expense_date' => 'required|date',
             'expense_by' => 'required|string|max:255',
             'amount' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
-            // 'created_by',
-            'expense_other' => 'required|string|max:500',
+            'expense_other' => 'nullable|string|max:500',
             'expense_supplier' => 'required|string|max:500',
-            // 'expense_id',
             'items' => 'required|array|min:1',
             'items.*.expense_type_id' => 'required|integer',
             'items.*.description' => 'required|string|max:500',
@@ -275,13 +274,13 @@ class ExpanseMasterController extends Controller
             ]);
         }
         $expense_masters->update([
-            'is_delete' => 1,
+            'is_deleted' => 1,
         ]);
         $expense_items = ExpanseItems::where('expense_id', $id)->get();
         if ($expense_items) {
             foreach ($expense_items as $item) {
                 $item->update([
-                    'is_delete' => 1,
+                    'is_deleted' => 1,
                 ]);
             }
         }

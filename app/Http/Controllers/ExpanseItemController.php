@@ -15,11 +15,13 @@ class ExpanseItemController extends Controller
     public function index()
     {
         $user = Auth::user();
-        $uid = $user->id;
-        $expense_items = DB::table('expense_items')
-            ->join('expense_types', 'expense_items.expense_type_id', '=', 'expense_types.expense_type_id')
-            ->where('created_by', $uid)
-            ->where('expense_items.is_deleted', 0)
+        $proId = $user->profile_id;
+        $expense_items = DB::table('expense_items as ei')
+            ->join('expense_types as et', 'ei.expense_type_id', '=', 'et.expense_type_id')
+            ->join('expense_masters as em', 'ei.expense_id', '=', 'em.expense_id')
+            ->join('users as u', 'em.created_by', '=', 'u.id')
+            ->where('u.profile_id', $proId)
+            ->where('ei.is_deleted', 0)
             ->get();
         if (!$expense_items) {
             return response()->json([
@@ -36,13 +38,18 @@ class ExpanseItemController extends Controller
 
     public function PopularExpanse()
     {
-        $items = DB::table('expense_items')
+        $user = Auth::user();
+        $proId = $user->profile_id;
+        $items = DB::table('expense_items as ei')
+            ->join('expense_masters as em', 'ei.expense_id', '=', 'em.expense_id')
+            ->join('users as u', 'em.created_by', '=', 'u.id')
+            ->where('u.profile_id', $proId)
             ->select(
-                'description',
-                DB::raw('SUM(sub_total) as total_price'),
-                DB::raw('SUM(quantity) as quantity')
+                'ei.description',
+                DB::raw('SUM(ei.sub_total) as total_price'),
+                DB::raw('SUM(ei.quantity) as quantity')
             )
-            ->groupBy('description')
+            ->groupBy('ei.description')
             ->orderByDesc('total_price')
             ->limit(5)
             ->get();
@@ -75,10 +82,13 @@ class ExpanseItemController extends Controller
     public function show(string $id)
     {
         $user = Auth::user();
-        $uid = $user->id;
-        $expense_items = DB::table('expense_items')->where('expense_id', $id)
-            ->join('expense_types', 'expense_items.expense_type_id', '=', 'expense_types.expense_type_id')
-            ->where('created_by', $uid)
+        $proId = $user->profile_id;
+        $expense_items = DB::table('expense_items as ei')
+            ->where('ei.expense_id', $id)
+            ->join('expense_types as et', 'ei.expense_type_id', '=', 'et.expense_type_id')
+            ->join('expense_masters as em', 'ei.expense_id', '=', 'em.expense_id')
+            ->join('users as u', 'em.created_by', '=', 'u.id')
+            ->where('u.profile_id', $proId)
             ->get();
         if (!$expense_items) {
             return response()->json([

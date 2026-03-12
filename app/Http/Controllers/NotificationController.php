@@ -35,15 +35,13 @@ class NotificationController extends Controller
             ->join('users', 'stock_masters.stock_created_by', '=', 'users.id')
             ->join('profiles', 'users.profile_id', '=', 'profiles.id')
             ->select(
-                'items.item_id',
+                'stock_details.item_id',
                 'items.item_code',
                 'items.item_name',
-                // 'items.item_image',
                 'items.item_price',
                 'categories.category_name',
                 'categories.category_id',
-                'stock_details.expire_date',
-                DB::raw('0 as image'),
+                // 'stock_details.expire_date',
                 DB::raw('0 as images'),
                 DB::raw('
             SUM(CASE WHEN stock_masters.stock_type_id = 1 THEN stock_details.quantity ELSE 0 END)
@@ -56,40 +54,42 @@ class NotificationController extends Controller
             ->where('stock_details.is_deleted', 0)
             ->where('items.is_deleted', 0)
             ->where('stock_masters.is_deleted', 0)
-            ->whereNotIn('stock_masters.stock_type_id',[3,4,5])
             ->where('profiles.id', $proId)
-            // ->where("users.id", $uid)
-            ->where('warehouses.warehouse_id', function ($query) {
-                $query->selectRaw('MIN(w.warehouse_id)')
-                    ->from('warehouses as w')
-                    ->join('stock_masters as sm', 'sm.warehouse_id', '=', 'w.warehouse_id')
-                    ->join('users as u', 'sm.stock_created_by', '=', 'u.id')
-                    ->whereColumn('u.profile_id', 'profiles.id');
-            })
+            // ->whereDate('stock_details.expire_date', '>=', Carbon::now()->toDateString())
             ->whereDate('stock_details.expire_date', '<=', Carbon::now()->toDateString())
-            // ->whereDate('stock_details.expire_date', '<=', Carbon::now()->addDays(3)->toDateString())
-            // ->where('stock_masters.stock_type_id', '!=', 4)
-            // ->whereIn('stock_masters.stock_type_id', [1, 2])
             ->groupBy(
-                'items.item_id',
+                'stock_details.item_id',
                 'items.item_code',
                 'items.item_name',
-                // 'items.item_image',
                 'items.item_price',
                 'categories.category_name',
                 'categories.category_id',
-                'stock_details.expire_date',
+                // 'stock_details.expire_date',
             )
             ->orderBy('items.item_id')->get();
+
         $newData = [];
+
         foreach ($results as $item) {
+            $totalOrdered = DB::table('order_items as oi')
+            ->join('order_masters as om', 'oi.order_id', '=', 'om.order_id')
+            ->join('users as u', 'om.created_by', '=', 'u.id')
+            ->join('profiles as p', 'u.profile_id', '=', 'p.id')
+            ->where('p.id', $proId)
+            ->where('oi.item_id', $item->item_id)
+            ->where('oi.is_deleted', 0)
+            ->where('om.is_deleted', 0)
+            ->whereIn('om.status', [4,5,6])
+            ->groupBy('oi.item_id')
+            ->sum('oi.quantity');
             if ($item->in_stock <= 0) {
                 continue; // Skip items with in_stock less than or equal to 0
             }
 
             $item->images = $this->itemService->getImage($item->item_id);
-            $item->item_image = $this->itemService->getImage($item->item_id)[0]['image'];
+            $item->item_image = $item->images[0]['image'];
             $newData[] = $item;
+            $item->in_stock = $item->in_stock - $totalOrdered;
         }
         return response()->json(['message' => 'StockMaster show successfully!', 'status' => 200, 'data' => $newData,], 200);
     }
@@ -107,6 +107,7 @@ class NotificationController extends Controller
             ->where('profiles.id', $proId)
             ->where('om.is_deleted', 0)
             ->where('om.online', 1)
+            // ->where('om.status','!=', 6)
             ->select('om.*', 'delivers.deliver_name', 'delivers.image as deliver_image')
             ->orderBy('om.order_id', 'desc')
             ->get();
@@ -208,3 +209,5 @@ class NotificationController extends Controller
         ], 200);
     }
 }
+
+

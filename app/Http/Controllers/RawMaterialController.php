@@ -39,6 +39,7 @@ class RawMaterialController extends Controller
         $proId = $user->profile_id;
         $limit = $request->input('limit', 10);
         $page = $request->input('page', 1);
+        $search = $request->input('search', '');
 
          $query = DB::table('raw_materials')
             ->leftJoin('users', 'users.id', '=', 'raw_materials.created_by')
@@ -95,7 +96,13 @@ class RawMaterialController extends Controller
         return response()->json([
             'message' => 'Raw Material selected successfully',
             'status' => 200,
-            'data' =>  $rawItems,
+            'data' =>  $items,
+            'pagination' => [
+            'current_page' => $rawItems->currentPage(),
+            'per_page'     => $rawItems->perPage(),
+            'total'        => $rawItems->total(),
+            'last_page'    => $rawItems->lastPage(),
+        ]
 
         ]);
     }
@@ -164,8 +171,6 @@ class RawMaterialController extends Controller
         $user = Auth::user();
         $uid = $user->id;
         $proId = $user->profile_id;
-        $limit = $request->input('limit', 10);
-        $page = $request->input('page', 1);
 
          $query = DB::table('raw_materials')
             ->leftJoin('users', 'users.id', '=', 'raw_materials.created_by')
@@ -196,8 +201,7 @@ class RawMaterialController extends Controller
                 'raw_materials.updated_at',
                 DB::raw('0 as in_stock'),
             )
-            ->orderBy('raw_materials.id', 'DESC')
-            ->paginate($limit, ['*'], 'page', $page);
+            ->orderBy('raw_materials.id', 'DESC')->first();
 
         return response()->json([
             'message' => 'Raw material retrieved successfully!',
@@ -274,7 +278,7 @@ class RawMaterialController extends Controller
 
     public function destroy(string $id)
     {
-        $material = Items::find($id);
+        $material = RawMaterial::find($id);
 
         if (!$material) {
             return response()->json([

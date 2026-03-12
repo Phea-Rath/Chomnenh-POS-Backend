@@ -45,6 +45,7 @@ class BrandController extends Controller
             ]);
         }
 
+
         return response()->json([
             'message' => 'Brands selected successfully',
             'status' => 200,

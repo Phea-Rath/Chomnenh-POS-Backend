@@ -252,6 +252,17 @@ class ReportController extends Controller
                     'i.id as item_id',
                     'i.material_code as barcode',
                     'i.material_name as item_name',
+                    DB::raw('
+                    (
+                        SELECT pd2.item_cost
+                        FROM purchase_raw_details pd2
+                        JOIN purchases p2 ON p2.purchase_id = pd2.purchase_id
+                        WHERE pd2.raw_material_id = i.id
+                        AND p2.is_deleted = 0
+                        ORDER BY pd2.id DESC
+                        LIMIT 1
+                    ) as item_price
+                    '),
                     DB::raw('SUM(pd.item_cost) as total_cost'),
                     DB::raw('SUM(pd.quantity) as quantity'),
                     DB::raw('SUM(pd.subtotal) as subtotal'),
@@ -555,12 +566,12 @@ class ReportController extends Controller
                 'rm.id',
                 'rm.material_code',
                 'rm.material_name',
+                'rm.primary_unit',
+                'rm.secondary_unit',
+                'rm.conversion_value',
                 DB::raw('SUM(pd.quantity) as quantity'),
                 DB::raw('AVG(pd.cost_per_unit) as cost_per_unit'),
                 DB::raw('SUM(pd.total_cost) as total_cost'),
-                DB::raw('0 as primary_unit'),
-                DB::raw('0 as secondary_unit'),
-                DB::raw('0 as conversion_value'),
                 DB::raw('SUM(p.quantity) as production_quantity'),
                 DB::raw('SUM(p.total_cost) as production_total_cost')
             )
@@ -595,18 +606,24 @@ class ReportController extends Controller
 
         $results = $query->get();
 
-        foreach($results as $item){
-            $attrs = $this->attributeService->transformAttributes($item->item_id);
-            $item->primary_unit = $attrs[0]['name'] ?? null;
-            $item->secondary_unit = $attrs[1]['name'] ?? null;
-            $item->conversion_value = $attrs[1]['value'] ?? null;
-            $item->cost_per_unit = number_format($item->cost_per_unit, 2, '.', '');
-        }
-
         return response()->json([
             'message' => 'production report by raw get successfully',
             'status' => 200,
-            'data' => $results
+            'data' => $results->map(function ($result) {
+                return [
+                    'id' => $result->id,
+                    'material_code' => $result->material_code,
+                    'material_name' => $result->material_name,
+                    'primary_unit' => $result->primary_unit,
+                    'secondary_unit' => $result->secondary_unit,
+                    'conversion_value' => number_format($result->conversion_value, 2, '.', ''),
+                    'quantity' => (float) $result->quantity,
+                    'cost_per_unit' => number_format($result->cost_per_unit, 2, '.', ''),
+                    'total_cost' => number_format($result->total_cost, 2, '.', ''),
+                    'production_quantity' => (float) $result->production_quantity,
+                    'production_total_cost' => number_format($result->production_total_cost, 2, '.', '')
+                ];
+            })
         ], 200);
     }
 
@@ -642,7 +659,7 @@ class ReportController extends Controller
                 'sm.warehouse_id',
                 'to_w.warehouse_name as to_warehouse_name',
                 'sm.quantity',
-                'sm.exchange_rate',
+                // 'sm.exchange_rate',
                 'sm.stock_created_by',
                 'u.username as created_by_name'
             );

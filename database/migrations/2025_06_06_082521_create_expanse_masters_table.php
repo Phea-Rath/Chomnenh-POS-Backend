@@ -19,7 +19,7 @@ return new class extends Migration
             $table->string("expense_by");
             $table->double("amount");
             $table->integer("created_by");
-            $table->string("expense_other");
+            $table->string("expense_other")->nullable();
             $table->string("expense_supplier");
             $table->boolean("is_active")->default(true);
             $table->boolean("is_deleted")->default(0);

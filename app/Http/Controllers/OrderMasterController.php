@@ -328,9 +328,12 @@ class OrderMasterController extends Controller
         $orderMasters = DB::table('order_masters as om')
             ->join('customers as cu','om.order_customer_id','=',"cu.customer_id")
             ->join('delivers as dl','om.deliver_id','=',"dl.deliver_id")
-            ->join('users', 'om.created_by', '=', 'users.id')
+            ->join('users as u', 'om.created_by', '=', 'u.id')
+            ->join('users as ut', 'om.through', '=', 'ut.id')
             ->where('om.is_deleted', 0)
             ->where('om.created_by', $id)
+            ->where('u.profile_id', $proId)
+            ->where('ut.profile_id', $proId)
             ->where('om.is_active', 1)
             ->select('cu.customer_name','cu.customer_email', 'dl.deliver_name', 'dl.image as deliver_image',"om.*")->get();
 
@@ -843,13 +846,41 @@ class OrderMasterController extends Controller
                 'status' => 404,
             ]);
         }
+
+        if ((int)$status === 6) {
+            $orderItems = OrderItems::where('order_id', $id)
+                ->where('is_deleted', 0)
+                ->get();
+
+            $outOfStockItems = [];
+            foreach ($orderItems as $item) {
+                $inStock = (double)($this->detailService->quanItems($item->item_id)[0]->in_stock ?? 0);
+                $requiredQty = (double)($item->quantity ?? 0);
+
+                if ($requiredQty > $inStock) {
+                    $outOfStockItems[] = [
+                        'item_id' => $item->item_id,
+                        'item_name' => $item->item_name,
+                        'required_quantity' => $requiredQty,
+                        'available_quantity' => $inStock,
+                    ];
+                }
+            }
+
+            if (!empty($outOfStockItems)) {
+                return response()->json([
+                    'message' => 'Stock is not enough for some items',
+                    'status' => 422,
+                    'out_of_stock_items' => $outOfStockItems,
+                ], 422);
+            }
+        }
+
         if($status == 7){
-            $order->is_cancelled = 1;
             $order->status = $status;
             $order->save();
         }else{
             $order->status = $status;
-            $order->is_cancelled = 0;
             $order->save();
         }
 

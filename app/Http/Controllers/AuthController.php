@@ -214,7 +214,8 @@ class AuthController extends Controller
         }
 
         $user->update([
-            'login_at' => $loginAt
+            'login_at' => $loginAt,
+            "profile_id" => $proId
         ]);
 
         $token = $user->createToken("remember_token")->plainTextToken;

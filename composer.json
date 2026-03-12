@@ -12,6 +12,7 @@
         "guzzlehttp/guzzle": "^7.9",
         "infobip/infobip-api-php-client": "^5.1",
         "intervention/image": "^3.11",
+        "khqr-gateway/bakong-khqr-php": "^1.0",
         "laravel/framework": "^10.0",
         "laravel/reverb": "^1.4",
         "laravel/sanctum": "^3.3",

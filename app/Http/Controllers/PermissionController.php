@@ -11,6 +11,85 @@ use Illuminate\Support\Collection;
 class PermissionController extends Controller
 {
     // List all permissions
+    // public function index()
+    // {
+    //     $user = Auth::user();
+    //     if (!$user || !$user->profile_id) {
+    //         return response()->json([
+    //             'message' => 'User or profile not found',
+    //             'status' => 200,
+    //             'data' => []
+    //         ], 200);
+    //     }
+    //     $proId = $user->profile_id;
+    //     $role = $user->role_id;
+    //     $permissions = collect();
+    //     $query = Permission::join('users', 'users.id', '=', 'permission.user_id')
+    //         ->join('profiles', 'profiles.id', '=', 'users.profile_id')
+    //         ->join('menus', 'permission.menu_id', '=', 'menus.menu_id')
+    //         // ->where('profile_id', $proId)
+    //         ->select(
+    //             'permission.user_id',
+    //             'permission.menu_id',
+    //             'menus.menu_name',
+    //             'menus.menu_type',
+    //             'menus.menu_icon',
+    //             'menus.menu_path',
+    //             'menus.parent_menu',
+    //             'menus.order_menu'
+    //         );
+    //     if ($role === 1) {
+    //         $permissions = $query->get();
+    //     } else if ($role === 3) {
+    //         // filter by profile_id
+    //         $permissions = $query->where('profile_id', $proId)->get();
+    //     } else {
+    //         // default: no result
+    //         $permissions = collect();
+    //     }
+
+    //     $permissions = $this->formatPermissionMenus($permissions);
+
+    //     return response()->json([
+    //         'message' => 'permission get successfully',
+    //         'status' => 200,
+    //         'data' => $permissions
+    //     ]);
+    // }
+
+    // // Show permissions for a specific user
+    // public function show($user_id)
+    // {
+    //     $permissions = Permission::where('user_id', $user_id)
+    //         ->join('menus', 'permission.menu_id', '=', 'menus.menu_id')
+    //         ->select(
+    //             'user_id',
+    //             'permission.menu_id',
+    //             'menus.menu_name',
+    //             'menus.menu_type',
+    //             'menus.menu_icon',
+    //             'menus.menu_path',
+    //             'menus.parent_menu',
+    //             'menus.order_menu'
+    //         )
+    //         ->get();
+
+    //     $permissions = $this->formatPermissionMenus($permissions);
+
+    //     if ($permissions->isEmpty()) {
+    //         return response()->json([
+    //             'message' => 'No permissions found for this user',
+    //             'status' => 200,
+    //             'data' => [],
+    //         ], 200);
+    //     }
+    //     return response()->json([
+    //         'message' => 'permission show successfully',
+    //         'status' => 200,
+    //         'data' => $permissions
+    //     ]);
+    // }
+
     public function index()
     {
         $user = Auth::user();
@@ -37,7 +116,8 @@ class PermissionController extends Controller
                 'menus.menu_path',
                 'menus.parent_menu',
                 'menus.order_menu'
-            );
+            )
+            ->orderBy('menus.order_menu', 'asc');
         if ($role === 1) {
             $permissions = $query->get();
         } else if ($role === 3) {
@@ -72,6 +152,7 @@ class PermissionController extends Controller
                 'menus.parent_menu',
                 'menus.order_menu'
             )
+            ->orderBy('menus.order_menu', 'asc')
             ->get();
 
         $permissions = $this->formatPermissionMenus($permissions);
@@ -289,15 +370,20 @@ class PermissionController extends Controller
 
     private function serializePermissionMenu($menu): array
     {
+        // Always include the basics; menu_type should only be shown for top‑level items
         $data = [
             'menu_id' => $menu->menu_id,
             'menu_name' => $menu->menu_name,
-            'menu_type' => $menu->menu_type,
             'menu_icon' => $menu->menu_icon,
             'menu_path' => $menu->menu_path,
             'parent_menu' => $menu->parent_menu,
             'order_menu' => $menu->order_menu,
         ];
+
+        // include menu_type only when the item has no parent (i.e. is a root menu)
+        if (is_null($menu->parent_menu) || $menu->parent_menu === '') {
+            $data['menu_type'] = $menu->menu_type;
+        }
 
         if (isset($menu->active)) {
             $data['active'] = (int) $menu->active;
@@ -315,4 +401,5 @@ class PermissionController extends Controller
         return (string) $parentMenu;
     }
 }
+
 

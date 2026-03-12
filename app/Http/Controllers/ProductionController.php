@@ -40,12 +40,12 @@ class ProductionController extends Controller
                 'prod.*',
                 'i.item_name',
                 'i.item_code',
+                'u.username as created_by_name',
                 DB::raw('0 as image'),
                 DB::raw('0 as images'),
-                'u.username as created_by_name',
             )
             ->where('prod.is_deleted', 0)
-            ->where('u.id', $uid)
+            // ->where('u.id', $uid)
             ->where('pr.id', $proId);
 
         if ($search) {
@@ -265,7 +265,7 @@ class ProductionController extends Controller
             )
             ->where('prod.id', $id)
             ->where('prod.is_deleted', 0)
-            ->where('u.id', $uid)
+            // ->where('u.id', $uid)
             ->where('pr.id', $proId)
             ->first();
 
@@ -277,22 +277,22 @@ class ProductionController extends Controller
             ]);
         }
 
-        $details = ProductionDetail::where('production_id', $id)
-            ->where('is_deleted', 0)
-            ->get()
-            ->map(function ($detail) {
-                $rawMaterial = Items::find($detail->item_id);
-                // dd($rawMaterial);
-                // Convert model to array
-                $detailArray = $detail->toArray();
-
-                // Add extra fields
-                $detailArray['material_name'] = $rawMaterial->item_name ?? null;
-                $detailArray['material_code'] = $rawMaterial->barcode ?? null;
-
-                return $detailArray;
-            })
-            ->toArray();
+        $details = DB::table('production_details as pd')
+                ->leftJoin('raw_materials as rm', 'pd.raw_material_id', '=', 'rm.id')
+                ->select(
+                    'pd.id',
+                    'pd.production_id',
+                    'pd.raw_material_id',
+                    'rm.material_image',
+                    'pd.quantity',
+                    'pd.cost_per_unit',
+                    'pd.total_cost',
+                    'rm.material_name',
+                    'rm.material_code'
+                )
+                ->where('pd.production_id', $id)
+                ->where('pd.is_deleted', 0)
+                ->get();
 
         $data = array_merge(
             (array)$production,

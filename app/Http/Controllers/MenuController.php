@@ -5,12 +5,13 @@ namespace App\Http\Controllers;
 use App\Models\Menus;
 use App\Models\Permission;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class MenuController extends Controller
 {
     public function index()
     {
-        $allMenus = Menus::all();
+        $allMenus = Menus::orderBy('order_menu', 'asc')->get();
 
         foreach ($allMenus as $item) {
             if ($item->menu_icon) {
@@ -53,6 +54,196 @@ class MenuController extends Controller
             'data' => $newFormat
         ]);
     }
+
+    public function getMenuSidebarByCurrentUser(){
+        $user = auth()->user();
+        $permissions = Permission::where('user_id', $user->id)->pluck('menu_id');
+        $menus = Menus::where('menu_type', '=', 1)
+        ->select('menu_id', 'menu_name', 'menu_icon', 'menu_path', 'order_menu')
+        ->orderBy('order_menu', 'asc')
+        ->get();
+
+        foreach ($menus as $item) {
+            if ($item->menu_icon) {
+                $filenameOnly = basename($item->menu_icon);
+                $item->menu_icon = url('storage/images/' . $filenameOnly);
+            }
+            $item->active = in_array($item->menu_id, $permissions->toArray()) ? 1 : 0;
+        }
+
+        return response()->json([
+            'message' => 'menus sidebar get successfully',
+            'status' => 200,
+            'data' => $menus
+        ]);
+    }
+
+    public function getMenuHomeByCurrentUser(){
+        $user = auth()->user();
+        $permissions = Permission::where('user_id', $user->id)->pluck('menu_id');
+        $menus = Menus::where('menu_type', '=', 2)
+        ->select('menu_id', 'menu_name', 'menu_icon', 'menu_path', 'order_menu')
+        ->orderBy('order_menu', 'asc')
+        ->get();
+
+        foreach ($menus as $item) {
+            if ($item->menu_icon) {
+                $filenameOnly = basename($item->menu_icon);
+                $item->menu_icon = url('storage/images/' . $filenameOnly);
+            }
+            $item->active = in_array($item->menu_id, $permissions->toArray()) ? 1 : 0;
+        }
+
+        return response()->json([
+            'message' => 'menus home get successfully',
+            'status' => 200,
+            'data' => $menus
+        ]);
+    }
+    public function getMenuSettingByCurrentUser(){
+        $user = auth()->user();
+        $permissions = Permission::where('user_id', $user->id)->pluck('menu_id');
+        $query = Menus::select('menu_id', 'menu_name', 'menu_icon', 'menu_path', 'order_menu')
+        ->orderBy('order_menu', 'asc');
+
+        if($user->id == 1){
+            $query->whereIn('menu_type', [0, 3]);
+        }else{
+            $query->where('menu_type', '=', 3);
+        }
+
+        $menus = $query->get();
+
+        foreach ($menus as $item) {
+            if ($item->menu_icon) {
+                $filenameOnly = basename($item->menu_icon);
+                $item->menu_icon = url('storage/images/' . $filenameOnly);
+            }
+            $item->active = in_array($item->menu_id, $permissions->toArray()) ? 1 : 0;
+        }
+
+        return response()->json([
+            'message' => 'menus setting get successfully',
+            'status' => 200,
+            'data' => $menus
+        ]);
+    }
+    public function getMenuReportByCurrentUser(){
+        $user = auth()->user();
+        $permissions = Permission::where('user_id', $user->id)->pluck('menu_id');
+        $menus = Menus::where('menu_type', '=', 4)
+        ->select('menu_id', 'menu_name', 'menu_icon', 'menu_path', 'order_menu')
+        ->orderBy('order_menu', 'asc')
+        ->get();
+
+        foreach ($menus as $item) {
+            if ($item->menu_icon) {
+                $filenameOnly = basename($item->menu_icon);
+                $item->menu_icon = url('storage/images/' . $filenameOnly);
+            }
+            $item->active = in_array($item->menu_id, $permissions->toArray()) ? 1 : 0;
+        }
+
+        return response()->json([
+            'message' => 'menus report get successfully',
+            'status' => 200,
+            'data' => $menus
+        ]);
+    }
+
+
+    public function getMenuSidebarByUserId($id){
+        $permissions = Permission::where('user_id', $id)->pluck('menu_id');
+        $menus = Menus::where('menu_type', '=', 1)
+        ->select('menu_id', 'menu_name', 'menu_icon', 'menu_path', 'order_menu')
+        ->orderBy('order_menu', 'asc')
+        ->get();
+
+        foreach ($menus as $item) {
+            if ($item->menu_icon) {
+                $filenameOnly = basename($item->menu_icon);
+                $item->menu_icon = url('storage/images/' . $filenameOnly);
+            }
+            $item->active = in_array($item->menu_id, $permissions->toArray()) ? 1 : 0;
+        }
+
+        return response()->json([
+            'message' => 'menus sidebar get successfully',
+            'status' => 200,
+            'data' => $menus
+        ]);
+    }
+    public function getMenuHomeByUserId($id){
+        $permissions = Permission::where('user_id', $id)->pluck('menu_id');
+        $menus = Menus::where('menu_type', '=', 2)
+        ->select('menu_id', 'menu_name', 'menu_icon', 'menu_path', 'order_menu')
+        ->orderBy('order_menu', 'asc')
+        ->get();
+
+        foreach ($menus as $item) {
+            if ($item->menu_icon) {
+                $filenameOnly = basename($item->menu_icon);
+                $item->menu_icon = url('storage/images/' . $filenameOnly);
+            }
+            $item->active = in_array($item->menu_id, $permissions->toArray()) ? 1 : 0;
+        }
+
+        return response()->json([
+            'message' => 'menus home get successfully',
+            'status' => 200,
+            'data' => $menus
+        ]);
+    }
+    public function getMenuSettingByUserId($id){
+        $permissions = Permission::where('user_id', $id)->pluck('menu_id');
+        $query = Menus::select('menu_id', 'menu_name', 'menu_icon', 'menu_path', 'order_menu')
+        ->orderBy('order_menu', 'asc');
+
+        if($user->id == 1){
+            $query->whereIn('menu_type', [0, 3]);
+        }else{
+            $query->where('menu_type', '=', 3);
+        }
+
+        $menus = $query->get();
+
+        foreach ($menus as $item) {
+            if ($item->menu_icon) {
+                $filenameOnly = basename($item->menu_icon);
+                $item->menu_icon = url('storage/images/' . $filenameOnly);
+            }
+            $item->active = in_array($item->menu_id, $permissions->toArray()) ? 1 : 0;
+        }
+
+        return response()->json([
+            'message' => 'menus setting get successfully',
+            'status' => 200,
+            'data' => $menus
+        ]);
+    }
+    public function getMenuReportByUserId($id){
+        $permissions = Permission::where('user_id', $id)->pluck('menu_id');
+        $menus = Menus::where('menu_type', '=', 4)
+        ->select('menu_id', 'menu_name', 'menu_icon', 'menu_path', 'order_menu')
+        ->orderBy('order_menu', 'asc')
+        ->get();
+
+        foreach ($menus as $item) {
+            if ($item->menu_icon) {
+                $filenameOnly = basename($item->menu_icon);
+                $item->menu_icon = url('storage/images/' . $filenameOnly);
+            }
+            $item->active = in_array($item->menu_id, $permissions->toArray()) ? 1 : 0;
+        }
+
+        return response()->json([
+            'message' => 'menus report get successfully',
+            'status' => 200,
+            'data' => $menus
+        ]);
+    }
+
+
 
     // Show a single menu
     public function show($id)
@@ -168,17 +359,27 @@ class MenuController extends Controller
     public function getEMenuByUserId(Request $request)
     {
         $user = $request->user();
+        $proId = $user->profile_id;
+        $pro = DB::table('profiles')->where('id', $proId)->first();
+        $proImage = $pro->image;
+         if ($proImage) {
+            $filenameOnly = basename($proImage);
+            $proImage = url('storage/images/' . $filenameOnly);
+        }
         // Get format result path/token/profile_id
         $path = env('EMENU_URL', 'http://www.chomnenhapp.com/');
         $user = $request->user();
         $proId = $user->profile_id;
         $token = $request->bearerToken();
 
-        $url = $path . $token . '/' . $proId;
+        $url = $path . $token . '/' . 'order-now/'  . $proId;
         return response()->json([
-            'message' => 'token get successfully',
+            'message' => 'e-menu get successfully',
             'status' => 200,
-            'data' => $url
+            'data' => [
+                'url' => $url,
+                'image'=> $proImage
+            ]
         ]);
     }
 }
