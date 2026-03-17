@@ -9,12 +9,17 @@ use Illuminate\Http\Request;
 class DashboardController extends Controller
 {
     //
-    public function showCard()
+    public function showCard(Request $request)
 {
     $user = Auth::user();
     $uid = $user->id;
     $proId = $user->profile_id;
-    $currentYear = now()->year;
+    $validate = $request->validate([
+        'year' => 'nullable|integer|min:2000',
+    ]);
+    $now = now();
+    $currentYear = (int) ($validate['year'] ?? $now->year);
+    $currentMonth = $currentYear === (int) $now->year ? $now->month : 12;
 
     /* ================= TOTAL STOCK ================= */
     $stockData = DB::table('stock_details as sd')
@@ -84,7 +89,7 @@ class DashboardController extends Controller
 
     /* ================= BUILD MONTH ARRAY ================= */
     $months = [];
-    for ($m = 1; $m <= now()->month; $m++) {
+    for ($m = 1; $m <= $currentMonth; $m++) {
         $stock = $monthlyStock->firstWhere('month', $m);
         $sale  = $monthlySales[$m]->sale_total ?? 0;
 
@@ -122,12 +127,12 @@ class DashboardController extends Controller
 
         // Validate month/year as integers
         $validate = $request->validate([
-            'month' => 'required|integer|min:1|max:12',
-            'year' => 'required|integer|min:2000',
+            'month' => 'nullable|integer|min:1|max:12',
+            'year' => 'nullable|integer|min:2000',
         ]);
 
-        $month = $validate['month'];
-        $year = $validate['year'];
+        $month = $validate['month'] ?? now()->month;
+        $year = $validate['year'] ?? now()->year;
 
         // Build start and end date for selected month
         $startDate = \Carbon\Carbon::create($year, $month, 1)->startOfMonth();
@@ -207,12 +212,21 @@ class DashboardController extends Controller
         ]);
     }
 
-    public function saleByWeek()
+    public function saleByWeek(Request $request)
 {
     $user = Auth::user();
     $proId = $user->profile_id;
-    $month = now()->month;
-    $year = now()->year;
+    $validate = $request->validate([
+        'year' => 'nullable|integer|min:2000',
+    ]);
+    $base = now();
+    $year = (int) ($validate['year'] ?? $base->year);
+    if ($year !== (int) $base->year) {
+        $daysInTargetMonth = \Carbon\Carbon::create($year, $base->month, 1)->daysInMonth;
+        $day = min($base->day, $daysInTargetMonth);
+        $base = \Carbon\Carbon::create($year, $base->month, $day, $base->hour, $base->minute, $base->second);
+    }
+    $month = $base->month;
 
     // Current and last month date ranges
     $startDate = \Carbon\Carbon::create($year, $month, 1)->startOfMonth();
@@ -295,12 +309,21 @@ class DashboardController extends Controller
         'data' => $sales,
     ]);
 }
-    public function purchaseByWeek()
+    public function purchaseByWeek(Request $request)
 {
     $user = Auth::user();
     $proId = $user->profile_id;
-    $month = now()->month;
-    $year = now()->year;
+    $validate = $request->validate([
+        'year' => 'nullable|integer|min:2000',
+    ]);
+    $base = now();
+    $year = (int) ($validate['year'] ?? $base->year);
+    if ($year !== (int) $base->year) {
+        $daysInTargetMonth = \Carbon\Carbon::create($year, $base->month, 1)->daysInMonth;
+        $day = min($base->day, $daysInTargetMonth);
+        $base = \Carbon\Carbon::create($year, $base->month, $day, $base->hour, $base->minute, $base->second);
+    }
+    $month = $base->month;
 
     // Current and last month date ranges
     $startDate = \Carbon\Carbon::create($year, $month, 1)->startOfMonth();
@@ -384,14 +407,18 @@ class DashboardController extends Controller
 }
 
 
-    public function saleByMonth()
+    public function saleByMonth(Request $request)
 {
     $user = Auth::user();
     $proId = $user->profile_id;
 
-    $currentYear = now()->year;
+    $validate = $request->validate([
+        'year' => 'nullable|integer|min:2000',
+    ]);
+    $now = now();
+    $currentYear = (int) ($validate['year'] ?? $now->year);
     $lastYear = $currentYear - 1;
-    $currentMonth = now()->month;
+    $currentMonth = $currentYear === (int) $now->year ? $now->month : 12;
 
     $data = [];
 
@@ -444,14 +471,18 @@ class DashboardController extends Controller
         'data' => $data
     ]);
 }
-    public function purchaseByMonth()
+    public function purchaseByMonth(Request $request)
 {
     $user = Auth::user();
     $proId = $user->profile_id;
 
-    $currentYear = now()->year;
+    $validate = $request->validate([
+        'year' => 'nullable|integer|min:2000',
+    ]);
+    $now = now();
+    $currentYear = (int) ($validate['year'] ?? $now->year);
     $lastYear = $currentYear - 1;
-    $currentMonth = now()->month;
+    $currentMonth = $currentYear === (int) $now->year ? $now->month : 12;
 
     $data = [];
 
@@ -507,13 +538,24 @@ class DashboardController extends Controller
 }
 
 
-public function saleByHour()
+public function saleByHour(Request $request)
 {
     $user = Auth::user();
     $proId = $user->profile_id;
 
-    $today = \Carbon\Carbon::today();
-    $yesterday = \Carbon\Carbon::yesterday();
+    $validate = $request->validate([
+        'year' => 'nullable|integer|min:2000',
+    ]);
+    $base = now();
+    $year = (int) ($validate['year'] ?? $base->year);
+    if ($year !== (int) $base->year) {
+        $daysInTargetMonth = \Carbon\Carbon::create($year, $base->month, 1)->daysInMonth;
+        $day = min($base->day, $daysInTargetMonth);
+        $base = \Carbon\Carbon::create($year, $base->month, $day, $base->hour, $base->minute, $base->second);
+    }
+
+    $today = $base->copy()->startOfDay();
+    $yesterday = $today->copy()->subDay();
 
     // Define time slots - you can adjust these times as needed
     $timeSlots = [
@@ -582,13 +624,24 @@ public function saleByHour()
 }
 
 
-public function purchaseByHour()
+public function purchaseByHour(Request $request)
 {
     $user = Auth::user();
     $proId = $user->profile_id;
 
-    $today = \Carbon\Carbon::today();
-    $yesterday = \Carbon\Carbon::yesterday();
+    $validate = $request->validate([
+        'year' => 'nullable|integer|min:2000',
+    ]);
+    $base = now();
+    $year = (int) ($validate['year'] ?? $base->year);
+    if ($year !== (int) $base->year) {
+        $daysInTargetMonth = \Carbon\Carbon::create($year, $base->month, 1)->daysInMonth;
+        $day = min($base->day, $daysInTargetMonth);
+        $base = \Carbon\Carbon::create($year, $base->month, $day, $base->hour, $base->minute, $base->second);
+    }
+
+    $today = $base->copy()->startOfDay();
+    $yesterday = $today->copy()->subDay();
 
     // Define time slots - you can adjust these times as needed
     $timeSlots = [
@@ -657,13 +710,23 @@ public function purchaseByHour()
 }
 
 
-public function saleByDay()
+public function saleByDay(Request $request)
 {
     $user = Auth::user();
     $proId = $user->profile_id;
 
     // Get current date and current week start/end (Monday to Sunday)
-    $today = now();
+    $validate = $request->validate([
+        'year' => 'nullable|integer|min:2000',
+    ]);
+    $base = now();
+    $year = (int) ($validate['year'] ?? $base->year);
+    if ($year !== (int) $base->year) {
+        $daysInTargetMonth = \Carbon\Carbon::create($year, $base->month, 1)->daysInMonth;
+        $day = min($base->day, $daysInTargetMonth);
+        $base = \Carbon\Carbon::create($year, $base->month, $day, $base->hour, $base->minute, $base->second);
+    }
+    $today = $base;
     $startOfWeek = $today->copy()->startOfWeek();
     $endOfWeek = $today->copy()->endOfWeek();
 
@@ -719,13 +782,23 @@ public function saleByDay()
 }
 
 
-public function purchaseByDay()
+public function purchaseByDay(Request $request)
 {
     $user = Auth::user();
     $proId = $user->profile_id;
 
     // Get current date and current week start/end (Monday to Sunday)
-    $today = now();
+    $validate = $request->validate([
+        'year' => 'nullable|integer|min:2000',
+    ]);
+    $base = now();
+    $year = (int) ($validate['year'] ?? $base->year);
+    if ($year !== (int) $base->year) {
+        $daysInTargetMonth = \Carbon\Carbon::create($year, $base->month, 1)->daysInMonth;
+        $day = min($base->day, $daysInTargetMonth);
+        $base = \Carbon\Carbon::create($year, $base->month, $day, $base->hour, $base->minute, $base->second);
+    }
+    $today = $base;
     $startOfWeek = $today->copy()->startOfWeek();
     $endOfWeek = $today->copy()->endOfWeek();
 
@@ -783,11 +856,20 @@ public function purchaseByDay()
 
 
 
-    public function expenseWeek(){
+    public function expenseWeek(Request $request){
         $user = Auth::user();
         $proId = $user->profile_id;
-        $month = now()->month;
-        $year = now()->year;
+        $validate = $request->validate([
+            'year' => 'nullable|integer|min:2000',
+        ]);
+        $base = now();
+        $year = (int) ($validate['year'] ?? $base->year);
+        if ($year !== (int) $base->year) {
+            $daysInTargetMonth = \Carbon\Carbon::create($year, $base->month, 1)->daysInMonth;
+            $day = min($base->day, $daysInTargetMonth);
+            $base = \Carbon\Carbon::create($year, $base->month, $day, $base->hour, $base->minute, $base->second);
+        }
+        $month = $base->month;
 
         // Get start/end dates for current and last month
         $startDate = \Carbon\Carbon::create($year, $month, 1)->startOfMonth();
@@ -842,13 +924,23 @@ public function purchaseByDay()
         ]);
     }
 
-    public function expenseDay()
+    public function expenseDay(Request $request)
 {
     $user = Auth::user();
     $proId = $user->profile_id;
 
     // Get start and end of the current week and last week
-    $today = now();
+    $validate = $request->validate([
+        'year' => 'nullable|integer|min:2000',
+    ]);
+    $base = now();
+    $year = (int) ($validate['year'] ?? $base->year);
+    if ($year !== (int) $base->year) {
+        $daysInTargetMonth = \Carbon\Carbon::create($year, $base->month, 1)->daysInMonth;
+        $day = min($base->day, $daysInTargetMonth);
+        $base = \Carbon\Carbon::create($year, $base->month, $day, $base->hour, $base->minute, $base->second);
+    }
+    $today = $base;
     $currentWeekStart = $today->copy()->startOfWeek(); // Monday
     $currentWeekEnd = $today->copy()->endOfWeek();     // Sunday
 
@@ -906,13 +998,24 @@ public function purchaseByDay()
     ]);
 }
 
-public function expenseHour()
+public function expenseHour(Request $request)
 {
     $user = Auth::user();
     $proId = $user->profile_id;
 
-    $today = \Carbon\Carbon::today();
-    $yesterday = \Carbon\Carbon::yesterday();
+    $validate = $request->validate([
+        'year' => 'nullable|integer|min:2000',
+    ]);
+    $base = now();
+    $year = (int) ($validate['year'] ?? $base->year);
+    if ($year !== (int) $base->year) {
+        $daysInTargetMonth = \Carbon\Carbon::create($year, $base->month, 1)->daysInMonth;
+        $day = min($base->day, $daysInTargetMonth);
+        $base = \Carbon\Carbon::create($year, $base->month, $day, $base->hour, $base->minute, $base->second);
+    }
+
+    $today = $base->copy()->startOfDay();
+    $yesterday = $today->copy()->subDay();
 
     // Define your hourly slots (customize as needed)
     $timeSlots = [
@@ -977,14 +1080,18 @@ public function expenseHour()
     ]);
 }
 
-public function expenseMonth()
+public function expenseMonth(Request $request)
 {
     $user = Auth::user();
     $proId = $user->profile_id;
 
-    $currentYear = now()->year;
+    $validate = $request->validate([
+        'year' => 'nullable|integer|min:2000',
+    ]);
+    $now = now();
+    $currentYear = (int) ($validate['year'] ?? $now->year);
     $lastYear = $currentYear - 1;
-    $currentMonth = now()->month;
+    $currentMonth = $currentYear === (int) $now->year ? $now->month : 12;
 
     $data = [];
 

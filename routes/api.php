@@ -62,9 +62,10 @@ Route::post('/verify-otp', [OtpController::class, 'verifyOtp']);
 Broadcast::routes(['middleware' => ['auth:sanctum']]);
 Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');
-    Route::get('aba-checkout', [PaymentController::class, 'checkout'])->middleware('auth:sanctum');
+    Route::post('aba-checkout', [PaymentController::class, 'getPaymentLink'])->middleware('auth:sanctum');
     Route::get('aba-callback', [PaymentController::class, 'callback'])->middleware('auth:sanctum');
     Route::get('get-qrcode', [PaymentController::class, 'getQrCode'])->middleware('auth:sanctum');
+    Route::post('send-qr-to-telegram', [PaymentController::class, 'sendQrToTelegram'])->middleware('auth:sanctum');
     Route::get('verify-payment/{md5}', [PaymentController::class, 'verifyPayment'])->middleware('auth:sanctum');
     Route::get('e-menu', [MenuController::class, 'getEMenuByUserId'])->middleware('auth:sanctum');
     Route::post('/guest/{phone_number}', [AuthController::class, 'guest'])->middleware('auth:sanctum');
@@ -176,7 +177,11 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::resource('purchase_details', PurchaseDetailController::class)->only(['index', 'show']);
     Route::resource('profiles', ProfileController::class)->only(['index', 'show', 'destroy']);
     Route::post('/production_report', [ReportController::class, 'productionReport']);
+    Route::post('/production_report_item', [ReportController::class, 'productionReportByItem']);
     Route::post('/production_report_raw', [ReportController::class, 'productionReportByRaw']);
+    Route::post('/ap-report', [ReportController::class, 'reportAP']);
+    Route::post('/ar-report', [ReportController::class, 'reportAR']);
+    Route::post('/debt-analysis', [ReportController::class, 'debtAnalysis']);
 
     Route::get('/popular_expense', [ExpanseItemController::class, 'popularExpanse']);
     Route::get('/popular_sales', [OrderItemController::class, 'popularSales']);

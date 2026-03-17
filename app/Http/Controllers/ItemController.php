@@ -19,18 +19,21 @@ use App\Models\AttributeValue;
 use App\Models\Attribute;
 use App\Models\AttributeValueDetail;
 use App\Services\ItemService;
+use App\Services\DetailService;
 
 class ItemController extends Controller
 {
 
     protected $attributeService;
     protected $itemService;
+    protected $detailService;
 
 
-    public function __construct(AttributeService $attributeService, ItemService $itemService)
+    public function __construct(AttributeService $attributeService, ItemService $itemService, DetailService $detailService)
     {
         $this->attributeService = $attributeService;
         $this->itemService = $itemService;
+        $this->detailService = $detailService;
     }
 
     public function indexMobile(Request $request)
@@ -62,18 +65,10 @@ class ItemController extends Controller
 
         if ($rawItems->total() === 0) {
             return response()->json([
-                'message' => 'Items not found!',
-                'status' => 404,
-                'data' => [
-                    'items' => [],
-                    'pagination' => [
-                        'current_page' => $rawItems->currentPage(),
-                        'per_page' => $rawItems->perPage(),
-                        'total' => $rawItems->total(),
-                        'last_page' => $rawItems->lastPage(),
-                    ],
-                ],
-            ], 404);
+                'status' => 'success',
+                'message' => 'Items fetched successfully',
+                'data' => [],
+            ]);
         }
 
         $items = [];
@@ -85,17 +80,9 @@ class ItemController extends Controller
         }
 
         return response()->json([
-            'message' => 'Items selected successfully',
-            'status' => 200,
-            'data' => [
-                'items' => $items,
-                'pagination' => [
-                    'current_page' => $rawItems->currentPage(),
-                    'per_page' => $rawItems->perPage(),
-                    'total' => $rawItems->total(),
-                    'last_page' => $rawItems->lastPage(),
-                ],
-            ],
+            'status' => 'success',
+            'message' => 'Items fetched successfully',
+            'data' => $items,
         ]);
     }
     public function showMobile($id)
@@ -107,16 +94,16 @@ class ItemController extends Controller
 
         if (!$data) {
             return response()->json([
-                'message' => 'Item not found!',
-                'status' => 404,
-                'data' => null,
-            ], 404);
+                'status' => 'success',
+                'message' => 'Items fetched successfully',
+                'data' => [],
+            ]);
         }
 
         return response()->json([
-            'message' => 'Items selected successfully',
-            'status' => 200,
-            'data' => $data,
+            'status' => 'success',
+            'message' => 'Items fetched successfully',
+            'data' => [$data],
         ]);
     }
 
@@ -163,15 +150,18 @@ class ItemController extends Controller
 
         $images = [];
         foreach ($imageRows as $row) {
-            $images[] = [
-                'image_id' => (int) $row->image_id,
-                'image' => url('storage/images/' . $row->image),
-            ];
+            $images[] = url('storage/images/' . $row->image);
         }
 
         $rawAttributes = $this->attributeService->transformAttributes($itemId);
+        $stock = $this->detailService->quanItems($itemId)[0];
         $attributes = [];
         foreach ($rawAttributes as $attribute) {
+            $name = $attribute['name'] ?? null;
+            if (!$name) {
+                continue;
+            }
+
             $value = $attribute['value'] ?? null;
             if (is_array($value)) {
                 $value = implode(', ', array_map(function ($v) {
@@ -179,12 +169,7 @@ class ItemController extends Controller
                 }, $value));
             }
 
-            $attributes[] = [
-                'id' => $attribute['id'] ?? null,
-                'name' => $attribute['name'] ?? null,
-                'type' => $attribute['type'] ?? 'string',
-                'value' => $value,
-            ];
+            $attributes[$name] = $value;
         }
 
         $discount = (float) $item->discount;
@@ -193,35 +178,25 @@ class ItemController extends Controller
 
         return [
             'id' => (int) $item->item_id,
-            'item_code' => $item->item_code,
+            'code' => $item->item_code,
             'barcode' => $item->barcode,
-            'item_name' => $item->item_name,
-            'discount' => $discount,
-            'pricing' => [
-                'base_currency' => 'USD',
-                'retail' => [
-                    'price' => $retail,
-                    'discount_price' => round($retail - ($retail * $discount / 100), 2),
-                ],
-                'wholesale' => [
-                    'price' => $wholesale,
-                    'discount_price' => round($wholesale - ($wholesale * $discount / 100), 2),
-                ],
-                'item_cost' => (float) $item->item_cost,
+            'name' => $item->item_name,
+            'price' => [
+                'currency' => 'USD',
+                'retail' => $retail,
+                'retail_discount' => round($retail - ($retail * $discount / 100), 2),
+                'wholesale' => $wholesale,
+                'wholesale_discount' => round($wholesale - ($wholesale * $discount / 100), 2),
+                'cost' => (float) $item->item_cost,
             ],
-            'category' => [
-                'id' => (int) $item->category_id,
-                'name' => $item->category_name,
-            ],
-            'brand' => [
-                'id' => (int) $item->brand_id,
-                'name' => $item->brand_name,
-            ],
+            'discount_percent' => $discount,
+            'category_id' => (int) $item->category_id,
+            'brand_id' => (int) $item->brand_id,
             'attributes' => $attributes,
             'images' => $images,
-            'created_by_name' => $item->created_by_name,
-            'created_at' => $item->created_at,
-            'updated_at' => $item->updated_at,
+            'created_by' => $item->created_by_name,
+            'created_at' => Carbon::parse($item->created_at)->format('Y-m-d H:i:s'),
+            'stock'=>$stock
         ];
     }
 
@@ -286,7 +261,11 @@ class ItemController extends Controller
 
     public function storeAttr(Request $request)
 {
-    $attributes = json_decode($request->input('attributes'), true);
+    $attributes = $request->input('attributes');
+
+    if (is_string($attributes)) {
+        $attributes = json_decode($attributes, true);
+    }
     $category_id = $request->category_id;
     $item_id = Items::max('item_id');
     $edit_id = $request->input('edit_id');
@@ -354,6 +333,7 @@ class ItemController extends Controller
     {
         $user = Auth::user();
         $uid = $user->id;
+        $proId = $user->profile_id;
         $itemCode = 'PRD-' . str_pad((Items::max('item_id') + 1), 5, '0', STR_PAD_LEFT);
         $stock_no = now()->format('Ymd') . '-' . str_pad((StockMaster::max('stock_id') + 1), 5, '0', STR_PAD_LEFT);
         $stock_date = now()->format('Y-m-d');
@@ -388,6 +368,29 @@ class ItemController extends Controller
             'item_images' => 'nullable|array',
             'item_images.*' => '',
         ]);
+
+        $itemCodeValue = $validated['item_code'] ?? $itemCode;
+
+        $duplicateQuery = DB::table('items')
+            ->join('users', 'users.id', '=', 'items.created_by')
+            ->join('profiles', 'profiles.id', '=', 'users.profile_id')
+            ->where([
+                ['profiles.id', '=', $proId],
+                ['items.item_type', '=', 0],
+                ['items.is_deleted', '=', 0],
+                ['items.item_name', '=', $validated['item_name']],
+                ['items.item_code', '=', $itemCodeValue],
+                ['items.item_price', '=', $validated['item_price']],
+            ])
+            ->exists();
+
+        if ($duplicateQuery) {
+            return response()->json([
+                'message' => 'Duplicate item detected for this profile.',
+                'status' => 409,
+                'data' => null,
+            ], 409);
+        }
 
         if (is_array($request->item_images) && count($request->item_images) > 0) {
                 $storedImageValue = null;

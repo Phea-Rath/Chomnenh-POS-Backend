@@ -232,18 +232,20 @@ class OrderMasterController extends Controller
                 'order_payment_status' => $order->order_payment_status,
             ],
             'items' => $items,
-            'customer' => [
-                'id' => $order->customer_id ? (int) $order->customer_id : null,
-                'name' => $order->customer_name,
-                'email' => $order->customer_email,
-                'phone' => $order->customer_tel ?? $order->order_tel,
-                'address' => $order->customer_address ?? $order->order_address,
-            ],
-            'delivery' => [
-                'id' => $order->deliver_id ? (int) $order->deliver_id : null,
-                'deliver_name' => $order->deliver_name,
-                'image' => $deliveryImage,
-            ],
+            'customer_id' => $order->customer_id ? (int) $order->customer_id : null,
+            // 'customer' => [
+            //     'id' => $order->customer_id ? (int) $order->customer_id : null,
+            //     'name' => $order->customer_name,
+            //     'email' => $order->customer_email,
+            //     'phone' => $order->customer_tel ?? $order->order_tel,
+            //     'address' => $order->customer_address ?? $order->order_address,
+            // ],
+            'delivery_id' => $order->deliver_id ? (int) $order->deliver_id : null,
+            // 'delivery' => [
+            //     'id' => $order->deliver_id ? (int) $order->deliver_id : null,
+            //     'deliver_name' => $order->deliver_name,
+            //     'image' => $deliveryImage,
+            // ],
         ];
     }
 
@@ -411,22 +413,30 @@ class OrderMasterController extends Controller
             'through' => 'nullable|integer',
             'sale_type' => 'nullable|string|max:255',
             'delivery_fee' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
-            'order_subtotal' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
-            'order_discount' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
             'order_tax' => 'nullable|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
-            'order_total' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
-            'balance' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
             'payment' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
             'items' => 'required|array|min:1',
             'items.*.item_id' => 'required|integer',
             'items.*.item_name' => 'required|string|max:255',
             'items.*.item_price' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
-            'items.*.discount' => 'required|numeric',
-            'items.*.total_price' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
             'items.*.quantity' => 'required|integer',
-            'items.*.item_cost' => 'required|numeric',
+            'items.*.discount' => 'nullable|numeric|min:0',
         ]);
         // dd($validated);
+        $subTotal = collect($validated['items'])->sum(function ($item) {
+            return (float) $item['item_price'] * (int) $item['quantity'];
+        });
+        $discountAmount = collect($validated['items'])->sum(function ($item) {
+            $lineSubtotal = (float) $item['item_price'] * (int) $item['quantity'];
+            $discountPercent = (float) ($item['discount'] ?? 0);
+            return round($lineSubtotal * $discountPercent / 100, 2);
+        });
+        $taxAmount = (float) ($validated['order_tax'] ?? 0);
+        $deliveryFee = (float) $validated['delivery_fee'];
+        $grandTotal = round($subTotal - $discountAmount + $taxAmount + $deliveryFee, 2);
+        $payment = (float) $validated['payment'];
+        $balance = round($grandTotal - $payment, 2);
+
         // Create the order master
         $order_masters = OrderMaster::create([
             'order_no' => $order_no,
@@ -442,12 +452,12 @@ class OrderMasterController extends Controller
             'through' => $validated['through'] ?? $uid,
             'order_payment_status' => $validated['order_payment_status'],
             'order_payment_method' => $validated['order_payment_method'],
-            'balance' => $validated['balance'],
-            'payment' => $validated['payment'],
-            'order_subtotal' => $validated['order_subtotal'],
-            'order_discount' => $validated['order_discount'],
-            'order_tax' => $validated['order_tax'] ?? 0,
-            'order_total' => $validated['order_total'],
+            'balance' => $balance,
+            'payment' => $payment,
+            'order_subtotal' => $subTotal,
+            'order_discount' => $discountAmount,
+            'order_tax' => $taxAmount,
+            'order_total' => $grandTotal,
             'exchange_rate' => (double)$exchange_rate->usd_to_khr,
             'created_by' => $uid,
         ]);
@@ -457,68 +467,60 @@ class OrderMasterController extends Controller
         // $order_details = [];
 
         foreach ($validated['items'] as $item) {
+            $lineSubtotal = (float) $item['item_price'] * (int) $item['quantity'];
+            $discountPercent = (float) ($item['discount'] ?? 0);
+            $lineDiscount = round($lineSubtotal * $discountPercent / 100, 2);
+            $lineTotal = round($lineSubtotal - $lineDiscount, 2);
+
             $order_items[] = OrderItems::create([
                 'order_id' => $order_id,
                 'item_id' => $item['item_id'],
                 'item_name' => $item['item_name'],
                 'item_price' => $item['item_price'],
-                'discount' => $item['discount'],
-                'price' => $item['total_price'],
+                'discount' => $discountPercent,
+                'price' => $lineTotal,
                 'quantity' => $item['quantity'],
-                'item_cost' => $item['item_cost'] ?? 0,
             ]);
         }
 
 
-        if($validated['online'] == 1){
+        if ($validated['online'] == 1) {
             $customer = Customers::find($validated['order_customer_id']);
             $profile_id = Users::where('id', $validated['through'])->value('profile_id');
             $profile = DB::table('profiles')->where('id', $profile_id)->first();
 
-           $phone = $validated['order_tel']
-                ?? $customer->customer_tel
-                ?? 'N/A';
-
-            $address = $validated['order_address']
-                ?? $customer->customer_address
-                ?? 'N/A';
+            $phone = $validated['order_tel'] ?? ($customer ? $customer->customer_tel : 'N/A');
+            $address = $validated['order_address'] ?? ($customer ? $customer->customer_address : 'N/A');
 
             // Build items list dynamically
-            $itemsList = '';
-                foreach ($validated['items'] as $item) {
-                    $itemsList .=
-                        "\t\t• <b>{$item['item_name']}</b> |  Qty: {$item['quantity']}  |  Price: <b>\$" . ($item['total_price'])."</b>\n";
-                }
+            $itemsList = "";
+            foreach ($validated['items'] as $item) {
+                $lineTotal = (float)$item['item_price'] * (int)$item['quantity'];
+                $itemsList .= "• <b>{$item['item_name']}</b> | x{$item['quantity']} | <b>\${$lineTotal}</b>\n";
+            }
 
+            $message = "🛒 <b>New Order Received</b>\n\n" .
+                "🏪 <b>Shop:</b> " . ($profile->profile_name ?? 'N/A') . "\n" .
+                "🆔 <b>Order No:</b> <code>{$order_no}</code>\n\n" .
+                "📞 <b>Buyer:</b> " . ($customer->customer_tel ?? $user->phone_number ?? 'N/A') . "\n" .
+                "📦 <b>Recipient:</b> {$phone}\n\n" .
+                "📌 <b>Address:</b> {$address}\n";
 
-             $message =
-                "🛒 <b>New Order Received</b>
+            if ($customer) {
+                if ($customer->customer_villages) $message .= "🏡 <b>Village:</b> {$customer->customer_villages}\n";
+                if ($customer->customer_communes) $message .= "🗺️ <b>Commune:</b> {$customer->customer_communes}\n";
+                if ($customer->customer_districts) $message .= "🏙️ <b>District:</b> {$customer->customer_districts}\n";
+                if ($customer->customer_provinces) $message .= "🌆 <b>Province:</b> {$customer->customer_provinces}\n";
+            }
 
-                🏪 <b>Shop:</b> {$profile->profile_name}
-                🆔 <b>Order No:</b> {$order_no}
+            $message .= "\n📅 <b>Date:</b> {$order_date}\n\n" .
+                "📦 <b>Items List:</b>\n{$itemsList}\n" .
+                "💰 <b>Total:</b> 💵 <b>\${$grandTotal}</b>";
 
-                📞 <b>Buyer Phone:</b> " . ($customer->customer_tel ?? $user->phone_number) . "
-                📦 <b>Recipient Phone:</b> {$phone}
-
-                📌 <b>Address:</b> " . ($address ?? 'N/A') . "
-                🗺️ <b>Commune:</b> " . ($customer->customer_communes ?? 'N/A') . "
-                🏙️ <b>District:</b> " . ($customer->customer_districts ?? 'N/A') . "
-                🌆 <b>Province:</b> " . ($customer->customer_provinces ?? 'N/A') . "
-                🏡 <b>Village:</b> " . ($customer->customer_villages ?? 'N/A') . "
-
-                📅 <b>Order Date:</b> {$order_date}
-
-                📦 <b>Items List</b>
-                {$itemsList}
-                💰 <b>Total:</b> 💵 <b>\${$validated['order_total']}</b>";
-
-
-
-                // Broadcast to Pusher
-                broadcast(new PrivateChannelEvent("New order by" . $validated['order_tel'], (int)$profile_id))->toOthers();
-                TelegramService::sendMessage($message, $profile_id);
+            // Broadcast to Pusher
+            broadcast(new PrivateChannelEvent("New order by " . $phone, (int)$profile_id))->toOthers();
+            TelegramService::sendMessage($message, $profile_id);
         }
-
         // return $message;
         return $this->show($order_masters->order_id);
     }
@@ -591,21 +593,29 @@ class OrderMasterController extends Controller
             'order_payment_method' => 'nullable|string|max:255',
             'deliver_id' => 'nullable|integer',
             'delivery_fee' => 'numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
-            'order_subtotal' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
-            'order_discount' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
             'order_tax' => 'nullable|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
-            'order_total' => 'required|numeric|min:0|max:99999999.99',
-            'balance' => 'required|numeric|min:0|max:99999999.99',
             'payment' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
             'items' => 'required|array|min:1',
             'items.*.item_id' => 'required|integer',
             'items.*.item_name' => 'required|string|max:255',
             'items.*.discount' => 'required|integer',
             'items.*.unit_price' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
-            'items.*.total_price' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
             'items.*.quantity' => 'required|integer',
-            'items.*.item_cost' => 'required|numeric',
         ]);
+
+        $subTotal = collect($validated['items'])->sum(function ($item) {
+            return (float) $item['unit_price'] * (int) $item['quantity'];
+        });
+        $discountAmount = collect($validated['items'])->sum(function ($item) {
+            $lineSubtotal = (float) $item['unit_price'] * (int) $item['quantity'];
+            $discountPercent = (float) ($item['discount'] ?? 0);
+            return round($lineSubtotal * $discountPercent / 100, 2);
+        });
+        $taxAmount = (float) ($validated['order_tax'] ?? 0);
+        $deliveryFee = (float) $validated['delivery_fee'];
+        $grandTotal = round($subTotal - $discountAmount + $taxAmount + $deliveryFee, 2);
+        $payment = (float) $validated['payment'];
+        $balance = round($grandTotal - $payment, 2);
 
         // Create the order master
         $order_masters->update([
@@ -616,12 +626,12 @@ class OrderMasterController extends Controller
             'delivery_fee' => $validated['delivery_fee'],
             'order_payment_status' => $validated['order_payment_status'],
             'order_payment_method' => $validated['order_payment_method'],
-            'balance' => $validated['balance'],
-            'payment' => $validated['payment'],
-            'order_subtotal' => $validated['order_subtotal'],
-            'order_discount' => $validated['order_discount'],
-            'order_tax' => $validated['order_tax'] ?? 0,
-            'order_total' => $validated['order_total'],
+            'balance' => $balance,
+            'payment' => $payment,
+            'order_subtotal' => $subTotal,
+            'order_discount' => $discountAmount,
+            'order_tax' => $taxAmount,
+            'order_total' => $grandTotal,
         ]);
 
         $order_items = [];
@@ -629,15 +639,19 @@ class OrderMasterController extends Controller
             OrderItems::where('order_id', $id)->delete();
         }
         foreach ($validated['items'] as $item) {
+            $lineSubtotal = (float) $item['unit_price'] * (int) $item['quantity'];
+            $discountPercent = (float) ($item['discount'] ?? 0);
+            $lineDiscount = round($lineSubtotal * $discountPercent / 100, 2);
+            $lineTotal = round($lineSubtotal - $lineDiscount, 2);
+
             $order_items[] = OrderItems::create([
                 'order_id' => $order_masters->order_id,
                 'item_id' => $item['item_id'],
                 'item_name' => $item['item_name'],
                 'item_price' => $item['unit_price'],
                 'discount' => $item['discount'],
-                'price' => $item['total_price'],
+                'price' => $lineTotal,
                 'quantity' => $item['quantity'],
-                'item_cost' => $item['item_cost'] ?? 0,
             ]);
         }
 

@@ -549,7 +549,7 @@ class ReportController extends Controller
     }
 
 
-    public function productionReportByRaw(Request $request)
+    public function productionReportByItem(Request $request)
     {
         $user = Auth::user();
         $proId = $user->profile_id;
@@ -557,6 +557,74 @@ class ReportController extends Controller
         $request->validate([
             'created_by' => 'nullable|integer',
             'item_id' => 'nullable|integer',
+            'start_date' => 'nullable|date',
+            'end_date' => 'nullable|date',
+        ]);
+
+        $query = DB::table('productions as p')
+            ->select(
+                'i.item_id',
+                'i.barcode',
+                'i.item_name',
+                'i.item_code',
+                DB::raw('SUM(p.quantity) as quantity'),
+                DB::raw('SUM(p.total_cost) as total_cost'),
+                DB::raw('CASE WHEN SUM(p.quantity) > 0 THEN SUM(p.total_cost) / SUM(p.quantity) ELSE 0 END as cost_per_unit')
+            )
+            ->join('users as u', 'u.id', '=', 'p.created_by')
+            ->join('profiles as pf', 'pf.id', '=', 'u.profile_id')
+            ->join('items as i', 'i.item_id', '=', 'p.item_id')
+            ->where('p.is_deleted', 0)
+            ->where('pf.id', $proId)
+            ->groupBy(
+                'i.item_id',
+                'i.barcode',
+                'i.item_name',
+                'i.item_code'
+            );
+
+        if ($request->filled('created_by')) {
+            $query->where('p.created_by', $request->created_by);
+        }
+
+        if ($request->filled('item_id')) {
+            $query->where('i.item_id', $request->item_id);
+        }
+
+        if ($request->filled('start_date') && $request->filled('end_date')) {
+            $query->whereBetween('p.production_date', [$request->start_date, $request->end_date]);
+        } elseif ($request->filled('start_date')) {
+            $query->where('p.production_date', '>=', $request->start_date);
+        } elseif ($request->filled('end_date')) {
+            $query->where('p.production_date', '<=', $request->end_date);
+        }
+
+        $results = $query->get();
+
+        return response()->json([
+            'message' => 'production report by item get successfully',
+            'status' => 200,
+            'data' => $results->map(function ($result) {
+                return [
+                    'item_id' => $result->item_id,
+                    'barcode' => $result->barcode,
+                    'item_name' => $result->item_name,
+                    'item_code' => $result->item_code,
+                    'quantity' => number_format($result->quantity, 2, '.', ''),
+                    'cost_per_unit' => number_format($result->cost_per_unit, 2, '.', ''),
+                    'total_cost' => number_format($result->total_cost, 2, '.', ''),
+                ];
+            })
+        ], 200);
+    }
+
+    public function productionReportByRaw(Request $request){
+        $user = Auth::user();
+        $proId = $user->profile_id;
+
+        $request->validate([
+            'created_by' => 'nullable|integer',
+            'raw_material_id' => 'nullable|integer',
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date',
         ]);
@@ -586,14 +654,17 @@ class ReportController extends Controller
                 'rm.id',
                 'rm.material_code',
                 'rm.material_name',
+                'rm.primary_unit',
+                'rm.secondary_unit',
+                'rm.conversion_value'
             );
 
         if ($request->filled('created_by')) {
             $query->where('p.created_by', $request->created_by);
         }
 
-        if ($request->filled('item_id')) {
-            $query->where('rm.id', $request->item_id);
+        if ($request->filled('raw_material_id')) {
+            $query->where('rm.id', $request->raw_material_id);
         }
 
         if ($request->filled('start_date') && $request->filled('end_date')) {
@@ -617,10 +688,10 @@ class ReportController extends Controller
                     'primary_unit' => $result->primary_unit,
                     'secondary_unit' => $result->secondary_unit,
                     'conversion_value' => number_format($result->conversion_value, 2, '.', ''),
-                    'quantity' => (float) $result->quantity,
+                    'quantity' => number_format($result->quantity, 2, '.', ''),
                     'cost_per_unit' => number_format($result->cost_per_unit, 2, '.', ''),
                     'total_cost' => number_format($result->total_cost, 2, '.', ''),
-                    'production_quantity' => (float) $result->production_quantity,
+                    'production_quantity' => number_format($result->production_quantity, 2, '.', ''),
                     'production_total_cost' => number_format($result->production_total_cost, 2, '.', '')
                 ];
             })
@@ -1157,6 +1228,343 @@ class ReportController extends Controller
             'message' => 'profit analysis chart get successfully',
             'status' => 200,
             'data' => $data
+        ], 200);
+    }
+
+
+    public function reportAP(Request $request){
+        $user = Auth::user();
+        $proId = $user->profile_id;
+
+        $request->validate([
+            'user_id' => 'nullable|integer|exists:users,id',
+            'supplier_id' => 'nullable|integer|exists:suppliers,supplier_id',
+            'start_date' => 'nullable|date',
+            'end_date' => 'nullable|date',
+        ]);
+
+        $exchangeRate = ExchangeRate::find($proId);
+
+        $query = DB::table('purchases as p')
+            ->select(
+                'p.purchase_no',
+                'p.purchase_date',
+                'p.total_amount',
+                'p.total_paid',
+                'p.balance',
+                'p.exchange_rate',
+                'sp.supplier_name'
+            )
+            ->join('users as u', 'u.id', '=', 'p.created_by')
+            ->join('profiles as pf', 'pf.id', '=', 'u.profile_id')
+            ->leftJoin('suppliers as sp', 'sp.supplier_id', '=', 'p.supplier_id')
+            ->where('p.is_deleted', 0)
+            ->where('pf.id', $proId);
+
+        if ($request->filled('user_id')) {
+            $query->where('p.created_by', $request->user_id);
+        }
+
+        if ($request->filled('supplier_id')) {
+            $query->where('p.supplier_id', $request->supplier_id);
+        }
+
+        if ($request->filled('start_date') && $request->filled('end_date')) {
+            $query->whereBetween('p.purchase_date', [$request->start_date, $request->end_date]);
+        } elseif ($request->filled('start_date')) {
+            $query->where('p.purchase_date', '>=', $request->start_date);
+        } elseif ($request->filled('end_date')) {
+            $query->where('p.purchase_date', '<=', $request->end_date);
+        }
+
+        $results = $query->get();
+
+        $totals = [
+            'total' => 0,
+            'total_paid' => 0,
+            'total_balance' => 0,
+            'total_kh' => 0,
+            'total_paid_kh' => 0,
+            'total_balance_kh' => 0,
+        ];
+
+        $summary = $results->map(function ($row) use (&$totals, $exchangeRate) {
+            $rate = $row->exchange_rate ?? ($exchangeRate->usd_to_khr ?? 0);
+            $total = (float) ($row->total_amount ?? 0);
+            $paid = (float) ($row->total_paid ?? 0);
+            $balance = (float) ($row->balance ?? 0);
+
+            $totalKh = $total * $rate;
+            $paidKh = $paid * $rate;
+            $balanceKh = $balance * $rate;
+
+            $totals['total'] += $total;
+            $totals['total_paid'] += $paid;
+            $totals['total_balance'] += $balance;
+            $totals['total_kh'] += $totalKh;
+            $totals['total_paid_kh'] += $paidKh;
+            $totals['total_balance_kh'] += $balanceKh;
+
+            return [
+                'purchase_no' => $row->purchase_no,
+                'supplier_name' => $row->supplier_name,
+                'purchase_date' => $row->purchase_date,
+                'total' => number_format($total, 2, '.', ''),
+                'paid' => number_format($paid, 2, '.', ''),
+                'balance' => number_format($balance, 2, '.', ''),
+                'total_kh' => number_format($totalKh, 2, '.', ''),
+                'paid_kh' => number_format($paidKh, 2, '.', ''),
+                'balance_kh' => number_format($balanceKh, 2, '.', ''),
+            ];
+        });
+
+        return response()->json([
+            'message' => 'Account Payables Report',
+            'status' => 200,
+            'data' => [
+                'summary' => $summary,
+                'total' => number_format($totals['total'], 2, '.', ''),
+                'total_paid' => number_format($totals['total_paid'], 2, '.', ''),
+                'total_balance' => number_format($totals['total_balance'], 2, '.', ''),
+                'total_kh' => number_format($totals['total_kh'], 2, '.', ''),
+                'total_paid_kh' => number_format($totals['total_paid_kh'], 2, '.', ''),
+                'total_balance_kh' => number_format($totals['total_balance_kh'], 2, '.', ''),
+            ]
+        ], 200);
+    }
+
+
+    public function reportAR(Request $request){
+        $user = Auth::user();
+        $proId = $user->profile_id;
+
+        $request->validate([
+            'user_id' => 'nullable|integer|exists:users,id',
+            'customer_id' => 'nullable|integer|exists:customers,customer_id',
+            'start_date' => 'nullable|date',
+            'end_date' => 'nullable|date',
+        ]);
+
+        $query = DB::table('order_masters as om')
+            ->select(
+                'om.order_no',
+                'om.order_date',
+                'om.order_total',
+                'om.payment',
+                'om.balance',
+                'om.exchange_rate',
+                'c.customer_name',
+                'c.customer_tel',
+                'u.username as created_by_name'
+            )
+            ->join('customers as c', 'c.customer_id', '=', 'om.order_customer_id')
+            ->join('users as u', 'u.id', '=', 'om.created_by')
+            ->join('profiles as p', 'u.profile_id', '=', 'p.id')
+            ->where('om.is_deleted', 0)
+            ->where('p.id', $proId);
+
+        if ($request->filled('user_id')) {
+            $query->where('om.created_by', $request->user_id);
+        }
+
+        if ($request->filled('customer_id')) {
+            $query->where('c.customer_id', $request->customer_id);
+        }
+
+        if ($request->filled('start_date') && $request->filled('end_date')) {
+            $query->whereBetween('om.order_date', [$request->start_date, $request->end_date]);
+        } elseif ($request->filled('start_date')) {
+            $query->where('om.order_date', '>=', $request->start_date);
+        } elseif ($request->filled('end_date')) {
+            $query->where('om.order_date', '<=', $request->end_date);
+        }
+
+        $results = $query->get();
+
+        $totals = [
+            'total' => 0,
+            'total_paid' => 0,
+            'total_balance' => 0,
+            'total_kh' => 0,
+            'total_paid_kh' => 0,
+            'total_balance_kh' => 0,
+        ];
+
+        $summary = $results->map(function ($row) use (&$totals) {
+            $rate = $row->exchange_rate ?? 0;
+            $total = (float) ($row->order_total ?? 0);
+            $paid = (float) ($row->payment ?? 0);
+            $balance = (float) ($row->balance ?? 0);
+
+            $totalKh = $total * $rate;
+            $paidKh = $paid * $rate;
+            $balanceKh = $balance * $rate;
+
+            $totals['total'] += $total;
+            $totals['total_paid'] += $paid;
+            $totals['total_balance'] += $balance;
+            $totals['total_kh'] += $totalKh;
+            $totals['total_paid_kh'] += $paidKh;
+            $totals['total_balance_kh'] += $balanceKh;
+
+            return [
+                'order_no' => $row->order_no,
+                'customer_name' => $row->customer_name,
+                'customer_tel' => $row->customer_tel,
+                'order_date' => $row->order_date,
+                'created_by_name' => $row->created_by_name,
+                'total' => number_format($total, 2, '.', ''),
+                'paid' => number_format($paid, 2, '.', ''),
+                'balance' => number_format($balance, 2, '.', ''),
+                'total_kh' => number_format($totalKh, 2, '.', ''),
+                'paid_kh' => number_format($paidKh, 2, '.', ''),
+                'balance_kh' => number_format($balanceKh, 2, '.', ''),
+            ];
+        });
+
+        return response()->json([
+            'message' => 'Account Receivables Report',
+            'status' => 200,
+            'data' => [
+                'summary' => $summary,
+                'total' => number_format($totals['total'], 2, '.', ''),
+                'total_paid' => number_format($totals['total_paid'], 2, '.', ''),
+                'total_balance' => number_format($totals['total_balance'], 2, '.', ''),
+                'total_kh' => number_format($totals['total_kh'], 2, '.', ''),
+                'total_paid_kh' => number_format($totals['total_paid_kh'], 2, '.', ''),
+                'total_balance_kh' => number_format($totals['total_balance_kh'], 2, '.', ''),
+            ]
+        ], 200);
+    }
+
+
+    public function debtAnalysis(Request $request){
+        $user = Auth::user();
+        $proId = $user->profile_id;
+
+        $request->validate([
+            'start_date' => 'nullable|date',
+            'end_date' => 'nullable|date',
+        ]);
+
+        $startDate = $request->start_date ?: date('Y-m-01');
+        $endDate = $request->end_date ?: date('Y-m-d');
+
+        if (strtotime($endDate) < strtotime($startDate)) {
+            return response()->json([
+                'message' => 'End date cannot be before start date.',
+                'status' => 422
+            ], 422);
+        }
+
+        $arTotals = DB::table('order_masters as om')
+            ->join('users as u', 'u.id', '=', 'om.created_by')
+            ->join('profiles as p', 'u.profile_id', '=', 'p.id')
+            ->where('om.is_deleted', 0)
+            ->where('p.id', $proId)
+            ->whereBetween('om.order_date', [$startDate, $endDate])
+            ->select(
+                DB::raw('SUM(om.balance) as total_balance'),
+                DB::raw('SUM(om.balance * IFNULL(om.exchange_rate, 0)) as total_balance_kh')
+            )
+            ->first();
+
+        $apTotals = DB::table('purchases as p')
+            ->join('users as u', 'u.id', '=', 'p.created_by')
+            ->join('profiles as pf', 'pf.id', '=', 'u.profile_id')
+            ->where('p.is_deleted', 0)
+            ->where('pf.id', $proId)
+            ->where('p.purchase_type', 0)
+            ->whereBetween('p.purchase_date', [$startDate, $endDate])
+            ->select(
+                DB::raw('SUM(p.balance) as total_balance'),
+                DB::raw('SUM(p.balance * IFNULL(p.exchange_rate, 0)) as total_balance_kh')
+            )
+            ->first();
+
+        $invTotals = DB::table('purchases as p')
+            ->join('users as u', 'u.id', '=', 'p.created_by')
+            ->join('profiles as pf', 'pf.id', '=', 'u.profile_id')
+            ->where('p.is_deleted', 0)
+            ->where('pf.id', $proId)
+            ->where('p.purchase_type', 1)
+            ->whereBetween('p.purchase_date', [$startDate, $endDate])
+            ->select(
+                DB::raw('SUM(p.balance) as total_balance'),
+                DB::raw('SUM(p.balance * IFNULL(p.exchange_rate, 0)) as total_balance_kh')
+            )
+            ->first();
+
+        $arTotal = (float) ($arTotals->total_balance ?? 0);
+        $arTotalKh = (float) ($arTotals->total_balance_kh ?? 0);
+        $apTotal = (float) ($apTotals->total_balance ?? 0);
+        $apTotalKh = (float) ($apTotals->total_balance_kh ?? 0);
+        $invTotal = (float) ($invTotals->total_balance ?? 0);
+        $invTotalKh = (float) ($invTotals->total_balance_kh ?? 0);
+
+        $balanceTotal = $arTotal - ($apTotal + $invTotal);
+        $balanceTotalKh = $arTotalKh - ($apTotalKh + $invTotalKh);
+
+        $arByDate = DB::table('order_masters as om')
+            ->join('users as u', 'u.id', '=', 'om.created_by')
+            ->join('profiles as p', 'u.profile_id', '=', 'p.id')
+            ->where('om.is_deleted', 0)
+            ->where('p.id', $proId)
+            ->whereBetween('om.order_date', [$startDate, $endDate])
+            ->groupBy(DB::raw('DATE(om.order_date)'))
+            ->select(
+                DB::raw('DATE(om.order_date) as date'),
+                DB::raw('SUM(om.balance) as total_balance')
+            )
+            ->pluck('total_balance', 'date');
+
+        $apInvByDate = DB::table('purchases as p')
+            ->join('users as u', 'u.id', '=', 'p.created_by')
+            ->join('profiles as pf', 'pf.id', '=', 'u.profile_id')
+            ->where('p.is_deleted', 0)
+            ->where('pf.id', $proId)
+            ->whereIn('p.purchase_type', [0, 1])
+            ->whereBetween('p.purchase_date', [$startDate, $endDate])
+            ->groupBy(DB::raw('DATE(p.purchase_date)'))
+            ->select(
+                DB::raw('DATE(p.purchase_date) as date'),
+                DB::raw('SUM(p.balance) as total_balance')
+            )
+            ->pluck('total_balance', 'date');
+
+        $chart = [];
+        $cursor = strtotime($startDate);
+        $last = strtotime($endDate);
+        while ($cursor <= $last) {
+            $date = date('Y-m-d', $cursor);
+            $arDay = (float) ($arByDate[$date] ?? 0);
+            $apInvDay = (float) ($apInvByDate[$date] ?? 0);
+            $chart[] = [
+                'date' => $date,
+                'ar' => (float)number_format($arDay,2,'.') ,
+                'ap_inv' =>(float)number_format($arDay - $apInvDay,2,'.'),
+            ];
+            $cursor = strtotime('+1 day', $cursor);
+        }
+
+        return response()->json([
+            'message' => 'Debt analysis generated successfully',
+            'status' => 200,
+            'data' => [
+                'start_date' => $startDate,
+                'end_date' => $endDate,
+                'cards' => [
+                    'ar_total' => number_format($arTotal, 2, '.', ''),
+                    'ar_total_kh' => number_format($arTotalKh, 2, '.', ''),
+                    'ap_total' => number_format($apTotal, 2, '.', ''),
+                    'ap_total_kh' => number_format($apTotalKh, 2, '.', ''),
+                    'inv_total' => number_format($invTotal, 2, '.', ''),
+                    'inv_total_kh' => number_format($invTotalKh, 2, '.', ''),
+                    'balance_total' => number_format($balanceTotal, 2, '.', ''),
+                    'balance_total_kh' => number_format($balanceTotalKh, 2, '.', '')
+                ],
+                'chart' => $chart
+            ]
         ], 200);
     }
 }

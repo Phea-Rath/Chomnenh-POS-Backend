@@ -7,12 +7,16 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use DB;
 use KHQR\BakongKHQR;
-use KHQR\Helpers\KHQRData;
 use KHQR\Models\IndividualInfo;
+use KHQR\Config\Constants;
+use KHQR\Helpers\KHQRData;
 use App\Services\AbaPayWayService;
 
 class PaymentController extends Controller
 {
+
+
+
     public function getQrCode(Request $request)
     {
         $user = auth()->user();
@@ -42,6 +46,52 @@ class PaymentController extends Controller
             'qr' => $qrResponse->data['qr'] ?? null,
             'md5' => $qrResponse->data['md5'] ?? null,
         ]);
+
+    }
+
+    public function sendQrToTelegram(Request $request)
+    {
+        $user = auth()->user();
+        $proId = $user->profile_id;
+        $qr = $request->qr_string;
+        $amount = $request->amount;
+        $currency = $request->currency;
+        $qrImage = $request->qr_image; // Base64 image string
+
+        $caption = "💰 <b>New QR Payment Request</b>\n\n" .
+                   "💵 <b>Amount:</b> " . number_format($amount, 2) . " {$currency}\n" .
+                   "<i>Please scan the QR code to pay.</i>";
+
+        if ($qrImage) {
+            // Handle base64 image
+            $imageData = substr($qrImage, strpos($qrImage, ',') + 1);
+            $imageData = base64_decode($imageData);
+
+            // Temporary file to send to Telegram
+            $tempFile = tempnam(sys_get_temp_dir(), 'qr_');
+            file_put_contents($tempFile, $imageData);
+
+            $profile = DB::table('profiles')->find($proId);
+            $token = $profile->bot_token;
+            $chatId = $profile->chat_id;
+
+            if ($token && $chatId) {
+                $url = "https://api.telegram.org/bot{$token}/sendPhoto";
+                \Illuminate\Support\Facades\Http::attach(
+                    'photo', $imageData, 'qrcode.png'
+                )->post($url, [
+                    'chat_id' => $chatId,
+                    'caption' => $caption,
+                    'parse_mode' => 'HTML',
+                ]);
+            }
+
+            unlink($tempFile);
+        } else {
+            \App\Services\TelegramService::sendMessage($caption, $proId);
+        }
+
+        return response()->json(['message' => 'QR sent to Telegram successfully']);
     }
 
     public function verifyPayment($md5)
@@ -71,30 +121,29 @@ class PaymentController extends Controller
     }
 
 
-    public function checkout(Request $request) {
-        $transactionId = time(); // លេខសម្គាល់ប្រតិបត្តិការ
-        $amount = "10.00";
-        $firstName = "Phearat";
-        $lastName = "Tep";
-        $phone = "012345678";
-        $email = "customer@email.com";
-        $items = base64_encode(json_encode([['name' => 'Item 1', 'quantity' => '1', 'price' => '10.00']]));
+
+    public function getPaymentLink(Request $request)
+    {
+        $merchant_id = env('ABA_PAYWAY_MERCHANT_ID');
+        $api_key = env('ABA_PAYWAY_API_KEY');
+
+        $req_time = now()->format('YmdHis');
+        $tran_id = time(); // លេខកូដប្រតិបត្តិការ
+        $amount = $request->amount; // ឧទាហរណ៍: 10.00
 
         // បង្កើត Hash តាមលំដាប់លំដោយរបស់ ABA
-        $req_time = date('YmdHis');
-        $hashStr = env('ABA_PAYWAY_MERCHANT_ID') . $transactionId . $amount . $items . $firstName . $lastName . $email . $phone . "purchase" . $req_time;
-        $hash = AbaPayWayService::getHash($hashStr);
+        $hash_str = $req_time . $merchant_id . $tran_id . $amount;
+        $hash = base64_encode(hash_hmac('sha256', $hash_str, $api_key, true));
 
         return response()->json([
-            'api_url' => env('ABA_PAYWAY_API_URL'),
-            'merchant_id' => env('ABA_PAYWAY_MERCHANT_ID'),
-            'tran_id' => $transactionId,
-            'amount' => $amount,
             'hash' => $hash,
+            'tran_id' => $tran_id,
             'req_time' => $req_time,
-            // ... ទិន្នន័យផ្សេងទៀត
-        ]);
-    }
+            'merchant_id' => $merchant_id,
+            'amount' => $amount,
+            'api_url' => env('ABA_PAYWAY_API_URL')]);
+        }
+
 
 
 

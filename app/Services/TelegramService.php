@@ -37,4 +37,24 @@ class TelegramService
         ])
         ]);
     }
+
+    public static function sendPhoto($caption, $photoUrl, $pro_id)
+    {
+        $profile = Profile::find($pro_id);
+        $token = $profile->bot_token;
+        $chatId = $profile->chat_id;
+
+        if (!$token || !$chatId) {
+            return "Error";
+        }
+
+        $url = "https://api.telegram.org/bot{$token}/sendPhoto";
+
+        return Http::post($url, [
+            'chat_id' => $chatId,
+            'photo' => $photoUrl,
+            'caption' => $caption,
+            'parse_mode' => 'HTML',
+        ]);
+    }
 }

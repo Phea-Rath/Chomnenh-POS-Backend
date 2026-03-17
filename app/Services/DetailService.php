@@ -343,20 +343,20 @@ class DetailService {
             ->where('p.id', $proId);
 
 
-        $items = $query->select(
-                DB::raw('SUM(CASE WHEN sm.stock_type_id = 1 THEN sd.quantity ELSE 0 END)
+            $items = $query->select(
+                DB::raw('COALESCE(
+                    SUM(CASE WHEN sm.stock_type_id = 1 THEN sd.quantity ELSE 0 END)
                     + SUM(CASE WHEN sm.stock_type_id = 2 THEN sd.quantity ELSE 0 END)
                     - SUM(CASE WHEN sm.stock_type_id = 3 THEN sd.quantity ELSE 0 END)
                     - SUM(CASE WHEN sm.stock_type_id = 4 THEN sd.quantity ELSE 0 END)
-                    - SUM(CASE WHEN sm.stock_type_id = 5 THEN sd.quantity ELSE 0 END)
-                    AS in_stock'),
-                DB::raw('SUM(CASE WHEN sm.stock_type_id = 1 THEN sd.quantity ELSE 0 END) AS stock_return'),
-                DB::raw('SUM(CASE WHEN sm.stock_type_id = 2 THEN sd.quantity ELSE 0 END) AS stock_in'),
-                DB::raw('SUM(CASE WHEN sm.stock_type_id = 3 THEN sd.quantity ELSE 0 END) AS stock_out'),
-                DB::raw('SUM(CASE WHEN sm.stock_type_id = 4 THEN sd.quantity ELSE 0 END) AS stock_wasted'),
-                DB::raw('SUM(CASE WHEN sm.stock_type_id = 5 THEN sd.quantity ELSE 0 END) AS sold')
+                    - SUM(CASE WHEN sm.stock_type_id = 5 THEN sd.quantity ELSE 0 END),0) AS in_stock'),
+
+                DB::raw('COALESCE(SUM(CASE WHEN sm.stock_type_id = 1 THEN sd.quantity ELSE 0 END),0) AS stock_return'),
+                DB::raw('COALESCE(SUM(CASE WHEN sm.stock_type_id = 2 THEN sd.quantity ELSE 0 END),0) AS stock_in'),
+                DB::raw('COALESCE(SUM(CASE WHEN sm.stock_type_id = 3 THEN sd.quantity ELSE 0 END),0) AS stock_out'),
+                DB::raw('COALESCE(SUM(CASE WHEN sm.stock_type_id = 4 THEN sd.quantity ELSE 0 END),0) AS stock_wasted'),
+                DB::raw('COALESCE(SUM(CASE WHEN sm.stock_type_id = 5 THEN sd.quantity ELSE 0 END),0) AS sold')
             )
-            ->orderBy('i.item_id')
             ->get();
 
             $totalOrdered = DB::table('order_items as oi')
@@ -372,13 +372,16 @@ class DetailService {
             if(!$totalOrdered){
                 $totalOrdered = 0;
             }
-            foreach($items as $it){
-                $orderQuan = $totalOrdered;
-                if($orderQuan){
-                    $it->sold = $orderQuan;
-                    $it->in_stock = $it->in_stock - $orderQuan;
-                }
+            foreach ($items as $it) {
+                $it->stock_return = (int) $it->stock_return;
+                $it->stock_in = (int) $it->stock_in;
+                $it->stock_out = (int) $it->stock_out;
+                $it->stock_wasted = (int) $it->stock_wasted;
+                $it->sold = (int) $totalOrdered;
+
+                $it->in_stock = (int) $it->in_stock - $totalOrdered;
             }
+
 
             return $items;
         }

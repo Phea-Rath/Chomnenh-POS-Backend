@@ -19,7 +19,6 @@ return new class extends Migration
             $table->decimal("price", 20, 2);
             $table->decimal("item_price", 20, 2);
             $table->integer("discount")->default(0);
-            $table->decimal('item_cost', 20, 2);
             $table->integer("quantity");
             $table->boolean("is_deleted")->default(0);
             $table->timestamps();

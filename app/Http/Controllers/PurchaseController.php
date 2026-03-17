@@ -371,13 +371,9 @@ class PurchaseController extends Controller
         $validated = $request->validate([
             'supplier_id'        => 'nullable|integer|exists:suppliers,supplier_id',
             'purchase_date'      => 'required|date',
-            'sub_total'          => 'required|numeric',
             'tax_rate'           => 'nullable|numeric',
-            'tax_amount'         => 'nullable|numeric',
             'shipping_fee'       => 'nullable|numeric',
-            'total_amount'       => 'required|numeric',
             'total_paid'         => 'nullable|numeric',
-            'balance'            => 'nullable|numeric',
             'exchange_rate'      => 'nullable|numeric',
             'status'             => 'required|integer',
             'purchase_type'      => 'required|integer',
@@ -391,6 +387,16 @@ class PurchaseController extends Controller
         ]);
 
 
+        $supplierId = $validated['supplier_id'] ?? null;
+        $subTotal = collect($validated['items'])->sum(function ($item) {
+            return (float) $item['quantity'] * (float) $item['item_cost'];
+        });
+        $taxRate = (float) ($validated['tax_rate'] ?? 0);
+        $taxAmount = round($subTotal * $taxRate / 100, 2);
+        $shippingFee = (float) ($validated['shipping_fee'] ?? 0);
+        $totalAmount = round($subTotal + $taxAmount + $shippingFee, 2);
+        $totalPaid = (float) ($validated['total_paid'] ?? 0);
+        $balance = round($totalAmount - $totalPaid, 2);
 
         $exchange_rate = ExchangeRate::find($proId);
         $purchaseNo = 'PO-' . now()->format('Ymd') . '-' . str_pad((Purchase::max('purchase_id') + 1), 5, '0', STR_PAD_LEFT);
@@ -399,13 +405,13 @@ class PurchaseController extends Controller
             'purchase_no'   => $purchaseNo,
             'supplier_id'   => $supplierId ?? Suppliers::max('supplier_id'),
             'purchase_date' => $validated['purchase_date'],
-            'sub_total'     => $validated['sub_total'],
-            'tax_rate'      => $validated['tax_rate'] ?? 0,
-            'tax_amount'    => $validated['tax_amount'] ?? 0,
-            'shipping_fee'  => $validated['shipping_fee'] ?? 0,
-            'total_amount'  => $validated['total_amount'],
-            'total_paid'    => $validated['total_paid'] ?? 0,
-            'balance'       => $validated['balance'] ?? 0,
+            'sub_total'     => $subTotal,
+            'tax_rate'      => $taxRate,
+            'tax_amount'    => $taxAmount,
+            'shipping_fee'  => $shippingFee,
+            'total_amount'  => $totalAmount,
+            'total_paid'    => $totalPaid,
+            'balance'       => $balance,
             'purchase_type' => $validated['purchase_type'] ?? 0,
             'exchange_rate' => $exchange_rate->usd_to_khr ?? 4000,
             'status'        => $validated['status'],
@@ -460,13 +466,9 @@ class PurchaseController extends Controller
         $validated = $request->validate([
             'supplier_id'        => 'nullable|integer|exists:suppliers,supplier_id',
             'purchase_date'      => 'required|date',
-            'sub_total'          => 'required|numeric',
             'tax_rate'           => 'nullable|numeric',
-            'tax_amount'         => 'nullable|numeric',
             'shipping_fee'       => 'nullable|numeric',
-            'total_amount'       => 'required|numeric',
             'total_paid'         => 'nullable|numeric',
-            'balance'            => 'nullable|numeric',
             'exchange_rate'      => 'nullable|numeric',
             'status'             => 'required|integer',
             'purchase_type'      => 'required|integer',
@@ -480,6 +482,16 @@ class PurchaseController extends Controller
         ]);
 
 
+        $supplierId = $validated['supplier_id'] ?? null;
+        $subTotal = collect($validated['items'])->sum(function ($item) {
+            return (float) $item['quantity'] * (float) $item['item_cost'];
+        });
+        $taxRate = (float) ($validated['tax_rate'] ?? 0);
+        $taxAmount = round($subTotal * $taxRate / 100, 2);
+        $shippingFee = (float) ($validated['shipping_fee'] ?? 0);
+        $totalAmount = round($subTotal + $taxAmount + $shippingFee, 2);
+        $totalPaid = (float) ($validated['total_paid'] ?? 0);
+        $balance = round($totalAmount - $totalPaid, 2);
 
         $purchaseNo = 'PO-' . now()->format('Ymd') . '-' . str_pad((Purchase::max('purchase_id') + 1), 5, '0', STR_PAD_LEFT);
 
@@ -487,13 +499,13 @@ class PurchaseController extends Controller
             'purchase_no'   => $purchaseNo,
             'supplier_id'   => $supplierId ?? Suppliers::max('supplier_id'),
             'purchase_date' => $validated['purchase_date'],
-            'sub_total'     => $validated['sub_total'],
-            'tax_rate'      => $validated['tax_rate'] ?? 0,
-            'tax_amount'    => $validated['tax_amount'] ?? 0,
-            'shipping_fee'  => $validated['shipping_fee'] ?? 0,
-            'total_amount'  => $validated['total_amount'],
-            'total_paid'    => $validated['total_paid'] ?? 0,
-            'balance'       => $validated['balance'] ?? 0,
+            'sub_total'     => $subTotal,
+            'tax_rate'      => $taxRate,
+            'tax_amount'    => $taxAmount,
+            'shipping_fee'  => $shippingFee,
+            'total_amount'  => $totalAmount,
+            'total_paid'    => $totalPaid,
+            'balance'       => $balance,
             'purchase_type' => $validated['purchase_type'] ?? 0,
             'exchange_rate' => $validated['exchange_rate'],
             'status'        => $validated['status'],
@@ -633,13 +645,9 @@ class PurchaseController extends Controller
         $validated = $request->validate([
             'supplier_id'   => 'required|integer',
             'purchase_date' => 'required|date',
-            'sub_total'     => 'required|numeric',
             'tax_rate'      => 'nullable|numeric',
-            'tax_amount'    => 'nullable|numeric',
             'shipping_fee'  => 'nullable|numeric',
-            'total_amount'  => 'required|numeric',
             'total_paid'    => 'nullable|numeric',
-            'balance'       => 'nullable|numeric',
             'exchange_rate' => 'nullable|numeric',
             'status'        => 'required|integer',
             'items'         => 'required|array|min:1',
@@ -651,7 +659,29 @@ class PurchaseController extends Controller
             'payments.*.paid_at' => 'date'
         ]);
 
-        $purchase->update($validated);
+        $subTotal = collect($validated['items'])->sum(function ($item) {
+            return (float) $item['quantity'] * (float) $item['item_cost'];
+        });
+        $taxRate = (float) ($validated['tax_rate'] ?? 0);
+        $taxAmount = round($subTotal * $taxRate / 100, 2);
+        $shippingFee = (float) ($validated['shipping_fee'] ?? 0);
+        $totalAmount = round($subTotal + $taxAmount + $shippingFee, 2);
+        $totalPaid = (float) ($validated['total_paid'] ?? 0);
+        $balance = round($totalAmount - $totalPaid, 2);
+
+        $purchase->update([
+            'supplier_id'   => $validated['supplier_id'],
+            'purchase_date' => $validated['purchase_date'],
+            'sub_total'     => $subTotal,
+            'tax_rate'      => $taxRate,
+            'tax_amount'    => $taxAmount,
+            'shipping_fee'  => $shippingFee,
+            'total_amount'  => $totalAmount,
+            'total_paid'    => $totalPaid,
+            'balance'       => $balance,
+            'exchange_rate' => $validated['exchange_rate'] ?? $purchase->exchange_rate,
+            'status'        => $validated['status'],
+        ]);
 
         PurchaseDetail::where('purchase_id', $id)->delete();
 
@@ -705,13 +735,9 @@ class PurchaseController extends Controller
         $validated = $request->validate([
             'supplier_id'   => 'required|integer',
             'purchase_date' => 'required|date',
-            'sub_total'     => 'required|numeric',
             'tax_rate'      => 'nullable|numeric',
-            'tax_amount'    => 'nullable|numeric',
             'shipping_fee'  => 'nullable|numeric',
-            'total_amount'  => 'required|numeric',
             'total_paid'    => 'nullable|numeric',
-            'balance'       => 'nullable|numeric',
             'exchange_rate' => 'nullable|numeric',
             'status'        => 'required|integer',
             'items'         => 'required|array|min:1',
@@ -723,7 +749,29 @@ class PurchaseController extends Controller
             'payments.*.paid_at' => 'date'
         ]);
 
-        $purchase->update($validated);
+        $subTotal = collect($validated['items'])->sum(function ($item) {
+            return (float) $item['quantity'] * (float) $item['item_cost'];
+        });
+        $taxRate = (float) ($validated['tax_rate'] ?? 0);
+        $taxAmount = round($subTotal * $taxRate / 100, 2);
+        $shippingFee = (float) ($validated['shipping_fee'] ?? 0);
+        $totalAmount = round($subTotal + $taxAmount + $shippingFee, 2);
+        $totalPaid = (float) ($validated['total_paid'] ?? 0);
+        $balance = round($totalAmount - $totalPaid, 2);
+
+        $purchase->update([
+            'supplier_id'   => $validated['supplier_id'],
+            'purchase_date' => $validated['purchase_date'],
+            'sub_total'     => $subTotal,
+            'tax_rate'      => $taxRate,
+            'tax_amount'    => $taxAmount,
+            'shipping_fee'  => $shippingFee,
+            'total_amount'  => $totalAmount,
+            'total_paid'    => $totalPaid,
+            'balance'       => $balance,
+            'exchange_rate' => $validated['exchange_rate'] ?? $purchase->exchange_rate,
+            'status'        => $validated['status'],
+        ]);
 
         PurchaseRawDetail::where('purchase_id', $id)->delete();
 
