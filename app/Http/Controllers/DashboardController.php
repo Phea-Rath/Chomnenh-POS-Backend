@@ -1144,7 +1144,267 @@ public function expenseMonth(Request $request)
     ]);
 }
 
+public function profiteByHour(Request $request)
+{
+    $user = Auth::user();
+    $proId = $user->profile_id;
 
+    $validate = $request->validate([
+        'year' => 'nullable|integer|min:2000',
+    ]);
+    $base = now();
+    $year = (int) ($validate['year'] ?? $base->year);
+    if ($year !== (int) $base->year) {
+        $daysInTargetMonth = \Carbon\Carbon::create($year, $base->month, 1)->daysInMonth;
+        $day = min($base->day, $daysInTargetMonth);
+        $base = \Carbon\Carbon::create($year, $base->month, $day, $base->hour, $base->minute, $base->second);
+    }
+
+    $today = $base->copy()->startOfDay();
+    $yesterday = $today->copy()->subDay();
+
+    $timeSlots = [
+        '07:00 AM' => ['start' => '07:00:00', 'end' => '10:59:59'],
+        '11:00 AM' => ['start' => '11:00:00', 'end' => '15:59:59'],
+        '04:00 PM' => ['start' => '16:00:00', 'end' => '20:59:59'],
+        '09:00 PM' => ['start' => '21:00:00', 'end' => '01:59:59'],
+        '02:00 AM' => ['start' => '02:00:00', 'end' => '05:59:59'],
+        '06:00 AM' => ['start' => '06:00:00', 'end' => '06:59:59'],
+    ];
+
+    $getHourlySum = function ($table, $amountField, $dateField, $proId, $day, $startTime, $endTime) {
+        $query = DB::table($table)
+            ->join('users as u', $table . '.created_by', '=', 'u.id')
+            ->where($table . '.is_deleted', 0)
+            ->where('u.profile_id', $proId);
+
+        if ($startTime > $endTime) {
+            $query->where(function ($q) use ($day, $startTime, $dateField, $table) {
+                $q->whereRaw("TIME($table.created_at) BETWEEN ? AND ?", [$startTime, '23:59:59'])
+                    ->whereRaw("DATE($table.$dateField) = ?", [$day->format('Y-m-d')]);
+            })->orWhere(function ($q) use ($day, $endTime, $dateField, $table) {
+                $q->whereRaw("TIME($table.created_at) BETWEEN ? AND ?", ['00:00:00', $endTime])
+                    ->whereRaw("DATE($table.$dateField) = ?", [$day->copy()->addDay()->format('Y-m-d')]);
+            });
+        } else {
+            $query->whereRaw("DATE($table.$dateField) = ?", [$day->format('Y-m-d')])
+                ->whereRaw("TIME($table.created_at) BETWEEN ? AND ?", [$startTime, $endTime]);
+        }
+
+        return $query->sum($table . '.' . $amountField);
+    };
+
+    $data = [];
+    foreach ($timeSlots as $label => $times) {
+        $startTime = $times['start'];
+        $endTime = $times['end'];
+
+        $saleToday = $getHourlySum('order_masters', 'payment', 'order_date', $proId, $today, $startTime, $endTime);
+        $purchaseToday = $getHourlySum('purchases', 'total_amount', 'purchase_date', $proId, $today, $startTime, $endTime);
+        $expenseToday = $getHourlySum('expense_masters', 'amount', 'expense_date', $proId, $today, $startTime, $endTime);
+
+        $saleYesterday = $getHourlySum('order_masters', 'payment', 'order_date', $proId, $yesterday, $startTime, $endTime);
+        $purchaseYesterday = $getHourlySum('purchases', 'total_amount', 'purchase_date', $proId, $yesterday, $startTime, $endTime);
+        $expenseYesterday = $getHourlySum('expense_masters', 'amount', 'expense_date', $proId, $yesterday, $startTime, $endTime);
+
+        $data[] = [
+            'name' => $label,
+            'today' => $saleToday - $purchaseToday - $expenseToday,
+            'yesterday' => $saleYesterday - $purchaseYesterday - $expenseYesterday,
+        ];
+    }
+
+    return response()->json([
+        'message' => 'Profit by hour fetched successfully!',
+        'status' => 200,
+        'data' => $data,
+    ]);
+}
+
+public function profiteByDay(Request $request)
+{
+    $user = Auth::user();
+    $proId = $user->profile_id;
+
+    $validate = $request->validate([
+        'year' => 'nullable|integer|min:2000',
+    ]);
+    $base = now();
+    $year = (int) ($validate['year'] ?? $base->year);
+    if ($year !== (int) $base->year) {
+        $daysInTargetMonth = \Carbon\Carbon::create($year, $base->month, 1)->daysInMonth;
+        $day = min($base->day, $daysInTargetMonth);
+        $base = \Carbon\Carbon::create($year, $base->month, $day, $base->hour, $base->minute, $base->second);
+    }
+
+    $startOfWeek = $base->copy()->startOfWeek();
+    $startOfLastWeek = $startOfWeek->copy()->subWeek();
+
+    $getDailySum = function ($table, $amountField, $dateField, $proId, $date) {
+        return DB::table($table)
+            ->join('users as u', $table . '.created_by', '=', 'u.id')
+            ->where($table . '.is_deleted', 0)
+            ->where('u.profile_id', $proId)
+            ->where($table . '.' . $dateField, $date->format('Y-m-d'))
+            ->sum($table . '.' . $amountField);
+    };
+
+    $data = [];
+    for ($i = 0; $i < 7; $i++) {
+        $currentDay = $startOfWeek->copy()->addDays($i);
+        $lastWeekDay = $startOfLastWeek->copy()->addDays($i);
+
+        $saleThis = $getDailySum('order_masters', 'payment', 'order_date', $proId, $currentDay);
+        $purchaseThis = $getDailySum('purchases', 'total_amount', 'purchase_date', $proId, $currentDay);
+        $expenseThis = $getDailySum('expense_masters', 'amount', 'expense_date', $proId, $currentDay);
+
+        $saleLast = $getDailySum('order_masters', 'payment', 'order_date', $proId, $lastWeekDay);
+        $purchaseLast = $getDailySum('purchases', 'total_amount', 'purchase_date', $proId, $lastWeekDay);
+        $expenseLast = $getDailySum('expense_masters', 'amount', 'expense_date', $proId, $lastWeekDay);
+
+        $data[] = [
+            'name' => 'Day ' . ($i + 1),
+            'thisWeek' => $saleThis - $purchaseThis - $expenseThis,
+            'Weekend' => $saleLast - $purchaseLast - $expenseLast,
+        ];
+    }
+
+    return response()->json([
+        'message' => 'Profit by day fetched successfully!',
+        'status' => 200,
+        'data' => $data,
+    ]);
+}
+
+public function profiteByWeek(Request $request)
+{
+    $user = Auth::user();
+    $proId = $user->profile_id;
+    $validate = $request->validate([
+        'year' => 'nullable|integer|min:2000',
+    ]);
+    $base = now();
+    $year = (int) ($validate['year'] ?? $base->year);
+    if ($year !== (int) $base->year) {
+        $daysInTargetMonth = \Carbon\Carbon::create($year, $base->month, 1)->daysInMonth;
+        $day = min($base->day, $daysInTargetMonth);
+        $base = \Carbon\Carbon::create($year, $base->month, $day, $base->hour, $base->minute, $base->second);
+    }
+    $month = $base->month;
+
+    $startDate = \Carbon\Carbon::create($year, $month, 1)->startOfMonth();
+    $endDate = \Carbon\Carbon::create($year, $month, 1)->endOfMonth();
+
+    $lastMonth = $month == 1 ? 12 : $month - 1;
+    $lastMonthYear = $month == 1 ? $year - 1 : $year;
+    $lastStartDate = \Carbon\Carbon::create($lastMonthYear, $lastMonth, 1)->startOfMonth();
+    $lastEndDate = \Carbon\Carbon::create($lastMonthYear, $lastMonth, 1)->endOfMonth();
+
+    $getWeeklyProfit = function ($proId, $start, $end) {
+        $weeks = [];
+        $current = $start->copy();
+        while ($current <= $end) {
+            $ws = $current->copy();
+            $we = $current->copy()->addDays(6);
+            if ($we > $end) $we = $end->copy();
+
+            $sale = DB::table('order_masters as om')
+                ->join('users as u', 'om.created_by', '=', 'u.id')
+                ->where('om.is_deleted', 0)
+                ->where('u.profile_id', $proId)
+                ->whereBetween('om.order_date', [$ws->format('Y-m-d'), $we->format('Y-m-d')])
+                ->sum('om.payment');
+
+            $purchase = DB::table('purchases as p')
+                ->join('users as u', 'p.created_by', '=', 'u.id')
+                ->where('p.is_deleted', 0)
+                ->where('u.profile_id', $proId)
+                ->whereBetween('p.purchase_date', [$ws->format('Y-m-d'), $we->format('Y-m-d')])
+                ->sum('p.total_amount');
+
+            $expense = DB::table('expense_masters as em')
+                ->join('users as u', 'em.created_by', '=', 'u.id')
+                ->where('em.is_deleted', 0)
+                ->where('u.profile_id', $proId)
+                ->whereBetween('em.expense_date', [$ws->format('Y-m-d'), $we->format('Y-m-d')])
+                ->sum('em.amount');
+
+            $weeks[] = $sale - $purchase - $expense;
+            $current = $we->copy()->addDay();
+        }
+        return $weeks;
+    };
+
+    $thisMonth = $getWeeklyProfit($proId, $startDate, $endDate);
+    $lastMonthData = $getWeeklyProfit($proId, $lastStartDate, $lastEndDate);
+
+    $weekCount = max(count($thisMonth), count($lastMonthData));
+    $data = [];
+    for ($i = 0; $i < $weekCount; $i++) {
+        $data[] = [
+            'name' => 'Week ' . ($i + 1),
+            'thisMonth' => $thisMonth[$i] ?? 0,
+            'lastMonth' => $lastMonthData[$i] ?? 0,
+        ];
+    }
+
+    return response()->json([
+        'message' => 'Profit by week fetched successfully!',
+        'status' => 200,
+        'data' => $data,
+    ]);
+}
+
+public function profiteByMonth(Request $request)
+{
+    $user = Auth::user();
+    $proId = $user->profile_id;
+
+    $validate = $request->validate([
+        'year' => 'nullable|integer|min:2000',
+    ]);
+    $now = now();
+    $currentYear = (int) ($validate['year'] ?? $now->year);
+    $lastYear = $currentYear - 1;
+    $currentMonth = $currentYear === (int) $now->year ? $now->month : 12;
+
+    $getMonthlySum = function ($table, $amountField, $dateField, $proId, $start, $end) {
+        return DB::table($table)
+            ->join('users as u', $table . '.created_by', '=', 'u.id')
+            ->where($table . '.is_deleted', 0)
+            ->where('u.profile_id', $proId)
+            ->whereBetween($table . '.' . $dateField, [$start->format('Y-m-d'), $end->format('Y-m-d')])
+            ->sum($table . '.' . $amountField);
+    };
+
+    $data = [];
+    for ($m = 1; $m <= $currentMonth; $m++) {
+        $startThis = \Carbon\Carbon::create($currentYear, $m, 1)->startOfMonth();
+        $endThis = $startThis->copy()->endOfMonth();
+        $startLast = \Carbon\Carbon::create($lastYear, $m, 1)->startOfMonth();
+        $endLast = $startLast->copy()->endOfMonth();
+
+        $saleThis = $getMonthlySum('order_masters', 'payment', 'order_date', $proId, $startThis, $endThis);
+        $purchaseThis = $getMonthlySum('purchases', 'total_amount', 'purchase_date', $proId, $startThis, $endThis);
+        $expenseThis = $getMonthlySum('expense_masters', 'amount', 'expense_date', $proId, $startThis, $endThis);
+
+        $saleLast = $getMonthlySum('order_masters', 'payment', 'order_date', $proId, $startLast, $endLast);
+        $purchaseLast = $getMonthlySum('purchases', 'total_amount', 'purchase_date', $proId, $startLast, $endLast);
+        $expenseLast = $getMonthlySum('expense_masters', 'amount', 'expense_date', $proId, $startLast, $endLast);
+
+        $data[] = [
+            'name' => $startThis->format('F'),
+            'thisYear' => $saleThis - $purchaseThis - $expenseThis,
+            'lastYear' => $saleLast - $purchaseLast - $expenseLast,
+        ];
+    }
+
+    return response()->json([
+        'message' => 'Profit by month fetched successfully!',
+        'status' => 200,
+        'data' => $data,
+    ]);
+}
 
 
 

@@ -194,7 +194,12 @@ class OrderItemController extends Controller
 
         // Fix image URLs
         foreach ($order_items as $item) {
-            $item->image = $this->itemService->getImage($item->item_id)[0]['image'];
+            $image = $this->itemService->getImage($item->item_id);
+            if(count($image)){
+                $item->image = $image[0]['image'];
+            }else{
+                $item->image = null;
+            }
         }
 
         return response()->json([

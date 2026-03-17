@@ -96,6 +96,10 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::get('/expense_by_month',[DashboardController::class, 'expenseMonth']);
     Route::get('/expense_by_day',[DashboardController::class, 'expenseDay']);
     Route::get('/expense_by_hour',[DashboardController::class, 'expenseHour']);
+    Route::get('/profite_by_week',[DashboardController::class, 'profiteByWeek']);
+    Route::get('/profite_by_month',[DashboardController::class, 'profiteByMonth']);
+    Route::get('/profite_by_day',[DashboardController::class, 'profiteByDay']);
+    Route::get('/profite_by_hour',[DashboardController::class, 'profiteByHour']);
     Route::put('exchange_rate/{id}', [ExchangeRateController::class, 'update']);
     Route::get('exchange_rate/{id}', [ExchangeRateController::class, 'show']);
     Route::post('/expense_report', [ReportController::class, 'expenseReport']);

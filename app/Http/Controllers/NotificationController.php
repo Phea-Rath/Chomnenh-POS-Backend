@@ -10,88 +10,56 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use App\Services\ItemService;
 use App\Services\AttributeService;
+use App\Services\DetailService;
 
 class NotificationController extends Controller
 {
     protected $attributeService;
     protected $itemService;
+    protected $detailService;
 
 
-    public function __construct(AttributeService $attributeService, ItemService $itemService)
+    public function __construct(AttributeService $attributeService, ItemService $itemService, DetailService $detailService)
     {
         $this->attributeService = $attributeService;
         $this->itemService = $itemService;
+        $this->detailService = $detailService;
     }
     public function index()
     {
         $user = Auth::user();
-        // $uid = $user->id;
         $proId = $user->profile_id;
-        $results = DB::table('stock_details')
-            ->join('stock_masters', 'stock_details.stock_id', '=', 'stock_masters.stock_id')
-            ->join('warehouses', 'stock_masters.warehouse_id', '=', 'warehouses.warehouse_id')
-            ->join('items', 'stock_details.item_id', '=', 'items.item_id')
-            ->join('categories', 'items.category_id', '=', 'categories.category_id')
-            ->join('users', 'stock_masters.stock_created_by', '=', 'users.id')
-            ->join('profiles', 'users.profile_id', '=', 'profiles.id')
-            ->select(
-                'stock_details.item_id',
-                'items.item_code',
-                'items.item_name',
-                'items.item_price',
-                'categories.category_name',
-                'categories.category_id',
-                // 'stock_details.expire_date',
-                DB::raw('0 as images'),
-                DB::raw('
-            SUM(CASE WHEN stock_masters.stock_type_id = 1 THEN stock_details.quantity ELSE 0 END)
-            + SUM(CASE WHEN stock_masters.stock_type_id = 2 THEN stock_details.quantity ELSE 0 END)
-            - SUM(CASE WHEN stock_masters.stock_type_id = 3 THEN stock_details.quantity ELSE 0 END)
-            - SUM(CASE WHEN stock_masters.stock_type_id = 4 THEN stock_details.quantity ELSE 0 END)
-            - SUM(CASE WHEN stock_masters.stock_type_id = 5 THEN stock_details.quantity ELSE 0 END)
-            AS in_stock ')
-            )->where('warehouses.status', 'stock')
-            ->where('stock_details.is_deleted', 0)
-            ->where('items.is_deleted', 0)
-            ->where('stock_masters.is_deleted', 0)
-            ->where('profiles.id', $proId)
-            // ->whereDate('stock_details.expire_date', '>=', Carbon::now()->toDateString())
-            ->whereDate('stock_details.expire_date', '<=', Carbon::now()->toDateString())
-            ->groupBy(
-                'stock_details.item_id',
-                'items.item_code',
-                'items.item_name',
-                'items.item_price',
-                'categories.category_name',
-                'categories.category_id',
-                // 'stock_details.expire_date',
-            )
-            ->orderBy('items.item_id')->get();
 
-        $newData = [];
-
-        foreach ($results as $item) {
-            $totalOrdered = DB::table('order_items as oi')
-            ->join('order_masters as om', 'oi.order_id', '=', 'om.order_id')
-            ->join('users as u', 'om.created_by', '=', 'u.id')
+        $results = DB::table('stock_details as sd')
+            ->join('stock_masters as sm', 'sd.stock_id', '=', 'sm.stock_id')
+            ->join('warehouses as w', 'sm.warehouse_id', '=', 'w.warehouse_id')
+            ->join('items as i', 'sd.item_id', '=', 'i.item_id')
+            ->join('categories as c', 'i.category_id', '=', 'c.category_id')
+            ->join('users as u', 'sm.stock_created_by', '=', 'u.id')
             ->join('profiles as p', 'u.profile_id', '=', 'p.id')
+            ->where('sm.warehouse_id', 1)
+            ->where('w.status', 'stock')
+            ->where('sd.is_deleted', 0)
+            ->where('i.is_deleted', 0)
+            ->where('sm.is_deleted', 0)
             ->where('p.id', $proId)
-            ->where('oi.item_id', $item->item_id)
-            ->where('oi.is_deleted', 0)
-            ->where('om.is_deleted', 0)
-            ->whereIn('om.status', [4,5,6])
-            ->groupBy('oi.item_id')
-            ->sum('oi.quantity');
-            if ($item->in_stock <= 0) {
-                continue; // Skip items with in_stock less than or equal to 0
-            }
+            ->whereDate('sd.expire_date', '<=', Carbon::now()->toDateString())
+            ->groupBy('sd.item_id', 'i.item_name', 'c.category_name')
+            ->select(
+                'sd.item_id',
+                'i.item_name',
+                'c.category_name',
+                DB::raw('SUM(sd.quantity) as wasted_qty'),
+                DB::raw('MAX(sd.expire_date) as last_expire_date')
+            )
+            ->orderBy('last_expire_date', 'desc')
+            ->get();
 
-            $item->images = $this->itemService->getImage($item->item_id);
-            $item->item_image = $item->images[0]['image'];
-            $newData[] = $item;
-            $item->in_stock = $item->in_stock - $totalOrdered;
-        }
-        return response()->json(['message' => 'StockMaster show successfully!', 'status' => 200, 'data' => $newData,], 200);
+        return response()->json([
+            'message' => 'Wasted items retrieved successfully!',
+            'status' => 200,
+            'data' => $results
+        ], 200);
     }
 
 
