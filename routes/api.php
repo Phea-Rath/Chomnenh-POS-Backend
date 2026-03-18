@@ -87,19 +87,12 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     //C
     Route::resource('categorys', CategoryController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
     Route::post('/customers/{id}', [\App\Http\Controllers\CustomerController::class, 'update']);
+    Route::post('/customer/image/{id}', [\App\Http\Controllers\CustomerController::class, 'updateImage']);
     Route::resource('customers', \App\Http\Controllers\CustomerController::class)->only(['index', 'show', 'store', 'destroy']);
     Route::resource('colors', ColorController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
     Route::resource('delivers', DeliverController::class)->only(['index', 'show', 'store', 'destroy']);
     Route::post('delivers/{id}', [DeliverController::class,'update']);
     //E
-    Route::get('/expense_by_week',[DashboardController::class, 'expenseWeek']);
-    Route::get('/expense_by_month',[DashboardController::class, 'expenseMonth']);
-    Route::get('/expense_by_day',[DashboardController::class, 'expenseDay']);
-    Route::get('/expense_by_hour',[DashboardController::class, 'expenseHour']);
-    Route::get('/profite_by_week',[DashboardController::class, 'profiteByWeek']);
-    Route::get('/profite_by_month',[DashboardController::class, 'profiteByMonth']);
-    Route::get('/profite_by_day',[DashboardController::class, 'profiteByDay']);
-    Route::get('/profite_by_hour',[DashboardController::class, 'profiteByHour']);
     Route::put('exchange_rate/{id}', [ExchangeRateController::class, 'update']);
     Route::get('exchange_rate/{id}', [ExchangeRateController::class, 'show']);
     Route::post('/expense_report', [ReportController::class, 'expenseReport']);
@@ -111,6 +104,7 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::get('/item_by_stock', [orderPageController::class, 'stockByItem']);
     Route::get('/item_in_stock', [orderPageController::class, 'showInStockByItem']);
     Route::resource('items', ItemController::class)->only(['index', 'show', 'store', 'destroy']);
+    Route::post('/items/image/{id}', [ItemController::class, 'updateImage']);
     Route::post('/items/{id}', [ItemController::class, 'update']);
     Route::post('/import_items', [ItemController::class, 'importItem']);
     Route::get('/item-list', [ItemController::class, 'indexMobile']);
@@ -169,10 +163,6 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::put('/purchase_confirm/{id}', [PurchaseController::class, 'purchaseConfirm']);
     Route::put('/purchase_confirm_raw/{id}', [PurchaseController::class, 'purchaseConfirmRaw']);
     Route::put('/purchase_payment/{id}', [PurchaseController::class, 'purchasePayment']);
-    Route::get('/purchase_by_week',[DashboardController::class, 'purchaseByWeek']);
-    Route::get('/purchase_by_month',[DashboardController::class, 'purchaseByMonth']);
-    Route::get('/purchase_by_day',[DashboardController::class, 'purchaseByDay']);
-    Route::get('/purchase_by_hour',[DashboardController::class, 'purchaseByHour']);
     Route::resource('permission', PermissionController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
     Route::resource('production', ProductionController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
     Route::put('/permission-remove/{user_id}', [PermissionController::class, 'destroy']);
@@ -211,6 +201,7 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::get('/popular_stock', [StockMasterController::class, 'popularStockIn']);
     Route::get('/quan_stock_by_attr', [StockDetailController::class, 'quantityInStockByItemId']);
     Route::post('/suppliers/{id}', [SupplierController::class, 'update']);
+    Route::post('/supplier/image/{id}', [SupplierController::class, 'updateImage']);
     Route::get('/stock-list', [StockMasterController::class, 'indexMobile']);
     Route::get('/stock-raw-list', [StockMasterController::class, 'indexRawMobile']);
     Route::get('/stock-by-id/{id}', [StockMasterController::class, 'showMobile']);
@@ -219,10 +210,7 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     //report
     Route::post('/sale_report', [ReportController::class, 'saleReport']);
     Route::post('/sale_report_item', [ReportController::class, 'saleReportByItem']);
-    Route::get('/sale_by_week',[DashboardController::class, 'saleByWeek']);
-    Route::get('/sale_by_month',[DashboardController::class, 'saleByMonth']);
-    Route::get('/sale_by_day',[DashboardController::class, 'saleByDay']);
-    Route::get('/sale_by_hour',[DashboardController::class, 'saleByHour']);
+    Route::post('/dashboard_filter', [DashboardController::class, 'filterDashboard']);
 
     //Q
     Route::put('/quotation_approved/{id}',[QuotationController::class, 'approved']);

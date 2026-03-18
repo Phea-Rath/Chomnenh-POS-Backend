@@ -3,1409 +3,476 @@
 namespace App\Http\Controllers;
 
 use Auth;
+use Carbon\Carbon;
 use DB;
 use Illuminate\Http\Request;
 
 class DashboardController extends Controller
 {
-    //
+    private const SALE_STATUSES = [4, 5, 6];
+
     public function showCard(Request $request)
-{
-    $user = Auth::user();
-    $uid = $user->id;
-    $proId = $user->profile_id;
-    $validate = $request->validate([
-        'year' => 'nullable|integer|min:2000',
-    ]);
-    $now = now();
-    $currentYear = (int) ($validate['year'] ?? $now->year);
-    $currentMonth = $currentYear === (int) $now->year ? $now->month : 12;
+    {
+        $filters = $this->dashboardFilters($request);
+        $year = (int) ($filters['year'] ?? now()->year);
 
-    /* ================= TOTAL STOCK ================= */
-    $stockData = DB::table('stock_details as sd')
-        ->join('stock_masters as sm', 'sd.stock_id', '=', 'sm.stock_id')
-        ->join('users as u', 'sm.stock_created_by', '=', 'u.id')
-        ->join('profiles as p', 'u.profile_id', '=', 'p.id')
-        ->where('sd.is_deleted', 0)
-        ->where('p.id', $proId)
-        // ->where('sm.stock_created_by', $uid)
-        ->whereYear('sm.stock_date', $currentYear)
-        ->selectRaw("
-            COALESCE(SUM(CASE WHEN sm.stock_type_id = 1 THEN sd.quantity END),0) AS return_total,
-            COALESCE(SUM(CASE WHEN sm.stock_type_id = 2 THEN sd.quantity END),0) AS in_total,
-            COALESCE(SUM(CASE WHEN sm.stock_type_id = 3 THEN sd.quantity END),0) AS out_total,
-            COALESCE(SUM(CASE WHEN sm.stock_type_id = 4 THEN sd.quantity END),0) AS waste_total
-        ")
-        ->first();
+        if ($this->hasCustomDateRange($filters)) {
+            [$startDate, $endDate] = $this->resolveCustomRange($filters);
+            $months = $this->buildMonthSeries($startDate, $endDate, function (Carbon $rangeStart, Carbon $rangeEnd) use ($filters) {
+                $stock = $this->stockTotals($filters, $rangeStart, $rangeEnd);
 
-    /* ================= TOTAL SALES (ORDERS) ================= */
-    $saleTotal = DB::table('order_items as oi')
-        ->join('order_masters as om', 'oi.order_id', '=', 'om.order_id')
-        ->join('users as u', 'om.created_by', '=', 'u.id')
-        ->join('profiles as p', 'u.profile_id', '=', 'p.id')
-        ->where('p.id', $proId)
-        ->where('oi.is_deleted', 0)
-        ->where('om.is_deleted', 0)
-        ->whereIn('om.status', [4,5,6])
-        ->whereYear('om.order_date', $currentYear)
-        ->sum('oi.quantity');
+                return [
+                    'return' => $stock['return_total'],
+                    'in' => $stock['in_total'],
+                    'out' => $stock['out_total'],
+                    'sale' => $this->saleQuantitySum($filters, $rangeStart, $rangeEnd),
+                    'waste' => $stock['waste_total'],
+                ];
+            });
+        } else {
+            $startDate = Carbon::create($year, 1, 1)->startOfDay();
+            $endDate = Carbon::create($year, 12, 31)->endOfDay();
+            $currentMonth = $year === (int) now()->year ? now()->month : 12;
+            $months = [];
 
-    /* ================= MONTHLY STOCK ================= */
-    $monthlyStock = DB::table('stock_details as sd')
-        ->join('stock_masters as sm', 'sd.stock_id', '=', 'sm.stock_id')
-        ->join('users as u', 'sm.stock_created_by', '=', 'u.id')
-        ->join('profiles as p', 'u.profile_id', '=', 'p.id')
-        ->where('sd.is_deleted', 0)
-        ->where('p.id', $proId)
-        // ->where('sm.stock_created_by', $uid)
-        ->whereYear('sm.stock_date', $currentYear)
-        ->selectRaw("
-            MONTH(sm.stock_date) AS month,
-            SUM(CASE WHEN sm.stock_type_id = 1 THEN sd.quantity ELSE 0 END) AS return_total,
-            SUM(CASE WHEN sm.stock_type_id = 2 THEN sd.quantity ELSE 0 END) AS in_total,
-            SUM(CASE WHEN sm.stock_type_id = 3 THEN sd.quantity ELSE 0 END) AS out_total,
-            SUM(CASE WHEN sm.stock_type_id = 4 THEN sd.quantity ELSE 0 END) AS waste_total
-        ")
-        ->groupBy('month')
-        ->get();
+            for ($month = 1; $month <= $currentMonth; $month++) {
+                $rangeStart = Carbon::create($year, $month, 1)->startOfMonth();
+                $rangeEnd = $rangeStart->copy()->endOfMonth();
+                $stock = $this->stockTotals($filters, $rangeStart, $rangeEnd);
 
-    /* ================= MONTHLY SALES ================= */
-    $monthlySales = DB::table('order_items as oi')
-        ->join('order_masters as om', 'oi.order_id', '=', 'om.order_id')
-        ->join('users as u', 'om.created_by', '=', 'u.id')
-        ->join('profiles as p', 'u.profile_id', '=', 'p.id')
-        ->where('oi.is_deleted', 0)
-        ->where('om.is_deleted', 0)
-        ->whereIn('om.status', [4,5,6])
-        ->where('p.id', $proId)
-        ->whereYear('om.order_date', $currentYear)
-        ->selectRaw("
-            MONTH(om.order_date) AS month,
-            SUM(oi.quantity) AS sale_total
-        ")
-        ->groupBy('month')
-        ->get()
-        ->keyBy('month');
+                $months[] = [
+                    'name' => $rangeStart->format('M'),
+                    'return' => $stock['return_total'],
+                    'in' => $stock['in_total'],
+                    'out' => $stock['out_total'],
+                    'sale' => $this->saleQuantitySum($filters, $rangeStart, $rangeEnd),
+                    'waste' => $stock['waste_total'],
+                ];
+            }
+        }
 
-    /* ================= BUILD MONTH ARRAY ================= */
-    $months = [];
-    for ($m = 1; $m <= $currentMonth; $m++) {
-        $stock = $monthlyStock->firstWhere('month', $m);
-        $sale  = $monthlySales[$m]->sale_total ?? 0;
+        $stockData = $this->stockTotals($filters, $startDate, $endDate);
+        $saleTotal = $this->saleQuantitySum($filters, $startDate, $endDate);
 
-        $months[] = [
-            'name'   => date('M', mktime(0, 0, 0, $m, 1)),
-            'return' => ($stock->return_total ?? 0) + 0,
-            'in'     => ($stock->in_total ?? 0)  + 0,
-            'out'    => ($stock->out_total ?? 0) + 0,
-            'sale'   => $sale + 0,
-            'waste'  => ($stock->waste_total ?? 0) + 0,
-        ];
+        return response()->json([
+            'status' => 200,
+            'message' => 'Dashboard data fetched successfully',
+            'data' => [
+                'stock_return' => $stockData['return_total'],
+                'stock_in' => $stockData['in_total'],
+                'stock_out' => $stockData['out_total'],
+                'stock_sale' => $saleTotal,
+                'stock_waste' => $stockData['waste_total'],
+                'stock_total' => $stockData['return_total'] + $stockData['in_total'],
+                'month' => $months,
+            ],
+        ]);
     }
-
-    return response()->json([
-        'status' => 200,
-        'message' => 'Dashboard data fetched successfully',
-        'data' => [
-            'stock_return' => $stockData->return_total + 0,
-            'stock_in'     => $stockData->in_total + 0,
-            'stock_out'    => $stockData->out_total + 0,
-            'stock_sale'   => $saleTotal + 0,
-            'stock_waste'  => $stockData->waste_total + 0,
-            'stock_total'  => $stockData->return_total + $stockData->in_total,
-            'month'        => $months
-        ]
-    ]);
-}
-
 
     public function showGraphic(Request $request)
     {
-        $user = Auth::user();
-        $uid = $user->id;
-        $proId = $user->profile_id;
+        $filters = $this->dashboardFilters($request);
 
-        // Validate month/year as integers
-        $validate = $request->validate([
-            'month' => 'nullable|integer|min:1|max:12',
-            'year' => 'nullable|integer|min:2000',
-        ]);
+        if ($this->hasCustomDateRange($filters)) {
+            [$startDate, $endDate] = $this->resolveCustomRange($filters);
+            $months = $this->buildMonthSeries($startDate, $endDate, function (Carbon $rangeStart, Carbon $rangeEnd) use ($filters) {
+                $stock = $this->stockTotals($filters, $rangeStart, $rangeEnd, true);
 
-        $month = $validate['month'] ?? now()->month;
-        $year = $validate['year'] ?? now()->year;
+                return [
+                    'return' => $stock['return_total'],
+                    'in' => $stock['in_total'],
+                    'out' => $stock['out_total'],
+                    'sale' => $stock['sale_total'],
+                    'waste' => $stock['waste_total'],
+                ];
+            });
+        } else {
+            $month = (int) ($filters['month'] ?? now()->month);
+            $year = (int) ($filters['year'] ?? now()->year);
+            $startDate = Carbon::create($year, $month, 1)->startOfMonth();
+            $endDate = $startDate->copy()->endOfMonth();
+            $months = [];
 
-        // Build start and end date for selected month
-        $startDate = \Carbon\Carbon::create($year, $month, 1)->startOfMonth();
-        $endDate   = \Carbon\Carbon::create($year, $month, 1)->endOfMonth();
+            for ($currentMonth = 1; $currentMonth <= $month; $currentMonth++) {
+                $rangeStart = Carbon::create($year, $currentMonth, 1)->startOfMonth();
+                $rangeEnd = $rangeStart->copy()->endOfMonth();
+                $stock = $this->stockTotals($filters, $rangeStart, $rangeEnd, true);
 
-        // --- Totals ---
-        $stockData = DB::table('stock_details as sd')
-            ->join('stock_masters as sm', 'sd.stock_id', '=', 'sm.stock_id')
-            ->join('users as u', 'sm.stock_created_by', '=', 'u.id')
-            ->join('profiles as p', 'u.profile_id', '=', 'p.id')
-            ->where('sd.is_deleted', 0)
-            ->where('p.id', $proId)
-            ->whereBetween('sm.stock_date', [$startDate, $endDate])
-            ->selectRaw("
-            SUM(CASE WHEN sm.stock_type_id = 1 THEN sd.quantity ELSE 0 END) AS return_total,
-            SUM(CASE WHEN sm.stock_type_id = 2 THEN sd.quantity ELSE 0 END) AS in_total,
-            SUM(CASE WHEN sm.stock_type_id = 3 THEN sd.quantity ELSE 0 END) AS out_total,
-            SUM(CASE WHEN sm.stock_type_id = 5 THEN sd.quantity ELSE 0 END) AS sale_total,
-            SUM(CASE WHEN sm.stock_type_id = 4 THEN sd.quantity ELSE 0 END) AS waste_total
-        ")
-            ->first();
-
-        if (!$stockData) {
-            return response()->json([
-                'message' => 'expense data get fail!',
-                'status' => 404
-            ]);
+                $months[] = [
+                    'name' => $rangeStart->format('M'),
+                    'return' => $stock['return_total'],
+                    'in' => $stock['in_total'],
+                    'out' => $stock['out_total'],
+                    'sale' => $stock['sale_total'],
+                    'waste' => $stock['waste_total'],
+                ];
+            }
         }
 
-        // --- Monthly breakdown (from Jan to selected month) ---
-        $monthlyData = DB::table('stock_details as sd')
-            ->join('stock_masters as sm', 'sd.stock_id', '=', 'sm.stock_id')
-            ->join('users as u', 'sm.stock_created_by', '=', 'u.id')
-            ->join('profiles as p', 'u.profile_id', '=', 'p.id')
-            ->where('sd.is_deleted', 0)
-            ->where('p.id', $proId)
-            ->whereYear('sm.stock_date', $year)
-            ->whereMonth('sm.stock_date', '<=', $month)
-            ->selectRaw("
-            EXTRACT(MONTH FROM sm.stock_date) as month,
-            SUM(CASE WHEN sm.stock_type_id = 1 THEN sd.quantity ELSE 0 END) AS return_total,
-            SUM(CASE WHEN sm.stock_type_id = 2 THEN sd.quantity ELSE 0 END) AS in_total,
-            SUM(CASE WHEN sm.stock_type_id = 3 THEN sd.quantity ELSE 0 END) AS out_total,
-            SUM(CASE WHEN sm.stock_type_id = 5 THEN sd.quantity ELSE 0 END) AS sale_total,
-            SUM(CASE WHEN sm.stock_type_id = 4 THEN sd.quantity ELSE 0 END) AS waste_total
-        ")
-            ->groupBy('month')
-            ->orderBy('month')
-            ->get();
-
-        // Build list from Jan -> selected month
-        $months = [];
-        for ($m = 1; $m <= $month; $m++) {
-            $found = $monthlyData->firstWhere('month', $m);
-            $months[] = [
-                'name' => date('M', mktime(0, 0, 0, $m, 1)),
-                'return' => $found->return_total ?? 0,
-                'in' => $found->in_total ?? 0,
-                'out' => $found->out_total ?? 0,
-                'sale' => $found->sale_total ?? 0,
-                'waste' => $found->waste_total ?? 0,
-            ];
-        }
+        $stockData = $this->stockTotals($filters, $startDate, $endDate, true);
 
         return response()->json([
             'message' => 'expense data geted successfully!',
             'status' => 200,
             'data' => [
-                'stock_return' => $stockData->return_total ?? 0,
-                'stock_in' => $stockData->in_total ?? 0,
-                'stock_out' => $stockData->out_total ?? 0,
-                'stock_sale' => $stockData->sale_total ?? 0,
-                'stock_waste' => $stockData->waste_total ?? 0,
-                'stock_total' => ($stockData->return_total ?? 0) + ($stockData->in_total ?? 0),
-                'month' => $months
-            ]
+                'stock_return' => $stockData['return_total'],
+                'stock_in' => $stockData['in_total'],
+                'stock_out' => $stockData['out_total'],
+                'stock_sale' => $stockData['sale_total'],
+                'stock_waste' => $stockData['waste_total'],
+                'stock_total' => $stockData['return_total'] + $stockData['in_total'],
+                'month' => $months,
+            ],
         ]);
     }
 
-    public function saleByWeek(Request $request)
-{
-    $user = Auth::user();
-    $proId = $user->profile_id;
-    $validate = $request->validate([
-        'year' => 'nullable|integer|min:2000',
-    ]);
-    $base = now();
-    $year = (int) ($validate['year'] ?? $base->year);
-    if ($year !== (int) $base->year) {
-        $daysInTargetMonth = \Carbon\Carbon::create($year, $base->month, 1)->daysInMonth;
-        $day = min($base->day, $daysInTargetMonth);
-        $base = \Carbon\Carbon::create($year, $base->month, $day, $base->hour, $base->minute, $base->second);
-    }
-    $month = $base->month;
-
-    // Current and last month date ranges
-    $startDate = \Carbon\Carbon::create($year, $month, 1)->startOfMonth();
-    $endDate = \Carbon\Carbon::create($year, $month, 1)->endOfMonth();
-
-    $lastMonth = $month == 1 ? 12 : $month - 1;
-    $lastMonthYear = $month == 1 ? $year - 1 : $year;
-
-    $lastStartDate = \Carbon\Carbon::create($lastMonthYear, $lastMonth, 1)->startOfMonth();
-    $lastEndDate = \Carbon\Carbon::create($lastMonthYear, $lastMonth, 1)->endOfMonth();
-
-    // Helper: generate weekly ranges between two dates
-    $getWeekRanges = function ($start, $end) {
-        $ranges = [];
-        $current = $start->copy();
-        while ($current <= $end) {
-            $weekStart = $current->copy();
-            $weekEnd = $current->copy()->addDays(6);
-            if ($weekEnd > $end) $weekEnd = $end->copy();
-            $ranges[] = [$weekStart, $weekEnd];
-            $current = $weekEnd->copy()->addDay();
-        }
-        return $ranges;
-    };
-
-    // Helper: get weekly sums (quantity or price)
-    $getWeeklySum = function ($proId, $start, $end, $usePrice = false) use ($getWeekRanges) {
-        $weeks = [];
-        $weekRanges = $getWeekRanges($start, $end);
-
-        foreach ($weekRanges as [$ws, $we]) {
-            $query = DB::table('order_items as oi')
-                ->join('order_masters as om', 'oi.order_id', '=', 'om.order_id')
-                ->join('users as u', 'om.created_by', '=', 'u.id')
-                ->where('oi.is_deleted', 0)
-                ->where('u.profile_id', $proId)
-                ->whereBetween('om.order_date', [$ws->format('Y-m-d'), $we->format('Y-m-d')]);
-
-            if ($usePrice) {
-                $query->select(DB::raw("SUM(om.payment) as total"));
-                $sum = $query->value('total') ?? 0;
-            } else {
-                $query->select(DB::raw("SUM(oi.quantity) as total"));
-                $sum = $query->value('total') ?? 0;
-            }
-
-            $weeks[] = $sum;
-        }
-
-        return $weeks;
-    };
-
-    // Fetch weekly data
-    $salesThisMonth = $getWeeklySum($proId, $startDate, $endDate, false); // Sales quantity
-    $salesThisMonthPrice = $getWeeklySum($proId, $startDate, $endDate, true); // Sales price
-    $salesLastMonth = $getWeeklySum($proId, $lastStartDate, $lastEndDate, false);
-    $salesLastMonthPrice = $getWeeklySum($proId, $lastStartDate, $lastEndDate, true);
-
-    // Build response arrays
-    $weekCount = max(
-        count($salesThisMonth),
-        count($salesLastMonth),
-    );
-
-    $sales = [];
-
-    for ($i = 0; $i < $weekCount; $i++) {
-        $sales[] = [
-            'name' => 'Week ' . ($i + 1),
-            'thisMonth' => $salesThisMonth[$i] ?? 0,
-            'thisMonthPrice' => $salesThisMonthPrice[$i] ?? 0,
-            'lastMonth' => $salesLastMonth[$i] ?? 0,
-            'lastMonthPrice' => $salesLastMonthPrice[$i] ?? 0,
-        ];
-    }
-
-    return response()->json([
-        'message' => 'expense data fetched successfully!',
-        'status' => 200,
-        'data' => $sales,
-    ]);
-}
-    public function purchaseByWeek(Request $request)
-{
-    $user = Auth::user();
-    $proId = $user->profile_id;
-    $validate = $request->validate([
-        'year' => 'nullable|integer|min:2000',
-    ]);
-    $base = now();
-    $year = (int) ($validate['year'] ?? $base->year);
-    if ($year !== (int) $base->year) {
-        $daysInTargetMonth = \Carbon\Carbon::create($year, $base->month, 1)->daysInMonth;
-        $day = min($base->day, $daysInTargetMonth);
-        $base = \Carbon\Carbon::create($year, $base->month, $day, $base->hour, $base->minute, $base->second);
-    }
-    $month = $base->month;
-
-    // Current and last month date ranges
-    $startDate = \Carbon\Carbon::create($year, $month, 1)->startOfMonth();
-    $endDate = \Carbon\Carbon::create($year, $month, 1)->endOfMonth();
-
-    $lastMonth = $month == 1 ? 12 : $month - 1;
-    $lastMonthYear = $month == 1 ? $year - 1 : $year;
-
-    $lastStartDate = \Carbon\Carbon::create($lastMonthYear, $lastMonth, 1)->startOfMonth();
-    $lastEndDate = \Carbon\Carbon::create($lastMonthYear, $lastMonth, 1)->endOfMonth();
-
-    // Helper: generate weekly ranges between two dates
-    $getWeekRanges = function ($start, $end) {
-        $ranges = [];
-        $current = $start->copy();
-        while ($current <= $end) {
-            $weekStart = $current->copy();
-            $weekEnd = $current->copy()->addDays(6);
-            if ($weekEnd > $end) $weekEnd = $end->copy();
-            $ranges[] = [$weekStart, $weekEnd];
-            $current = $weekEnd->copy()->addDay();
-        }
-        return $ranges;
-    };
-
-    // Helper: get weekly sums (quantity or price)
-    $getWeeklySum = function ($proId, $start, $end, $usePrice = false) use ($getWeekRanges) {
-        $weeks = [];
-        $weekRanges = $getWeekRanges($start, $end);
-
-        foreach ($weekRanges as [$ws, $we]) {
-            $query = DB::table('purchase_details as pd')
-                ->join('purchases as p', 'pd.purchase_id', '=', 'p.purchase_id')
-                ->join('users as u', 'p.created_by', '=', 'u.id')
-                ->where('pd.is_deleted', 0)
-                ->where('u.profile_id', $proId)
-                ->whereBetween('p.purchase_date', [$ws->format('Y-m-d'), $we->format('Y-m-d')]);
-
-            if ($usePrice) {
-                $query->select(DB::raw("SUM(p.total_amount) as total"));
-                $sum = $query->value('total') ?? 0;
-            } else {
-                $query->select(DB::raw("SUM(pd.quantity) as total"));
-                $sum = $query->value('total') ?? 0;
-            }
-
-            $weeks[] = $sum;
-        }
-
-        return $weeks;
-    };
-
-    $stockThisMonth = $getWeeklySum($proId, $startDate, $endDate, false); // Stock quantity
-    $stockThisMonthPrice = $getWeeklySum($proId, $startDate, $endDate, true);
-    $stockLastMonth = $getWeeklySum($proId, $lastStartDate, $lastEndDate, false);
-    $stockLastMonthPrice = $getWeeklySum($proId, $lastStartDate, $lastEndDate, true);
-
-    // Build response arrays
-    $weekCount = max(
-        count($stockThisMonth),
-        count($stockLastMonth)
-    );
-
-    $stock = [];
-
-    for ($i = 0; $i < $weekCount; $i++) {
-        $stock[] = [
-            'name' => 'Week ' . ($i + 1),
-            'thisMonth' => $stockThisMonth[$i] ?? 0,
-            'thisMonthPrice' => $stockThisMonthPrice[$i] ?? 0,
-            'lastMonth' => $stockLastMonth[$i] ?? 0,
-            'lastMonthPrice' => $stockLastMonthPrice[$i] ?? 0,
-        ];
-    }
-
-    return response()->json([
-        'message' => 'expense data fetched successfully!',
-        'status' => 200,
-        'data' => $stock
-    ]);
-}
-
-
-    public function saleByMonth(Request $request)
-{
-    $user = Auth::user();
-    $proId = $user->profile_id;
-
-    $validate = $request->validate([
-        'year' => 'nullable|integer|min:2000',
-    ]);
-    $now = now();
-    $currentYear = (int) ($validate['year'] ?? $now->year);
-    $lastYear = $currentYear - 1;
-    $currentMonth = $currentYear === (int) $now->year ? $now->month : 12;
-
-    $data = [];
-
-    // Helper function to get monthly total (quantity or price)
-    $getMonthlySum = function ($proId, $startDate, $endDate, $usePrice = false) {
-         $query = DB::table('order_items as oi')
-                ->join('order_masters as om', 'oi.order_id', '=', 'om.order_id')
-                ->join('users as u', 'om.created_by', '=', 'u.id')
-                ->where('oi.is_deleted', 0)
-                ->where('u.profile_id', $proId)
-                ->whereBetween('om.order_date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')]);
-
-            if ($usePrice) {
-                $query->select(DB::raw("SUM(om.payment) as total"));
-                $sum = $query->value('total') ?? 0;
-            } else {
-                $query->select(DB::raw("SUM(oi.quantity) as total"));
-                $sum = $query->value('total') ?? 0;
-            }
-            return $sum;
-    };
-
-    // Loop from January to current month
-    for ($month = 1; $month <= $currentMonth; $month++) {
-        $startThisYear = \Carbon\Carbon::create($currentYear, $month, 1)->startOfMonth();
-        $endThisYear = \Carbon\Carbon::create($currentYear, $month, 1)->endOfMonth();
-        $startLastYear = \Carbon\Carbon::create($lastYear, $month, 1)->startOfMonth();
-        $endLastYear = \Carbon\Carbon::create($lastYear, $month, 1)->endOfMonth();
-
-        // Get sales and stock data
-        $salesThisYearQty = $getMonthlySum($proId, $startThisYear, $endThisYear, false);
-        $salesThisYearPrice = $getMonthlySum($proId, $startThisYear, $endThisYear, true);
-        $salesLastYearQty = $getMonthlySum($proId, $startLastYear, $endLastYear, false);
-        $salesLastYearPrice = $getMonthlySum($proId, $startLastYear, $endLastYear, true);
-
-        $monthName = $startThisYear->format('F');
-
-        $data[] = [
-                'name' => $monthName,
-                'thisYearQty' => $salesThisYearQty,
-                'thisYearPrice' => $salesThisYearPrice,
-                'lastYearQty' => $salesLastYearQty,
-                'lastYearPrice' => $salesLastYearPrice,
-        ];
-    }
-
-    return response()->json([
-        'message' => 'expense masters fetched successfully!',
-        'status' => 200,
-        'data' => $data
-    ]);
-}
-    public function purchaseByMonth(Request $request)
-{
-    $user = Auth::user();
-    $proId = $user->profile_id;
-
-    $validate = $request->validate([
-        'year' => 'nullable|integer|min:2000',
-    ]);
-    $now = now();
-    $currentYear = (int) ($validate['year'] ?? $now->year);
-    $lastYear = $currentYear - 1;
-    $currentMonth = $currentYear === (int) $now->year ? $now->month : 12;
-
-    $data = [];
-
-    // Helper function to get monthly total (quantity or price)
-    $getMonthlySum = function ($proId, $startDate, $endDate, $usePrice = false) {
-         $query = DB::table('purchase_details as pd')
-                ->join('purchases as p', 'pd.purchase_id', '=', 'p.purchase_id')
-                ->join('users as u', 'p.created_by', '=', 'u.id')
-                ->where('pd.is_deleted', 0)
-                ->where('u.profile_id', $proId)
-                ->whereBetween('p.purchase_date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')]);
-
-            if ($usePrice) {
-                $query->select(DB::raw("SUM(p.total_amount) as total"));
-                $sum = $query->value('total') ?? 0;
-            } else {
-                $query->select(DB::raw("SUM(pd.quantity) as total"));
-                $sum = $query->value('total') ?? 0;
-            }
-            return $sum;
-    };
-
-    // Loop from January to current month
-    for ($month = 1; $month <= $currentMonth; $month++) {
-        $startThisYear = \Carbon\Carbon::create($currentYear, $month, 1)->startOfMonth();
-        $endThisYear = \Carbon\Carbon::create($currentYear, $month, 1)->endOfMonth();
-        $startLastYear = \Carbon\Carbon::create($lastYear, $month, 1)->startOfMonth();
-        $endLastYear = \Carbon\Carbon::create($lastYear, $month, 1)->endOfMonth();
-
-        // Get sales and stock data
-
-        $stockThisYearQty = $getMonthlySum($proId, $startThisYear, $endThisYear, false);
-        $stockThisYearPrice = $getMonthlySum($proId, $startThisYear, $endThisYear, true);
-        $stockLastYearQty = $getMonthlySum($proId, $startLastYear, $endLastYear, false);
-        $stockLastYearPrice = $getMonthlySum($proId, $startLastYear, $endLastYear, true);
-
-        $monthName = $startThisYear->format('F');
-
-        $data[] = [
-                'name' => $monthName,
-                'thisYearQty' => $stockThisYearQty,
-                'thisYearPrice' => $stockThisYearPrice,
-                'lastYearQty' => $stockLastYearQty,
-                'lastYearPrice' => $stockLastYearPrice,
-        ];
-    }
-
-    return response()->json([
-        'message' => 'expense masters fetched successfully!',
-        'status' => 200,
-        'data' => $data
-    ]);
-}
-
-
-public function saleByHour(Request $request)
-{
-    $user = Auth::user();
-    $proId = $user->profile_id;
-
-    $validate = $request->validate([
-        'year' => 'nullable|integer|min:2000',
-    ]);
-    $base = now();
-    $year = (int) ($validate['year'] ?? $base->year);
-    if ($year !== (int) $base->year) {
-        $daysInTargetMonth = \Carbon\Carbon::create($year, $base->month, 1)->daysInMonth;
-        $day = min($base->day, $daysInTargetMonth);
-        $base = \Carbon\Carbon::create($year, $base->month, $day, $base->hour, $base->minute, $base->second);
-    }
-
-    $today = $base->copy()->startOfDay();
-    $yesterday = $today->copy()->subDay();
-
-    // Define time slots - you can adjust these times as needed
-    $timeSlots = [
-        '07:00 AM' => ['start' => '07:00:00', 'end' => '10:59:59'],
-        '11:00 AM' => ['start' => '11:00:00', 'end' => '15:59:59'],
-        '04:00 PM' => ['start' => '16:00:00', 'end' => '20:59:59'],
-        '09:00 PM' => ['start' => '21:00:00', 'end' => '01:59:59'],  // crosses midnight, handled below
-        '02:00 AM' => ['start' => '02:00:00', 'end' => '05:59:59'],
-        '06:00 AM' => ['start' => '06:00:00', 'end' => '06:59:59'],
-    ];
-
-    // Helper function to get sums by time range and day
-    $getHourlySum = function ($proId, $day, $startTime, $endTime, $usePrice = false) {
-    $query = DB::table('order_items as oi')
-        ->join('order_masters as om', 'oi.order_id', '=', 'om.order_id')
-        ->join('users as u', 'om.created_by', '=', 'u.id')
-        ->where('oi.is_deleted', 0)
-        ->where('u.profile_id', $proId);
-
-    // Handle time range that might cross midnight
-    if ($startTime > $endTime) {
-        // Between day start and endTime on next day
-                        $query->where(function ($q) use ($day, $startTime) {
-                        $q->whereRaw('TIME(om.created_at) BETWEEN ? AND ?', [$startTime, '23:59:59'])
-                            ->whereRaw('DATE(om.created_at) = ?', [$day->format('Y-m-d')]);
-                })->orWhere(function ($q) use ($day, $endTime) {
-                        $q->whereRaw('TIME(om.created_at) BETWEEN ? AND ?', ['00:00:00', $endTime])
-                            ->whereRaw('DATE(om.created_at) = ?', [$day->copy()->addDay()->format('Y-m-d')]);
-                });
-    } else {
-          $query->whereRaw('DATE(om.created_at) = ?', [$day->format('Y-m-d')])
-              ->whereRaw('TIME(om.created_at) BETWEEN ? AND ?', [$startTime, $endTime]);
-    }
-
-    if ($usePrice) {
-        $query->select(DB::raw("COALESCE(SUM(om.payment), 0) as total"));
-    } else {
-        $query->select(DB::raw("COALESCE(SUM(oi.quantity), 0) as total"));
-    }
-
-    return $query->value('total');
-};
-
-
-    $sales = [];
-
-    foreach ($timeSlots as $label => $times) {
-        $startTime = $times['start'];
-        $endTime = $times['end'];
-
-        $sales[] = [
-            'name' => $label,
-            'today' => $getHourlySum($proId, $today, $startTime, $endTime, false),
-            'todayPrice' => $getHourlySum($proId, $today, $startTime, $endTime, true),
-            'yesterday' => $getHourlySum($proId, $yesterday, $startTime, $endTime, false),
-            'yesterdayPrice' => $getHourlySum($proId, $yesterday, $startTime, $endTime, true),
-        ];
-    }
-
-    return response()->json([
-        'message' => 'expense masters fetched successfully!',
-        'status' => 200,
-        'data' => $sales,
-
-    ]);
-}
-
-
-public function purchaseByHour(Request $request)
-{
-    $user = Auth::user();
-    $proId = $user->profile_id;
-
-    $validate = $request->validate([
-        'year' => 'nullable|integer|min:2000',
-    ]);
-    $base = now();
-    $year = (int) ($validate['year'] ?? $base->year);
-    if ($year !== (int) $base->year) {
-        $daysInTargetMonth = \Carbon\Carbon::create($year, $base->month, 1)->daysInMonth;
-        $day = min($base->day, $daysInTargetMonth);
-        $base = \Carbon\Carbon::create($year, $base->month, $day, $base->hour, $base->minute, $base->second);
-    }
-
-    $today = $base->copy()->startOfDay();
-    $yesterday = $today->copy()->subDay();
-
-    // Define time slots - you can adjust these times as needed
-    $timeSlots = [
-        '07:00 AM' => ['start' => '07:00:00', 'end' => '10:59:59'],
-        '11:00 AM' => ['start' => '11:00:00', 'end' => '15:59:59'],
-        '04:00 PM' => ['start' => '16:00:00', 'end' => '20:59:59'],
-        '09:00 PM' => ['start' => '21:00:00', 'end' => '01:59:59'],  // crosses midnight, handled below
-        '02:00 AM' => ['start' => '02:00:00', 'end' => '05:59:59'],
-        '06:00 AM' => ['start' => '06:00:00', 'end' => '06:59:59'],
-    ];
-
-    // Helper function to get sums by time range and day
-    $getHourlySum = function ($proId, $day, $startTime, $endTime, $usePrice = false) {
-    $query = DB::table('purchase_details as pd')
-        ->join('purchases as p', 'pd.purchase_id', '=', 'p.purchase_id')
-        ->join('users as u', 'p.created_by', '=', 'u.id')
-        ->where('pd.is_deleted', 0)
-        ->where('u.profile_id', $proId);
-
-    // Handle time range that crosses midnight
-        if ($startTime > $endTime) {
-        $query->where(function ($q) use ($day, $startTime) {
-            $q->whereRaw('TIME(p.created_at) BETWEEN ? AND ?', [$startTime, '23:59:59'])
-              ->whereRaw('DATE(p.created_at) = ?', [$day->format('Y-m-d')]);
-        })->orWhere(function ($q) use ($day, $endTime) {
-            $q->whereRaw('TIME(p.created_at) BETWEEN ? AND ?', ['00:00:00', $endTime])
-              ->whereRaw('DATE(p.created_at) = ?', [$day->copy()->addDay()->format('Y-m-d')]);
-        });
-    } else {
-        $query->whereRaw('DATE(p.created_at) = ?', [$day->format('Y-m-d')])
-              ->whereRaw('TIME(p.created_at) BETWEEN ? AND ?', [$startTime, $endTime]);
-    }
-
-    // Select based on usePrice flag
-    if ($usePrice) {
-        $query->select(DB::raw("COALESCE(SUM(p.total_amount), 0) as total"));
-    } else {
-        $query->select(DB::raw("COALESCE(SUM(pd.quantity), 0) as total"));
-    }
-
-    return $query->value('total');
-};
-
-
-    $stock = [];
-
-    foreach ($timeSlots as $label => $times) {
-        $startTime = $times['start'];
-        $endTime = $times['end'];
-
-        $stock[] = [
-            'name' => $label,
-            'today' => $getHourlySum($proId, $today, $startTime, $endTime, false),
-            'todayPrice' => $getHourlySum($proId, $today, $startTime, $endTime, true),
-            'yesterday' => $getHourlySum($proId, $yesterday, $startTime, $endTime, false),
-            'yesterdayPrice' => $getHourlySum($proId, $yesterday, $startTime, $endTime, true),
-        ];
-    }
-
-    return response()->json([
-        'message' => 'expense masters fetched successfully!',
-        'status' => 200,
-        'data' =>  $stock,
-
-    ]);
-}
-
-
-public function saleByDay(Request $request)
-{
-    $user = Auth::user();
-    $proId = $user->profile_id;
-
-    // Get current date and current week start/end (Monday to Sunday)
-    $validate = $request->validate([
-        'year' => 'nullable|integer|min:2000',
-    ]);
-    $base = now();
-    $year = (int) ($validate['year'] ?? $base->year);
-    if ($year !== (int) $base->year) {
-        $daysInTargetMonth = \Carbon\Carbon::create($year, $base->month, 1)->daysInMonth;
-        $day = min($base->day, $daysInTargetMonth);
-        $base = \Carbon\Carbon::create($year, $base->month, $day, $base->hour, $base->minute, $base->second);
-    }
-    $today = $base;
-    $startOfWeek = $today->copy()->startOfWeek();
-    $endOfWeek = $today->copy()->endOfWeek();
-
-    // Previous week start/end
-    $startOfLastWeek = $startOfWeek->copy()->subWeek();
-    $endOfLastWeek = $endOfWeek->copy()->subWeek();
-
-    // Helper: Get daily sum (quantity or price)
-    $getDailySum = function ($proId, $date, $usePrice = false) {
-        $query = DB::table('order_items as oi')
-                ->join('order_masters as om', 'oi.order_id', '=', 'om.order_id')
-                ->join('users as u', 'om.created_by', '=', 'u.id')
-                ->where('oi.is_deleted', 0)
-                ->where('u.profile_id', $proId)
-                ->where('om.order_date', $date->format('Y-m-d'));
-
-            if ($usePrice) {
-                $query->select(DB::raw("SUM(om.payment) as total"));
-                $sum = $query->value('total') ?? 0;
-            } else {
-                $query->select(DB::raw("SUM(oi.quantity) as total"));
-                $sum = $query->value('total') ?? 0;
-            }
-            return $sum;
-    };
-
-    $sales = [];
-
-    for ($i = 0; $i < 7; $i++) {
-        $currentDay = $startOfWeek->copy()->addDays($i);
-        $lastWeekDay = $startOfLastWeek->copy()->addDays($i);
-
-        // Sales quantity and price for current week and last week
-        $salesThisWeekQty = $getDailySum($proId, $currentDay, false);
-        $salesThisWeekPrice = $getDailySum($proId, $currentDay, true);
-        $salesLastWeekQty = $getDailySum($proId, $lastWeekDay, false);
-        $salesLastWeekPrice = $getDailySum($proId, $lastWeekDay, true);
-
-        $sales[] = [
-            'name' => 'Day ' . ($i + 1),
-            'thisWeek' => $salesThisWeekQty,
-            'thisWeekPrice' => $salesThisWeekPrice,
-            'Weekend' => $salesLastWeekQty,
-            'WeekendPrice' => $salesLastWeekPrice,
-        ];
-    }
-
-    return response()->json([
-        'message' => 'expense masters fetched successfully!',
-        'status' => 200,
-        'data' =>  $sales,
-    ]);
-}
-
-
-public function purchaseByDay(Request $request)
-{
-    $user = Auth::user();
-    $proId = $user->profile_id;
-
-    // Get current date and current week start/end (Monday to Sunday)
-    $validate = $request->validate([
-        'year' => 'nullable|integer|min:2000',
-    ]);
-    $base = now();
-    $year = (int) ($validate['year'] ?? $base->year);
-    if ($year !== (int) $base->year) {
-        $daysInTargetMonth = \Carbon\Carbon::create($year, $base->month, 1)->daysInMonth;
-        $day = min($base->day, $daysInTargetMonth);
-        $base = \Carbon\Carbon::create($year, $base->month, $day, $base->hour, $base->minute, $base->second);
-    }
-    $today = $base;
-    $startOfWeek = $today->copy()->startOfWeek();
-    $endOfWeek = $today->copy()->endOfWeek();
-
-    // Previous week start/end
-    $startOfLastWeek = $startOfWeek->copy()->subWeek();
-    $endOfLastWeek = $endOfWeek->copy()->subWeek();
-
-    // Helper: Get daily sum (quantity or price)
-    $getDailySum = function ($proId, $date, $usePrice = false) {
-        $query = DB::table('purchase_details as pd')
-                ->join('purchases as p', 'pd.purchase_id', '=', 'p.purchase_id')
-                ->join('users as u', 'p.created_by', '=', 'u.id')
-                ->where('pd.is_deleted', 0)
-                ->where('u.profile_id', $proId)
-                ->where('p.purchase_date', $date->format('Y-m-d'));
-
-            if ($usePrice) {
-                $query->select(DB::raw("SUM(p.total_amount) as total"));
-                $sum = $query->value('total') ?? 0;
-            } else {
-                $query->select(DB::raw("SUM(pd.quantity) as total"));
-                $sum = $query->value('total') ?? 0;
-            }
-            return $sum;
-    };
-
-    $stock = [];
-
-    for ($i = 0; $i < 7; $i++) {
-        $currentDay = $startOfWeek->copy()->addDays($i);
-        $lastWeekDay = $startOfLastWeek->copy()->addDays($i);
-
-        // Stock quantity and price for current week and last week
-        $stockThisWeekQty = $getDailySum($proId, $currentDay, false);
-        $stockThisWeekPrice = $getDailySum($proId, $currentDay, true);
-        $stockLastWeekQty = $getDailySum($proId, $lastWeekDay, false);
-        $stockLastWeekPrice = $getDailySum($proId, $lastWeekDay, true);
-
-        $stock[] = [
-            'name' => 'Day ' . ($i + 1),
-            'thisWeek' => $stockThisWeekQty,
-            'thisWeekPrice' => $stockThisWeekPrice,
-            'Weekend' => $stockLastWeekQty,
-            'WeekendPrice' => $stockLastWeekPrice,
-        ];
-    }
-
-    return response()->json([
-        'message' => 'expense masters fetched successfully!',
-        'status' => 200,
-        'data' => $stock,
-    ]);
-}
-
-
-
-
-    public function expenseWeek(Request $request){
-        $user = Auth::user();
-        $proId = $user->profile_id;
-        $validate = $request->validate([
-            'year' => 'nullable|integer|min:2000',
-        ]);
-        $base = now();
-        $year = (int) ($validate['year'] ?? $base->year);
-        if ($year !== (int) $base->year) {
-            $daysInTargetMonth = \Carbon\Carbon::create($year, $base->month, 1)->daysInMonth;
-            $day = min($base->day, $daysInTargetMonth);
-            $base = \Carbon\Carbon::create($year, $base->month, $day, $base->hour, $base->minute, $base->second);
-        }
-        $month = $base->month;
-
-        // Get start/end dates for current and last month
-        $startDate = \Carbon\Carbon::create($year, $month, 1)->startOfMonth();
-        $endDate = \Carbon\Carbon::create($year, $month, 1)->endOfMonth();
-        $lastMonth = $month == 1 ? 12 : $month - 1;
-        $lastMonthYear = $month == 1 ? $year - 1 : $year;
-        $lastStartDate = \Carbon\Carbon::create($lastMonthYear, $lastMonth, 1)->startOfMonth();
-        $lastEndDate = \Carbon\Carbon::create($lastMonthYear, $lastMonth, 1)->endOfMonth();
-
-        // Helper to get weekly sums for expense
-        $getWeeklyexpense = function($start, $end) use ($proId) {
-            $weeks = [];
-            $weekRanges = [];
-            $current = $start->copy();
-            while ($current < $end) {
-                $weekStart = $current->copy();
-                $weekEnd = $current->copy()->addDays(6);
-                if ($weekEnd > $end) $weekEnd = $end->copy();
-                $weekRanges[] = [$weekStart, $weekEnd];
-                $current = $weekEnd->copy()->addDay();
-            }
-            foreach ($weekRanges as [$ws, $we]) {
-                $sum = DB::table('expense_masters as em')
-                    ->join('expense_items as ei', 'em.expense_id', '=', 'ei.expense_id')
-                    ->join('users as u', 'em.created_by', '=', 'u.id')
-                    ->where('u.profile_id', $proId)
-                    ->where('em.is_deleted', 0)
-                    ->whereBetween('em.expense_date', [$ws->format('Y-m-d'), $we->format('Y-m-d')])
-                    ->sum('em.amount');
-                $weeks[] = $sum;
-            }
-            return $weeks;
-        };
-
-        $thisMonthexpense = $getWeeklyexpense($startDate, $endDate);
-        $lastMonthexpense = $getWeeklyexpense($lastStartDate, $lastEndDate);
-
-        $weekCount = max(count($thisMonthexpense), count($lastMonthexpense));
-        $data = [];
-        for ($i = 0; $i < $weekCount; $i++) {
-            $data[] = [
-                'name' => 'Week ' . ($i + 1),
-                'thisMonth' => $thisMonthexpense[$i] ?? 0,
-                'lastMonth' => $lastMonthexpense[$i] ?? 0,
+    public function filterDashboard(Request $request)
+    {
+        $filters = $this->dashboardFilters($request, true);
+        $operation = $filters['operation'];
+        [$startDate, $endDate] = $this->resolveFilterDashboardRange($filters);
+        $chart = [];
+
+        $chart = $this->buildMonthSeries($startDate, $endDate, function (Carbon $rangeStart, Carbon $rangeEnd) use ($operation, $filters) {
+            return [
+                'quantity' => $this->operationQuantityTotal($operation, $filters, $rangeStart, $rangeEnd),
+                'price' => $this->operationPriceTotal($operation, $filters, $rangeStart, $rangeEnd),
             ];
-        }
+        });
 
         return response()->json([
-            'message' => 'expense masters fetched successfully!',
+            'message' => 'Operation chart fetched successfully!',
             'status' => 200,
-            'data' => $data
+            'data' => [
+                'operation' => $operation,
+                'start_date' => $startDate?->toDateTimeString(),
+                'end_date' => $endDate?->toDateTimeString(),
+                'user_id' => $filters['user_id'] ?? null,
+                'summary' => [
+                    'quantity' => $this->operationQuantityTotal($operation, $filters, $startDate, $endDate),
+                    'price' => $this->operationPriceTotal($operation, $filters, $startDate, $endDate),
+                ],
+                'chart' => $chart,
+            ],
         ]);
     }
 
-    public function expenseDay(Request $request)
-{
-    $user = Auth::user();
-    $proId = $user->profile_id;
-
-    // Get start and end of the current week and last week
-    $validate = $request->validate([
-        'year' => 'nullable|integer|min:2000',
-    ]);
-    $base = now();
-    $year = (int) ($validate['year'] ?? $base->year);
-    if ($year !== (int) $base->year) {
-        $daysInTargetMonth = \Carbon\Carbon::create($year, $base->month, 1)->daysInMonth;
-        $day = min($base->day, $daysInTargetMonth);
-        $base = \Carbon\Carbon::create($year, $base->month, $day, $base->hour, $base->minute, $base->second);
-    }
-    $today = $base;
-    $currentWeekStart = $today->copy()->startOfWeek(); // Monday
-    $currentWeekEnd = $today->copy()->endOfWeek();     // Sunday
-
-    $lastWeekStart = $currentWeekStart->copy()->subWeek();
-    $lastWeekEnd = $currentWeekEnd->copy()->subWeek();
-
-    $data = [];
-
-    // Loop through 7 days of the week (Mon → Sun)
-    for ($i = 0; $i < 7; $i++) {
-        // Current week day
-        $thisDayStart = $currentWeekStart->copy()->addDays($i)->startOfDay();
-        $thisDayEnd = $thisDayStart->copy()->endOfDay();
-
-        // Last week same day
-        $lastWeekDayStart = $lastWeekStart->copy()->addDays($i)->startOfDay();
-        $lastWeekDayEnd = $lastWeekDayStart->copy()->endOfDay();
-
-        // Get total expense for this day (current week)
-        $thisWeekSum = DB::table('expense_masters as em')
-            ->join('expense_items as ei', 'em.expense_id', '=', 'ei.expense_id')
-            ->join('users as u', 'em.created_by', '=', 'u.id')
-            ->where('u.profile_id', $proId)
-            ->where('em.is_deleted', 0)
-            ->whereBetween('em.expense_date', [
-                $thisDayStart->format('Y-m-d H:i:s'),
-                $thisDayEnd->format('Y-m-d H:i:s')
-            ])
-            ->sum('em.amount');
-
-        // Get total expense for same day (last week)
-        $lastWeekSum = DB::table('expense_masters as em')
-            ->join('expense_items as ei', 'em.expense_id', '=', 'ei.expense_id')
-            ->join('users as u', 'em.created_by', '=', 'u.id')
-            ->where('u.profile_id', $proId)
-            ->where('em.is_deleted', 0)
-            ->whereBetween('em.expense_date', [
-                $lastWeekDayStart->format('Y-m-d H:i:s'),
-                $lastWeekDayEnd->format('Y-m-d H:i:s')
-            ])
-            ->sum('em.amount');
-
-        // Add data to array
-        $data[] = [
-            'name' => 'Day ' . ($i + 1),
-            'thisWeek' => $thisWeekSum,
-            'Weekend' => $lastWeekSum,
+    private function dashboardFilters(Request $request, bool $includeOperation = false): array
+    {
+        $rules = [
+            'start_date' => 'nullable|date',
+            'end_date' => 'nullable|date|after_or_equal:start_date',
+            'user_id' => 'nullable|integer|exists:users,id',
+            'month' => 'nullable|integer|min:1|max:12',
+            'year' => 'nullable|integer|min:2000',
         ];
-    }
 
-    return response()->json([
-        'message' => 'expense masters fetched successfully!',
-        'status' => 200,
-        'data' => $data
-    ]);
-}
-
-public function expenseHour(Request $request)
-{
-    $user = Auth::user();
-    $proId = $user->profile_id;
-
-    $validate = $request->validate([
-        'year' => 'nullable|integer|min:2000',
-    ]);
-    $base = now();
-    $year = (int) ($validate['year'] ?? $base->year);
-    if ($year !== (int) $base->year) {
-        $daysInTargetMonth = \Carbon\Carbon::create($year, $base->month, 1)->daysInMonth;
-        $day = min($base->day, $daysInTargetMonth);
-        $base = \Carbon\Carbon::create($year, $base->month, $day, $base->hour, $base->minute, $base->second);
-    }
-
-    $today = $base->copy()->startOfDay();
-    $yesterday = $today->copy()->subDay();
-
-    // Define your hourly slots (customize as needed)
-    $timeSlots = [
-        '07:00 AM',
-        '11:00 AM',
-        '04:00 PM',
-        '09:00 PM',
-        '02:00 AM',
-        '06:00 AM',
-    ];
-
-    $data = [];
-
-    foreach ($timeSlots as $slot) {
-        // Parse slot into Carbon time
-        $time = \Carbon\Carbon::parse($slot);
-
-        // Create today's time range (1 hour window)
-        $todayStart = $today->copy()->setTimeFromTimeString($time->format('H:i:s'));
-        $todayEnd = $todayStart->copy()->addHour();
-
-        // Create yesterday's same time range
-        $yesterdayStart = $yesterday->copy()->setTimeFromTimeString($time->format('H:i:s'));
-        $yesterdayEnd = $yesterdayStart->copy()->addHour();
-
-        // Calculate today's total expense for this hour
-        $todaySum = DB::table('expense_masters as em')
-            ->join('expense_items as ei', 'em.expense_id', '=', 'ei.expense_id')
-            ->join('users as u', 'em.created_by', '=', 'u.id')
-            ->where('u.profile_id', $proId)
-            ->where('em.is_deleted', 0)
-            ->whereBetween('em.expense_date', [
-                $todayStart->format('Y-m-d H:i:s'),
-                $todayEnd->format('Y-m-d H:i:s')
-            ])
-            ->sum('em.amount');
-
-        // Calculate yesterday's total expense for this hour
-        $yesterdaySum = DB::table('expense_masters as em')
-            ->join('expense_items as ei', 'em.expense_id', '=', 'ei.expense_id')
-            ->join('users as u', 'em.created_by', '=', 'u.id')
-            ->where('u.profile_id', $proId)
-            ->where('em.is_deleted', 0)
-            ->whereBetween('em.expense_date', [
-                $yesterdayStart->format('Y-m-d H:i:s'),
-                $yesterdayEnd->format('Y-m-d H:i:s')
-            ])
-            ->sum('em.amount');
-
-        // Add to data array
-        $data[] = [
-            'name' => $slot,
-            'today' => $todaySum,
-            'yesterday' => $yesterdaySum,
-        ];
-    }
-
-    return response()->json([
-        'message' => 'expense masters fetched successfully!',
-        'status' => 200,
-        'data' => $data
-    ]);
-}
-
-public function expenseMonth(Request $request)
-{
-    $user = Auth::user();
-    $proId = $user->profile_id;
-
-    $validate = $request->validate([
-        'year' => 'nullable|integer|min:2000',
-    ]);
-    $now = now();
-    $currentYear = (int) ($validate['year'] ?? $now->year);
-    $lastYear = $currentYear - 1;
-    $currentMonth = $currentYear === (int) $now->year ? $now->month : 12;
-
-    $data = [];
-
-    // Loop from January to the current month
-    for ($month = 1; $month <= $currentMonth; $month++) {
-        // This year: start & end of month
-        $startThisYear = \Carbon\Carbon::create($currentYear, $month, 1)->startOfMonth();
-        $endThisYear = \Carbon\Carbon::create($currentYear, $month, 1)->endOfMonth();
-
-        // Last year: same month
-        $startLastYear = \Carbon\Carbon::create($lastYear, $month, 1)->startOfMonth();
-        $endLastYear = \Carbon\Carbon::create($lastYear, $month, 1)->endOfMonth();
-
-        // Calculate total expense for this year’s month
-        $thisYearSum = DB::table('expense_masters as em')
-            ->join('expense_items as ei', 'em.expense_id', '=', 'ei.expense_id')
-            ->join('users as u', 'em.created_by', '=', 'u.id')
-            ->where('u.profile_id', $proId)
-            ->where('em.is_deleted', 0)
-            ->whereBetween('em.expense_date', [
-                $startThisYear->format('Y-m-d'),
-                $endThisYear->format('Y-m-d')
-            ])
-            ->sum('em.amount');
-
-        // Calculate total expense for last year’s same month
-        $lastYearSum = DB::table('expense_masters as em')
-            ->join('expense_items as ei', 'em.expense_id', '=', 'ei.expense_id')
-            ->join('users as u', 'em.created_by', '=', 'u.id')
-            ->where('u.profile_id', $proId)
-            ->where('em.is_deleted', 0)
-            ->whereBetween('em.expense_date', [
-                $startLastYear->format('Y-m-d'),
-                $endLastYear->format('Y-m-d')
-            ])
-            ->sum('em.amount');
-
-        // Push result for this month
-        $data[] = [
-            'name' => $startThisYear->format('F'), // e.g., January, February
-            'thisYear' => $thisYearSum,
-            'lastYear' => $lastYearSum,
-        ];
-    }
-
-    return response()->json([
-        'message' => 'expense masters fetched successfully!',
-        'status' => 200,
-        'data' => $data
-    ]);
-}
-
-public function profiteByHour(Request $request)
-{
-    $user = Auth::user();
-    $proId = $user->profile_id;
-
-    $validate = $request->validate([
-        'year' => 'nullable|integer|min:2000',
-    ]);
-    $base = now();
-    $year = (int) ($validate['year'] ?? $base->year);
-    if ($year !== (int) $base->year) {
-        $daysInTargetMonth = \Carbon\Carbon::create($year, $base->month, 1)->daysInMonth;
-        $day = min($base->day, $daysInTargetMonth);
-        $base = \Carbon\Carbon::create($year, $base->month, $day, $base->hour, $base->minute, $base->second);
-    }
-
-    $today = $base->copy()->startOfDay();
-    $yesterday = $today->copy()->subDay();
-
-    $timeSlots = [
-        '07:00 AM' => ['start' => '07:00:00', 'end' => '10:59:59'],
-        '11:00 AM' => ['start' => '11:00:00', 'end' => '15:59:59'],
-        '04:00 PM' => ['start' => '16:00:00', 'end' => '20:59:59'],
-        '09:00 PM' => ['start' => '21:00:00', 'end' => '01:59:59'],
-        '02:00 AM' => ['start' => '02:00:00', 'end' => '05:59:59'],
-        '06:00 AM' => ['start' => '06:00:00', 'end' => '06:59:59'],
-    ];
-
-    $getHourlySum = function ($table, $amountField, $dateField, $proId, $day, $startTime, $endTime) {
-        $query = DB::table($table)
-            ->join('users as u', $table . '.created_by', '=', 'u.id')
-            ->where($table . '.is_deleted', 0)
-            ->where('u.profile_id', $proId);
-
-        if ($startTime > $endTime) {
-            $query->where(function ($q) use ($day, $startTime, $dateField, $table) {
-                $q->whereRaw("TIME($table.created_at) BETWEEN ? AND ?", [$startTime, '23:59:59'])
-                    ->whereRaw("DATE($table.$dateField) = ?", [$day->format('Y-m-d')]);
-            })->orWhere(function ($q) use ($day, $endTime, $dateField, $table) {
-                $q->whereRaw("TIME($table.created_at) BETWEEN ? AND ?", ['00:00:00', $endTime])
-                    ->whereRaw("DATE($table.$dateField) = ?", [$day->copy()->addDay()->format('Y-m-d')]);
-            });
-        } else {
-            $query->whereRaw("DATE($table.$dateField) = ?", [$day->format('Y-m-d')])
-                ->whereRaw("TIME($table.created_at) BETWEEN ? AND ?", [$startTime, $endTime]);
+        if ($includeOperation) {
+            $rules['operation'] = 'required|in:sale,purchase,expense,stock,profit';
         }
 
-        return $query->sum($table . '.' . $amountField);
-    };
+        return $request->validate($rules);
+    }
 
-    $data = [];
-    foreach ($timeSlots as $label => $times) {
-        $startTime = $times['start'];
-        $endTime = $times['end'];
+    private function hasCustomDateRange(array $filters): bool
+    {
+        return !empty($filters['start_date']) && !empty($filters['end_date']);
+    }
 
-        $saleToday = $getHourlySum('order_masters', 'payment', 'order_date', $proId, $today, $startTime, $endTime);
-        $purchaseToday = $getHourlySum('purchases', 'total_amount', 'purchase_date', $proId, $today, $startTime, $endTime);
-        $expenseToday = $getHourlySum('expense_masters', 'amount', 'expense_date', $proId, $today, $startTime, $endTime);
-
-        $saleYesterday = $getHourlySum('order_masters', 'payment', 'order_date', $proId, $yesterday, $startTime, $endTime);
-        $purchaseYesterday = $getHourlySum('purchases', 'total_amount', 'purchase_date', $proId, $yesterday, $startTime, $endTime);
-        $expenseYesterday = $getHourlySum('expense_masters', 'amount', 'expense_date', $proId, $yesterday, $startTime, $endTime);
-
-        $data[] = [
-            'name' => $label,
-            'today' => $saleToday - $purchaseToday - $expenseToday,
-            'yesterday' => $saleYesterday - $purchaseYesterday - $expenseYesterday,
+    private function resolveCustomRange(array $filters): array
+    {
+        return [
+            Carbon::parse($filters['start_date'])->startOfDay(),
+            Carbon::parse($filters['end_date'])->endOfDay(),
         ];
     }
 
-    return response()->json([
-        'message' => 'Profit by hour fetched successfully!',
-        'status' => 200,
-        'data' => $data,
-    ]);
-}
-
-public function profiteByDay(Request $request)
-{
-    $user = Auth::user();
-    $proId = $user->profile_id;
-
-    $validate = $request->validate([
-        'year' => 'nullable|integer|min:2000',
-    ]);
-    $base = now();
-    $year = (int) ($validate['year'] ?? $base->year);
-    if ($year !== (int) $base->year) {
-        $daysInTargetMonth = \Carbon\Carbon::create($year, $base->month, 1)->daysInMonth;
-        $day = min($base->day, $daysInTargetMonth);
-        $base = \Carbon\Carbon::create($year, $base->month, $day, $base->hour, $base->minute, $base->second);
-    }
-
-    $startOfWeek = $base->copy()->startOfWeek();
-    $startOfLastWeek = $startOfWeek->copy()->subWeek();
-
-    $getDailySum = function ($table, $amountField, $dateField, $proId, $date) {
-        return DB::table($table)
-            ->join('users as u', $table . '.created_by', '=', 'u.id')
-            ->where($table . '.is_deleted', 0)
-            ->where('u.profile_id', $proId)
-            ->where($table . '.' . $dateField, $date->format('Y-m-d'))
-            ->sum($table . '.' . $amountField);
-    };
-
-    $data = [];
-    for ($i = 0; $i < 7; $i++) {
-        $currentDay = $startOfWeek->copy()->addDays($i);
-        $lastWeekDay = $startOfLastWeek->copy()->addDays($i);
-
-        $saleThis = $getDailySum('order_masters', 'payment', 'order_date', $proId, $currentDay);
-        $purchaseThis = $getDailySum('purchases', 'total_amount', 'purchase_date', $proId, $currentDay);
-        $expenseThis = $getDailySum('expense_masters', 'amount', 'expense_date', $proId, $currentDay);
-
-        $saleLast = $getDailySum('order_masters', 'payment', 'order_date', $proId, $lastWeekDay);
-        $purchaseLast = $getDailySum('purchases', 'total_amount', 'purchase_date', $proId, $lastWeekDay);
-        $expenseLast = $getDailySum('expense_masters', 'amount', 'expense_date', $proId, $lastWeekDay);
-
-        $data[] = [
-            'name' => 'Day ' . ($i + 1),
-            'thisWeek' => $saleThis - $purchaseThis - $expenseThis,
-            'Weekend' => $saleLast - $purchaseLast - $expenseLast,
-        ];
-    }
-
-    return response()->json([
-        'message' => 'Profit by day fetched successfully!',
-        'status' => 200,
-        'data' => $data,
-    ]);
-}
-
-public function profiteByWeek(Request $request)
-{
-    $user = Auth::user();
-    $proId = $user->profile_id;
-    $validate = $request->validate([
-        'year' => 'nullable|integer|min:2000',
-    ]);
-    $base = now();
-    $year = (int) ($validate['year'] ?? $base->year);
-    if ($year !== (int) $base->year) {
-        $daysInTargetMonth = \Carbon\Carbon::create($year, $base->month, 1)->daysInMonth;
-        $day = min($base->day, $daysInTargetMonth);
-        $base = \Carbon\Carbon::create($year, $base->month, $day, $base->hour, $base->minute, $base->second);
-    }
-    $month = $base->month;
-
-    $startDate = \Carbon\Carbon::create($year, $month, 1)->startOfMonth();
-    $endDate = \Carbon\Carbon::create($year, $month, 1)->endOfMonth();
-
-    $lastMonth = $month == 1 ? 12 : $month - 1;
-    $lastMonthYear = $month == 1 ? $year - 1 : $year;
-    $lastStartDate = \Carbon\Carbon::create($lastMonthYear, $lastMonth, 1)->startOfMonth();
-    $lastEndDate = \Carbon\Carbon::create($lastMonthYear, $lastMonth, 1)->endOfMonth();
-
-    $getWeeklyProfit = function ($proId, $start, $end) {
-        $weeks = [];
-        $current = $start->copy();
-        while ($current <= $end) {
-            $ws = $current->copy();
-            $we = $current->copy()->addDays(6);
-            if ($we > $end) $we = $end->copy();
-
-            $sale = DB::table('order_masters as om')
-                ->join('users as u', 'om.created_by', '=', 'u.id')
-                ->where('om.is_deleted', 0)
-                ->where('u.profile_id', $proId)
-                ->whereBetween('om.order_date', [$ws->format('Y-m-d'), $we->format('Y-m-d')])
-                ->sum('om.payment');
-
-            $purchase = DB::table('purchases as p')
-                ->join('users as u', 'p.created_by', '=', 'u.id')
-                ->where('p.is_deleted', 0)
-                ->where('u.profile_id', $proId)
-                ->whereBetween('p.purchase_date', [$ws->format('Y-m-d'), $we->format('Y-m-d')])
-                ->sum('p.total_amount');
-
-            $expense = DB::table('expense_masters as em')
-                ->join('users as u', 'em.created_by', '=', 'u.id')
-                ->where('em.is_deleted', 0)
-                ->where('u.profile_id', $proId)
-                ->whereBetween('em.expense_date', [$ws->format('Y-m-d'), $we->format('Y-m-d')])
-                ->sum('em.amount');
-
-            $weeks[] = $sale - $purchase - $expense;
-            $current = $we->copy()->addDay();
+    private function resolveOptionalRange(array $filters): array
+    {
+        if ($this->hasCustomDateRange($filters)) {
+            return $this->resolveCustomRange($filters);
         }
-        return $weeks;
-    };
 
-    $thisMonth = $getWeeklyProfit($proId, $startDate, $endDate);
-    $lastMonthData = $getWeeklyProfit($proId, $lastStartDate, $lastEndDate);
+        return [null, null];
+    }
 
-    $weekCount = max(count($thisMonth), count($lastMonthData));
-    $data = [];
-    for ($i = 0; $i < $weekCount; $i++) {
-        $data[] = [
-            'name' => 'Week ' . ($i + 1),
-            'thisMonth' => $thisMonth[$i] ?? 0,
-            'lastMonth' => $lastMonthData[$i] ?? 0,
+    private function resolveFilterDashboardRange(array $filters): array
+    {
+        if ($this->hasCustomDateRange($filters)) {
+            return $this->resolveCustomRange($filters);
+        }
+
+        $now = now();
+
+        return [
+            $now->copy()->startOfYear(),
+            $now->copy()->endOfMonth(),
         ];
     }
 
-    return response()->json([
-        'message' => 'Profit by week fetched successfully!',
-        'status' => 200,
-        'data' => $data,
-    ]);
-}
+    private function monthRanges(Carbon $start, Carbon $end): array
+    {
+        $ranges = [];
+        $cursor = $start->copy()->startOfMonth();
+        $lastMonth = $end->copy()->startOfMonth();
 
-public function profiteByMonth(Request $request)
-{
-    $user = Auth::user();
-    $proId = $user->profile_id;
+        while ($cursor <= $lastMonth) {
+            $rangeStart = $cursor->copy()->startOfMonth();
+            $rangeEnd = $cursor->copy()->endOfMonth();
+            if ($rangeStart->lt($start)) {
+                $rangeStart = $start->copy();
+            }
+            if ($rangeEnd->gt($end)) {
+                $rangeEnd = $end->copy();
+            }
+            $ranges[] = [$rangeStart, $rangeEnd];
+            $cursor->addMonth();
+        }
 
-    $validate = $request->validate([
-        'year' => 'nullable|integer|min:2000',
-    ]);
-    $now = now();
-    $currentYear = (int) ($validate['year'] ?? $now->year);
-    $lastYear = $currentYear - 1;
-    $currentMonth = $currentYear === (int) $now->year ? $now->month : 12;
+        return $ranges;
+    }
 
-    $getMonthlySum = function ($table, $amountField, $dateField, $proId, $start, $end) {
-        return DB::table($table)
-            ->join('users as u', $table . '.created_by', '=', 'u.id')
-            ->where($table . '.is_deleted', 0)
-            ->where('u.profile_id', $proId)
-            ->whereBetween($table . '.' . $dateField, [$start->format('Y-m-d'), $end->format('Y-m-d')])
-            ->sum($table . '.' . $amountField);
-    };
+    private function buildMonthSeries(Carbon $start, Carbon $end, callable $resolver): array
+    {
+        $data = [];
 
-    $data = [];
-    for ($m = 1; $m <= $currentMonth; $m++) {
-        $startThis = \Carbon\Carbon::create($currentYear, $m, 1)->startOfMonth();
-        $endThis = $startThis->copy()->endOfMonth();
-        $startLast = \Carbon\Carbon::create($lastYear, $m, 1)->startOfMonth();
-        $endLast = $startLast->copy()->endOfMonth();
+        foreach ($this->monthRanges($start, $end) as [$rangeStart, $rangeEnd]) {
+            $data[] = array_merge([
+                'name' => $rangeStart->format($start->year === $end->year ? 'M' : 'M Y'),
+            ], $resolver($rangeStart, $rangeEnd));
+        }
 
-        $saleThis = $getMonthlySum('order_masters', 'payment', 'order_date', $proId, $startThis, $endThis);
-        $purchaseThis = $getMonthlySum('purchases', 'total_amount', 'purchase_date', $proId, $startThis, $endThis);
-        $expenseThis = $getMonthlySum('expense_masters', 'amount', 'expense_date', $proId, $startThis, $endThis);
+        return $data;
+    }
 
-        $saleLast = $getMonthlySum('order_masters', 'payment', 'order_date', $proId, $startLast, $endLast);
-        $purchaseLast = $getMonthlySum('purchases', 'total_amount', 'purchase_date', $proId, $startLast, $endLast);
-        $expenseLast = $getMonthlySum('expense_masters', 'amount', 'expense_date', $proId, $startLast, $endLast);
+    private function stockBaseQuery(array $filters)
+    {
+        $query = DB::table('stock_details as sd')
+            ->join('stock_masters as sm', 'sd.stock_id', '=', 'sm.stock_id')
+            ->join('users as u', 'sm.stock_created_by', '=', 'u.id')
+            ->where('sd.is_deleted', 0)
+            ->where('u.profile_id', Auth::user()->profile_id);
 
-        $data[] = [
-            'name' => $startThis->format('F'),
-            'thisYear' => $saleThis - $purchaseThis - $expenseThis,
-            'lastYear' => $saleLast - $purchaseLast - $expenseLast,
+        if (!empty($filters['user_id'])) {
+            $query->where('sm.stock_created_by', $filters['user_id']);
+        }
+
+        return $query;
+    }
+
+    private function saleQuantityBaseQuery(array $filters)
+    {
+        $query = DB::table('order_items as oi')
+            ->join('order_masters as om', 'oi.order_id', '=', 'om.order_id')
+            ->join('users as u', 'om.created_by', '=', 'u.id')
+            ->where('oi.is_deleted', 0)
+            ->where('om.is_deleted', 0)
+            ->whereIn('om.status', self::SALE_STATUSES)
+            ->where('u.profile_id', Auth::user()->profile_id);
+
+        if (!empty($filters['user_id'])) {
+            $query->where('om.created_by', $filters['user_id']);
+        }
+
+        return $query;
+    }
+
+    private function saleAmountBaseQuery(array $filters)
+    {
+        $query = DB::table('order_masters as om')
+            ->join('users as u', 'om.created_by', '=', 'u.id')
+            ->where('om.is_deleted', 0)
+            ->whereIn('om.status', self::SALE_STATUSES)
+            ->where('u.profile_id', Auth::user()->profile_id);
+
+        if (!empty($filters['user_id'])) {
+            $query->where('om.created_by', $filters['user_id']);
+        }
+
+        return $query;
+    }
+
+    private function purchaseQuantityBaseQuery(array $filters)
+    {
+        $query = DB::table('purchase_details as pd')
+            ->join('purchases as p', 'pd.purchase_id', '=', 'p.purchase_id')
+            ->join('users as u', 'p.created_by', '=', 'u.id')
+            ->where('pd.is_deleted', 0)
+            ->where('p.is_deleted', 0)
+            ->where('u.profile_id', Auth::user()->profile_id);
+
+        if (!empty($filters['user_id'])) {
+            $query->where('p.created_by', $filters['user_id']);
+        }
+
+        return $query;
+    }
+
+    private function purchaseAmountBaseQuery(array $filters)
+    {
+        $query = DB::table('purchases as p')
+            ->join('users as u', 'p.created_by', '=', 'u.id')
+            ->where('p.is_deleted', 0)
+            ->where('u.profile_id', Auth::user()->profile_id);
+
+        if (!empty($filters['user_id'])) {
+            $query->where('p.created_by', $filters['user_id']);
+        }
+
+        return $query;
+    }
+
+    private function expenseAmountBaseQuery(array $filters)
+    {
+        $query = DB::table('expense_masters as em')
+            ->join('users as u', 'em.created_by', '=', 'u.id')
+            ->where('em.is_deleted', 0)
+            ->where('u.profile_id', Auth::user()->profile_id);
+
+        if (!empty($filters['user_id'])) {
+            $query->where('em.created_by', $filters['user_id']);
+        }
+
+        return $query;
+    }
+
+    private function stockTotals(array $filters, Carbon $start, Carbon $end, bool $includeSaleType = false): array
+    {
+        $select = [
+            'COALESCE(SUM(CASE WHEN sm.stock_type_id = 1 THEN sd.quantity ELSE 0 END), 0) AS return_total',
+            'COALESCE(SUM(CASE WHEN sm.stock_type_id = 2 THEN sd.quantity ELSE 0 END), 0) AS in_total',
+            'COALESCE(SUM(CASE WHEN sm.stock_type_id = 3 THEN sd.quantity ELSE 0 END), 0) AS out_total',
+            'COALESCE(SUM(CASE WHEN sm.stock_type_id = 4 THEN sd.quantity ELSE 0 END), 0) AS waste_total',
+        ];
+
+        if ($includeSaleType) {
+            $select[] = 'COALESCE(SUM(CASE WHEN sm.stock_type_id = 5 THEN sd.quantity ELSE 0 END), 0) AS sale_total';
+        }
+
+        $row = $this->stockBaseQuery($filters)
+            ->whereBetween('sm.stock_date', [$start->format('Y-m-d H:i:s'), $end->format('Y-m-d H:i:s')])
+            ->selectRaw(implode(', ', $select))
+            ->first();
+
+        return [
+            'return_total' => (float) ($row->return_total ?? 0),
+            'in_total' => (float) ($row->in_total ?? 0),
+            'out_total' => (float) ($row->out_total ?? 0),
+            'waste_total' => (float) ($row->waste_total ?? 0),
+            'sale_total' => (float) ($row->sale_total ?? 0),
         ];
     }
 
-    return response()->json([
-        'message' => 'Profit by month fetched successfully!',
-        'status' => 200,
-        'data' => $data,
-    ]);
-}
+    private function stockTotalsForOptionalRange(array $filters, ?Carbon $start, ?Carbon $end, bool $includeSaleType = false): array
+    {
+        $select = [
+            'COALESCE(SUM(CASE WHEN sm.stock_type_id = 1 THEN sd.quantity ELSE 0 END), 0) AS return_total',
+            'COALESCE(SUM(CASE WHEN sm.stock_type_id = 2 THEN sd.quantity ELSE 0 END), 0) AS in_total',
+            'COALESCE(SUM(CASE WHEN sm.stock_type_id = 3 THEN sd.quantity ELSE 0 END), 0) AS out_total',
+            'COALESCE(SUM(CASE WHEN sm.stock_type_id = 4 THEN sd.quantity ELSE 0 END), 0) AS waste_total',
+        ];
 
+        if ($includeSaleType) {
+            $select[] = 'COALESCE(SUM(CASE WHEN sm.stock_type_id = 5 THEN sd.quantity ELSE 0 END), 0) AS sale_total';
+        }
 
+        $query = $this->stockBaseQuery($filters);
 
+        if ($start && $end) {
+            $query->whereBetween('sm.stock_date', [$start->format('Y-m-d H:i:s'), $end->format('Y-m-d H:i:s')]);
+        }
+
+        $row = $query->selectRaw(implode(', ', $select))->first();
+
+        return [
+            'return_total' => (float) ($row->return_total ?? 0),
+            'in_total' => (float) ($row->in_total ?? 0),
+            'out_total' => (float) ($row->out_total ?? 0),
+            'waste_total' => (float) ($row->waste_total ?? 0),
+            'sale_total' => (float) ($row->sale_total ?? 0),
+        ];
+    }
+
+    private function saleQuantitySum(array $filters, Carbon $start, Carbon $end): float
+    {
+        return (float) $this->saleQuantityBaseQuery($filters)
+            ->whereBetween('om.order_date', [$start->format('Y-m-d H:i:s'), $end->format('Y-m-d H:i:s')])
+            ->sum('oi.quantity');
+    }
+
+    private function saleAmountSum(array $filters, Carbon $start, Carbon $end): float
+    {
+        return (float) $this->saleAmountBaseQuery($filters)
+            ->whereBetween('om.order_date', [$start->format('Y-m-d H:i:s'), $end->format('Y-m-d H:i:s')])
+            ->sum('om.payment');
+    }
+
+    private function purchaseQuantitySum(array $filters, Carbon $start, Carbon $end): float
+    {
+        return (float) $this->purchaseQuantityBaseQuery($filters)
+            ->whereBetween('p.purchase_date', [$start->format('Y-m-d H:i:s'), $end->format('Y-m-d H:i:s')])
+            ->sum('pd.quantity');
+    }
+
+    private function purchaseAmountSum(array $filters, Carbon $start, Carbon $end): float
+    {
+        return (float) $this->purchaseAmountBaseQuery($filters)
+            ->whereBetween('p.purchase_date', [$start->format('Y-m-d H:i:s'), $end->format('Y-m-d H:i:s')])
+            ->sum('p.total_amount');
+    }
+
+    private function expenseAmountSum(array $filters, Carbon $start, Carbon $end): float
+    {
+        return (float) $this->expenseAmountBaseQuery($filters)
+            ->whereBetween('em.expense_date', [$start->format('Y-m-d H:i:s'), $end->format('Y-m-d H:i:s')])
+            ->sum('em.amount');
+    }
+
+    private function profitAmountSum(array $filters, Carbon $start, Carbon $end): float
+    {
+        return $this->saleAmountSum($filters, $start, $end)
+            - $this->purchaseAmountSum($filters, $start, $end)
+            - $this->expenseAmountSum($filters, $start, $end);
+    }
+
+    private function operationQuantityTotal(string $operation, array $filters, ?Carbon $start, ?Carbon $end): float
+    {
+        if ($operation === 'stock') {
+            $stock = $this->stockTotalsForOptionalRange($filters, $start, $end, true);
+
+            return $stock['return_total']
+                + $stock['in_total']
+                + $stock['out_total']
+                + $stock['sale_total']
+                + $stock['waste_total'];
+        }
+
+        return match ($operation) {
+            'sale' => $this->sumWithOptionalRange($this->saleQuantityBaseQuery($filters), 'om.order_date', 'oi.quantity', $start, $end),
+            'purchase' => $this->sumWithOptionalRange($this->purchaseQuantityBaseQuery($filters), 'p.purchase_date', 'pd.quantity', $start, $end),
+            default => 0.0,
+        };
+    }
+
+    private function operationPriceTotal(string $operation, array $filters, ?Carbon $start, ?Carbon $end): float
+    {
+        return match ($operation) {
+            'sale' => $this->sumWithOptionalRange($this->saleAmountBaseQuery($filters), 'om.order_date', 'om.payment', $start, $end),
+            'purchase' => $this->sumWithOptionalRange($this->purchaseAmountBaseQuery($filters), 'p.purchase_date', 'p.total_amount', $start, $end),
+            'expense' => $this->sumWithOptionalRange($this->expenseAmountBaseQuery($filters), 'em.expense_date', 'em.amount', $start, $end),
+            'profit' => $this->operationPriceTotal('sale', $filters, $start, $end)
+                - $this->operationPriceTotal('purchase', $filters, $start, $end)
+                - $this->operationPriceTotal('expense', $filters, $start, $end),
+            default => 0.0,
+        };
+    }
+
+    private function sumWithOptionalRange($query, string $dateColumn, string $sumColumn, ?Carbon $start, ?Carbon $end): float
+    {
+        if ($start && $end) {
+            $query->whereBetween($dateColumn, [$start->format('Y-m-d H:i:s'), $end->format('Y-m-d H:i:s')]);
+        }
+
+        return (float) $query->sum($sumColumn);
+    }
 }

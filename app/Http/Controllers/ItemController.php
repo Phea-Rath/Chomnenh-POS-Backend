@@ -20,6 +20,7 @@ use App\Models\Attribute;
 use App\Models\AttributeValueDetail;
 use App\Services\ItemService;
 use App\Services\DetailService;
+use App\Services\PostImage;
 
 class ItemController extends Controller
 {
@@ -27,13 +28,15 @@ class ItemController extends Controller
     protected $attributeService;
     protected $itemService;
     protected $detailService;
+    protected $postImage;
 
 
-    public function __construct(AttributeService $attributeService, ItemService $itemService, DetailService $detailService)
+    public function __construct(AttributeService $attributeService, ItemService $itemService, DetailService $detailService, PostImage $postImage)
     {
         $this->attributeService = $attributeService;
         $this->itemService = $itemService;
         $this->detailService = $detailService;
+        $this->postImage = $postImage;
     }
 
     public function indexMobile(Request $request)
@@ -665,6 +668,48 @@ class ItemController extends Controller
                 "data" => $items,
             ], 200);
 }
+    }
+
+    public function updateImage(Request $request, string $id)
+    {
+        $item = Items::find($id);
+
+        if (!$item) {
+            return response()->json([
+                "message" => "This item not found!",
+                "status" => 404,
+            ], 404);
+        }
+
+        $validated = $request->validate([
+            'images' => 'required|array|min:1',
+            'images.*' => 'required|file|image',
+            'delete_image_ids' => 'nullable|array',
+            'delete_image_ids.*' => 'integer|exists:images,id',
+        ]);
+
+        if (!empty($validated['delete_image_ids'])) {
+            $existingIds = ItemImage::where('item_id', $item->item_id)
+                ->whereIn('image_id', $validated['delete_image_ids'])
+                ->pluck('image_id')
+                ->toArray();
+
+            if (!empty($existingIds)) {
+                $this->postImage->deleteItemImages($existingIds);
+            }
+        }
+
+        $files = $request->file('images', []);
+        $uploadedImages = $this->postImage->attachItemImages($item->item_id, $files);
+
+        return response()->json([
+            "message" => "Item images updated successfully",
+            "status" => 200,
+            "data" => [
+                'item_id' => $item->item_id,
+                'images' => $uploadedImages,
+            ],
+        ]);
     }
 
     public function importItem(Request $request)

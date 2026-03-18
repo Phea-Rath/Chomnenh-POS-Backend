@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Purchase;
 use App\Models\Production;
 use App\Models\StockMaster;
 use App\Models\ExchangeRate;
@@ -383,32 +382,72 @@ class ReportController extends Controller
             'supplier_id' => 'nullable|integer'
         ]);
 
-        $query = Purchase::with(['details.item', 'payments', 'users', 'supplier'])
-            ->where('is_deleted', 0)
-            ->whereHas('users', function ($query) use ($proId) {
-                $query->where('profile_id', $proId);
-            });
+        $query = DB::table('purchases as p')
+            ->join('users as u', 'u.id', '=', 'p.created_by')
+            ->join('profiles as pf', 'pf.id', '=', 'u.profile_id')
+            ->leftJoin('suppliers as s', 's.supplier_id', '=', 'p.supplier_id')
+            ->leftJoin('purchase_details as pd', function ($join) {
+                $join->on('pd.purchase_id', '=', 'p.purchase_id')
+                    ->where('pd.is_deleted', 0);
+            })
+            ->where('p.is_deleted', 0)
+            ->where('pf.id', $proId)
+            ->select(
+                'p.purchase_id',
+                'p.purchase_no',
+                's.supplier_name',
+                's.supplier_tel',
+                'p.purchase_date',
+                'u.username as created_by',
+                'p.shipping_fee',
+                'p.tax_amount',
+                'p.total_amount',
+                'p.total_paid',
+                'p.balance'
+            )
+            ->groupBy(
+                'p.purchase_id',
+                'p.purchase_no',
+                's.supplier_name',
+                's.supplier_tel',
+                'p.purchase_date',
+                'u.username',
+                'p.shipping_fee',
+                'p.tax_amount',
+                'p.total_amount',
+                'p.total_paid',
+                'p.balance'
+            );
 
-        // Apply created_by filter if provided
         if (isset($validated['created_by'])) {
-            $query->where('created_by', $validated['created_by']);
-        }
-        if(isset($validated['supplier_id'])){
-            $query->whereHas('supplier', function ($q) use ($validated) {
-                $q->where('supplier_id', $validated['supplier_id']);
-            });
+            $query->where('p.created_by', $validated['created_by']);
         }
 
-        // Determine date range
+        if (isset($validated['supplier_id'])) {
+            $query->where('p.supplier_id', $validated['supplier_id']);
+        }
+
         $startDate = $validated['start_date'] ?? '';
         $endDate = $validated['end_date'] ?? '';
 
         if ($startDate || $endDate) {
-            // If start_date is empty, use the earliest purchase date
-            $startDate = $startDate ?: Purchase::where('is_deleted', 0)->min('purchase_date') ?: date('Y-m-d');
-            // If end_date is empty, use the latest purchase date
-            $endDate = $endDate ?: Purchase::where('is_deleted', 0)->max('purchase_date') ?: date('Y-m-d');
-            // Ensure end_date is not before start_date
+            $baseDateQuery = DB::table('purchases as p')
+                ->join('users as u', 'u.id', '=', 'p.created_by')
+                ->join('profiles as pf', 'pf.id', '=', 'u.profile_id')
+                ->where('p.is_deleted', 0)
+                ->where('pf.id', $proId);
+
+            if (isset($validated['created_by'])) {
+                $baseDateQuery->where('p.created_by', $validated['created_by']);
+            }
+
+            if (isset($validated['supplier_id'])) {
+                $baseDateQuery->where('p.supplier_id', $validated['supplier_id']);
+            }
+
+            $startDate = $startDate ?: ($baseDateQuery->min('p.purchase_date') ?: date('Y-m-d'));
+            $endDate = $endDate ?: ($baseDateQuery->max('p.purchase_date') ?: date('Y-m-d'));
+
             if (strtotime($endDate) < strtotime($startDate)) {
                 return response()->json([
                     'message' => 'End date cannot be before start date.',
@@ -418,20 +457,18 @@ class ReportController extends Controller
             $query->whereBetween('purchase_date', [$startDate, $endDate]);
         }
 
-        $purchases = $query->get();
+        $purchases = $query->orderBy('p.purchase_date', 'desc')->get();
 
         return response()->json([
             'message' => 'Purchase report generated successfully!',
             'status' => 200,
             'data' => $purchases->map(function ($purchase) {
                 return [
-                    'barcode' => $purchase->details->map(function ($detail) {
-                        return $detail->item ? $detail->item->barcode : 'N/A';
-                    })->first(),
-                    'supplier_name' => $purchase->supplier->supplier_name,
-                    'supplier_tel' => $purchase->supplier->supplier_tel,
+                    'purchase_no' => $purchase->purchase_no ?? 'N/A',
+                    'supplier_name' => $purchase->supplier_name,
+                    'supplier_tel' => $purchase->supplier_tel,
                     'purchase_date' => $purchase->purchase_date,
-                    'created_by' => $purchase->users->username,
+                    'created_by' => $purchase->created_by,
                     'shipping_fee' => number_format($purchase->shipping_fee, 2, '.', ''),
                     'tax_amount' => number_format($purchase->tax_amount, 2, '.', ''),
                     'total_amount' => number_format($purchase->total_amount, 2, '.', ''),

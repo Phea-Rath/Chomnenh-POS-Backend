@@ -5,11 +5,16 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 
 use App\Models\Customers;
+use App\Services\PostImage;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 
 class CustomerController extends Controller
 {
+	public function __construct(private PostImage $postImage)
+	{
+	}
+
 	public function index()
 	{
 		$user = Auth::user();
@@ -230,5 +235,32 @@ class CustomerController extends Controller
 			"status" => 200,
 			"data" => $customers,
 		], 200);
+	}
+
+	public function updateImage(Request $request, string $id)
+	{
+		$customer = Customers::find($id);
+
+		if (!$customer) {
+			return response()->json([
+				"message" => "This customer not found!",
+				"status" => 404,
+			], 404);
+		}
+
+		$request->validate([
+			'image' => 'required|file|image',
+		]);
+
+		$filename = $this->postImage->replaceSingle($customer->image, $request->file('image'));
+		$customer->image = $filename;
+		$customer->save();
+		$customer->image = url('storage/images/' . $filename);
+
+		return response()->json([
+			"message" => "Customer image updated successfully",
+			"status" => 200,
+			"data" => $customer,
+		]);
 	}
 }

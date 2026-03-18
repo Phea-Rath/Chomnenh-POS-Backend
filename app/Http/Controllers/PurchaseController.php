@@ -163,8 +163,6 @@ class PurchaseController extends Controller
 
             return [
                 'id' => (int) $item->id,
-                'product_name' => $item->item_name,
-                'item_code' => $item->item_code,
                 'price' => $price,
                 'quantity' => (int) $item->quantity,
                 'total' => (float) $item->subtotal,
@@ -184,10 +182,185 @@ class PurchaseController extends Controller
             'purchase_id' => $purchase->purchase_id,
             'purchase_no' => $purchase->purchase_no,
             'status' => (int) $purchase->status,
-            'supplier' => [
-                'id' => (int) $purchase->supplier_id,
-                'name' => $purchase->supplier_name,
+            'supplier_id' => (int) $purchase->supplier_id,
+            'purchase_date' => $purchase->created_at ?? $purchase->purchase_date,
+            'subtotal' => $subTotal,
+            'tax_percent' => $taxPercent,
+            'tax_amount' => $taxAmount,
+            'discount_percent' => $discountPercent,
+            'discount_amount' => $discountAmount,
+            'delivery_fee' => $deliveryFee,
+            'grand_total' => $grandTotal,
+            'paymented' => (float) $purchase->total_paid,
+            'balance' => (float) $purchase->balance,
+            'exchange_rate' => $exchangeRate,
+            'grand_total_khr' => round($grandTotal * $exchangeRate, 2),
+            'created_by_name' => $purchase->created_by_name,
+            'items' => $items,
+        ];
+    }
+
+    public function indexMobileRaw(Request $request)
+    {
+        $user = Auth::user();
+        $proId = $user->profile_id;
+        $limit = (int) $request->input('limit', 10);
+        $page = (int) $request->input('page', 1);
+        $search = $request->input('search');
+
+        $query = DB::table('purchases as p')
+            ->join('users as u', 'p.created_by', '=', 'u.id')
+            ->join('profiles as pr', 'u.profile_id', '=', 'pr.id')
+            ->leftJoin('suppliers as s', 'p.supplier_id', '=', 's.supplier_id')
+            ->where('p.is_deleted', 0)
+            ->where('pr.id', $proId);
+
+        if (!empty($search)) {
+            $query->where(function ($q) use ($search) {
+                $q->where('p.purchase_no', 'LIKE', "%{$search}%")
+                    ->orWhere('s.supplier_name', 'LIKE', "%{$search}%")
+                    ->orWhere('u.username', 'LIKE', "%{$search}%");
+            });
+        }
+
+        $rawPurchases = $query->whereExists(function ($q) {
+                $q->select(DB::raw(1))
+                    ->from('purchase_raw_details as prd')
+                    ->whereColumn('prd.purchase_id', 'p.purchase_id')
+                    ->where('prd.is_deleted', 0);
+            })
+            ->select('p.purchase_id')
+            ->orderBy('p.purchase_id', 'DESC')
+            ->paginate($limit, ['*'], 'page', $page);
+
+        if ($rawPurchases->total() === 0) {
+            return response()->json([
+                'message' => 'Order details retrieved successfully',
+                'status' => 200,
+                'data' => [],
+            ]);
+        }
+
+        $purchases = [];
+        foreach ($rawPurchases as $row) {
+            $formatted = $this->formatMobileRawPurchase((int) $row->purchase_id, $proId);
+            if ($formatted) {
+                $purchases[] = $formatted;
+            }
+        }
+
+        return response()->json([
+            'message' => 'Order details retrieved successfully',
+            'status' => 200,
+            'data' => $purchases,
+            'pagination' => [
+                'current_page' => $rawPurchases->currentPage(),
+                'per_page' => $rawPurchases->perPage(),
+                'total' => $rawPurchases->total(),
+                'last_page' => $rawPurchases->lastPage(),
             ],
+        ]);
+    }
+
+    public function showMobileRaw($id)
+    {
+        $user = Auth::user();
+        $proId = $user->profile_id;
+
+        $data = $this->formatMobileRawPurchase((int) $id, $proId);
+        if (!$data) {
+            return response()->json([
+                'message' => 'Purchase not found!',
+                'status' => 404,
+                'data' => null,
+            ], 404);
+        }
+
+        return response()->json([
+            'message' => 'Order details retrieved successfully',
+            'status' => 200,
+            'data' => $data,
+        ]);
+    }
+
+    private function formatMobileRawPurchase(int $purchaseId, int $profileId): ?array
+    {
+        $purchase = DB::table('purchases as p')
+            ->join('users as u', 'p.created_by', '=', 'u.id')
+            ->join('profiles as pr', 'u.profile_id', '=', 'pr.id')
+            ->leftJoin('suppliers as s', 'p.supplier_id', '=', 's.supplier_id')
+            ->where('p.purchase_id', $purchaseId)
+            ->where('p.is_deleted', 0)
+            ->where('pr.id', $profileId)
+            ->whereExists(function ($q) {
+                $q->select(DB::raw(1))
+                    ->from('purchase_raw_details as prd')
+                    ->whereColumn('prd.purchase_id', 'p.purchase_id')
+                    ->where('prd.is_deleted', 0);
+            })
+            ->select(
+                'p.purchase_id',
+                'p.purchase_no',
+                'p.status',
+                'p.supplier_id',
+                'p.purchase_date',
+                'p.sub_total',
+                'p.tax_rate',
+                'p.tax_amount',
+                'p.shipping_fee',
+                'p.total_amount',
+                'p.total_paid',
+                'p.balance',
+                'p.exchange_rate',
+                'p.created_at',
+                's.supplier_name',
+                'u.username as created_by_name'
+            )
+            ->first();
+
+        if (!$purchase) {
+            return null;
+        }
+
+        $itemRows = DB::table('purchase_raw_details as prd')
+            ->join('raw_materials as rm', 'prd.raw_material_id', '=', 'rm.id')
+            ->where('prd.purchase_id', $purchaseId)
+            ->where('prd.is_deleted', 0)
+            ->select(
+                'prd.id',
+                'prd.raw_material_id',
+                'prd.item_cost',
+                'prd.quantity',
+                'prd.subtotal',
+                'rm.material_name',
+                'rm.material_code'
+            )
+            ->orderBy('prd.id', 'asc')
+            ->get();
+
+        $items = $itemRows->map(function ($item) {
+            return [
+                'id' => (int) $item->id,
+                'price' => (float) $item->item_cost,
+                'quantity' => (int) $item->quantity,
+                'total' => (float) $item->subtotal,
+            ];
+        })->values()->toArray();
+
+        $subTotal = (float) $purchase->sub_total;
+        $taxPercent = (float) $purchase->tax_rate;
+        $taxAmount = (float) $purchase->tax_amount;
+        $deliveryFee = (float) $purchase->shipping_fee;
+        $grandTotal = (float) $purchase->total_amount;
+        $discountAmount = round(max(0, ($subTotal + $taxAmount + $deliveryFee) - $grandTotal), 2);
+        $discountPercent = $subTotal > 0 ? round(($discountAmount / $subTotal) * 100, 2) : 0;
+        $exchangeRate = (float) $purchase->exchange_rate;
+
+        return [
+            'purchase_id' => $purchase->purchase_id,
+            'purchase_no' => $purchase->purchase_no,
+            'status' => (int) $purchase->status,
+            'supplier_id' => (int) $purchase->supplier_id,
             'purchase_date' => $purchase->created_at ?? $purchase->purchase_date,
             'subtotal' => $subTotal,
             'tax_percent' => $taxPercent,
@@ -318,8 +491,7 @@ class PurchaseController extends Controller
                 $query->where(function ($q) use ($search) {
                     $q->where('p.purchase_no', 'like', "%{$search}%")
                     ->orWhere('s.supplier_name', 'like', "%{$search}%")
-                    ->orWhere('u.username', 'like', "%{$search}%")
-                    ->orWhere('p.note', 'like', "%{$search}%");
+                    ->orWhere('u.username', 'like', "%{$search}%");
                 });
             })
 
@@ -534,19 +706,16 @@ class PurchaseController extends Controller
                 ]);
             }
         }
-        // Update items_cost for each item in the Items table
-        foreach ($validated['items'] as $item) {
-            $itemData = Items::where('item_id', $item['item_id'])->first();
-            $itemData->item_cost = $item['item_cost'];
-            $itemData->save();
-        }
+        // // Update items_cost for each item in the Items table
+        // foreach ($validated['items'] as $item) {
+        //     $itemData = Items::where('item_id', $item['item_id'])->first();
+        //     $itemData->item_cost = $item['item_cost'];
+        //     $itemData->save();
+        // }
 
         return response()->json([
             'message'  => 'Purchase created successfully!',
             'status'   => 201,
-            'data'     => $purchase,
-            'details'  => $details,
-            'payments' => $payments
         ], 201);
     }
 
@@ -713,8 +882,6 @@ class PurchaseController extends Controller
         return response()->json([
             'message' => 'Purchase updated successfully',
             'status'  => 200,
-            'data'    => $purchase,
-            'details' => $details
         ]);
     }
 
@@ -802,8 +969,6 @@ class PurchaseController extends Controller
         return response()->json([
             'message' => 'Purchase updated successfully',
             'status'  => 200,
-            'data'    => $purchase,
-            'details' => $details
         ]);
     }
 

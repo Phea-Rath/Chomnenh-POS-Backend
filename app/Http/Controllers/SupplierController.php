@@ -3,12 +3,17 @@
 namespace App\Http\Controllers;
 
 use App\Models\Suppliers;
+use App\Services\PostImage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 
 class SupplierController extends Controller
 {
+    public function __construct(private PostImage $postImage)
+    {
+    }
+
     public function index()
     {
         $user = Auth::user();
@@ -239,5 +244,32 @@ class SupplierController extends Controller
             'status' => 200,
             'data' => $supplier,
         ], 200);
+    }
+
+    public function updateImage(Request $request, string $id)
+    {
+        $supplier = Suppliers::find($id);
+
+        if (!$supplier) {
+            return response()->json([
+                "message" => "This supplier not found!",
+                "status" => 404,
+            ], 404);
+        }
+
+        $request->validate([
+            'image' => 'required|file|image',
+        ]);
+
+        $filename = $this->postImage->replaceSingle($supplier->image, $request->file('image'));
+        $supplier->image = $filename;
+        $supplier->save();
+        $supplier->image = url('storage/images/' . $filename);
+
+        return response()->json([
+            "message" => "Supplier image updated successfully",
+            "status" => 200,
+            "data" => $supplier,
+        ]);
     }
 }
