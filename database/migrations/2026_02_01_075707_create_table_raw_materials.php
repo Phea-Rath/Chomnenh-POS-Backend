@@ -17,6 +17,7 @@ return new class extends Migration
             $table->string('material_name');
             $table->string('material_code')->unique();
             $table->text('material_image')->nullable();
+            $table->decimal('material_cost', 12, 2)->default(0);
             $table->string('primary_unit');
             $table->string('secondary_unit');
             $table->decimal('conversion_value', 12, 4);

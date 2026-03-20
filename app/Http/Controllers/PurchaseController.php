@@ -707,11 +707,11 @@ class PurchaseController extends Controller
             }
         }
         // // Update items_cost for each item in the Items table
-        // foreach ($validated['items'] as $item) {
-        //     $itemData = Items::where('item_id', $item['item_id'])->first();
-        //     $itemData->item_cost = $item['item_cost'];
-        //     $itemData->save();
-        // }
+        foreach ($validated['items'] as $item) {
+            $itemData = RawMaterial::where('id', $item['item_id'])->first();
+            $itemData->material_cost = $item['item_cost'];
+            $itemData->save();
+        }
 
         return response()->json([
             'message'  => 'Purchase created successfully!',

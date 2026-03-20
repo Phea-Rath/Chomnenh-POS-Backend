@@ -16,6 +16,7 @@ class RawMaterial extends Model
         'material_name',
         'material_code',
         'material_image',
+        'material_cost',
         'primary_unit',
         'secondary_unit',
         'conversion_value',
