@@ -943,12 +943,22 @@ private function formatMobileStockTransfer(int $stockId, int $profileId, bool $i
         ]);
 
 
+        if($validated['from_warehouse'] != 1||$validated['from_warehouse'] != 3){
+            return response()->json([
+                'message'=>'Main Warehouse can to use stock  only "stock in" and "stock out"',
+            ],200);
+        }
 
         $exchange_rate = ExchangeRate::find($proId);
         // Create the post
         $data = StockMaster::create([
             'stock_no' => $stock_no,
-            'stock_type_id' => $validated['stock_type_id'],
+            'stock_type_id' => $validated['from_warehouse'] == 1
+                                ? 1
+                                : ($validated['to_warehouse'] == 1
+                                    ? 3
+                                    : $validated['stock_type_id']
+                                ),
             'from_warehouse' => $validated['from_warehouse'],
             'warehouse_id' => $validated['warehouse_id'],
             'quantity' => array_sum(array_column($validated['items'], 'quantity')),
@@ -1008,13 +1018,24 @@ private function formatMobileStockTransfer(int $stockId, int $profileId, bool $i
             'items.*.expire_date' => 'required|date',
         ]);
 
+        if($validated['from_warehouse'] != 1||$validated['from_warehouse'] != 3){
+            return response()->json([
+                'message'=>'Raw Material Warehouse can to use stock  only "stock in" and "stock out"',
+            ],200);
+        }
+
 
 
         $exchange_rate = ExchangeRate::find($proId);
         // Create the post
         $data = StockMaster::create([
             'stock_no' => $stock_no,
-            'stock_type_id' => $validated['stock_type_id'],
+            'stock_type_id' => $validated['from_warehouse'] == 5
+                                ? 1
+                                : ($validated['to_warehouse'] == 5
+                                    ? 3
+                                    : $validated['stock_type_id']
+                                ),
             'from_warehouse' => $validated['from_warehouse'],
             'warehouse_id' => $validated['warehouse_id'],
             'quantity' => array_sum(array_column($validated['items'], 'quantity')),
@@ -1156,8 +1177,20 @@ private function formatMobileStockTransfer(int $stockId, int $profileId, bool $i
             'items.*.expire_date' => 'required|date',
             'items.*.item_cost' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
         ]);
+
+        if($validated['from_warehouse'] != 1||$validated['from_warehouse'] != 3){
+            return response()->json([
+                'message'=>'Main Warehouse can to use stock  only "stock in" and "stock out"',
+            ],200);
+        }
+
         $stock_masters->update([
-            'stock_type_id' => $validated['stock_type_id'],
+            'stock_type_id' => $validated['from_warehouse'] == 1
+                                ? 1
+                                : ($validated['to_warehouse'] == 1
+                                    ? 3
+                                    : $validated['stock_type_id']
+                                ),
             'from_warehouse' => $validated['from_warehouse'],
             'warehouse_id' => $validated['warehouse_id'],
             'stock_date' => $validated['stock_date'],
@@ -1223,8 +1256,21 @@ private function formatMobileStockTransfer(int $stockId, int $profileId, bool $i
             'items.*.expire_date' => 'required|date',
             'items.*.item_cost' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
         ]);
+
+        if($validated['from_warehouse'] != 1||$validated['from_warehouse'] != 3){
+            return response()->json([
+                'message'=>'Raw Material Warehouse can to use stock  only "stock in" and "stock out"',
+            ],200);
+        }
+
+
         $stock_masters->update([
-            'stock_type_id' => $validated['stock_type_id'],
+            'stock_type_id' => $validated['from_warehouse'] == 5
+                                ? 1
+                                : ($validated['to_warehouse'] == 5
+                                    ? 3
+                                    : $validated['stock_type_id']
+                                ),
             'from_warehouse' => $validated['from_warehouse'],
             'warehouse_id' => $validated['warehouse_id'],
             'stock_date' => $validated['stock_date'],

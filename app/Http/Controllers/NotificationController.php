@@ -75,6 +75,7 @@ class NotificationController extends Controller
             ->where('profiles.id', $proId)
             ->where('om.is_deleted', 0)
             ->where('om.online', 1)
+            ->where('om.status', 1)
             // ->where('om.status','!=', 6)
             ->select('om.*', 'delivers.deliver_name', 'delivers.image as deliver_image')
             ->orderBy('om.order_id', 'desc')
@@ -95,35 +96,35 @@ class NotificationController extends Controller
         }
 
         // Attach items to each order
-        $ordersWithItems = $orderMasters->map(function ($order) {
-            $order->items = DB::table('order_items as oi')
-                ->join('items as i', 'oi.item_id', '=', 'i.item_id')
-                ->join('categories as c', 'i.category_id', '=', 'c.category_id')
-                ->select(
-                    'i.item_name',
-                    'i.item_code',
-                    'i.category_id',
-                    'c.category_name',
-                    'oi.*'
-                )
-                ->where('oi.is_deleted', 0)
-                ->where('order_id', $order->order_id)
-                ->get();
+        // $ordersWithItems = $orderMasters->map(function ($order) {
+        //     $order->items = DB::table('order_items as oi')
+        //         ->join('items as i', 'oi.item_id', '=', 'i.item_id')
+        //         ->join('categories as c', 'i.category_id', '=', 'c.category_id')
+        //         ->select(
+        //             'i.item_name',
+        //             'i.item_code',
+        //             'i.category_id',
+        //             'c.category_name',
+        //             'oi.*'
+        //         )
+        //         ->where('oi.is_deleted', 0)
+        //         ->where('order_id', $order->order_id)
+        //         ->get();
 
-            // Fix: loop through each item
-            foreach ($order->items as $item) {
-                    $item->images = $this->itemService->getImage($item->item_id);
-                    $item->item_image = $this->itemService->getImage($item->item_id)[0]['image'] ?? null;
-            }
+        //     // Fix: loop through each item
+        //     foreach ($order->items as $item) {
+        //             $item->images = $this->itemService->getImage($item->item_id);
+        //             $item->item_image = $this->itemService->getImage($item->item_id)[0]['image'] ?? null;
+        //     }
 
-            return $order;
-        });
+        //     return $order;
+        // });
 
         // broadcast(new OrderMessage($ordersWithItems))->toOthers();
         return response()->json([
             'message' => 'Order online fetched successfully!',
             'status' => 200,
-            'data' => $ordersWithItems,
+            'data' => $orderMasters,
         ]);
     }
 

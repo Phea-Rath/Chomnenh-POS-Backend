@@ -96,6 +96,66 @@ class ReportController extends Controller
         ]);
     }
 
+    public function stockReportByRaw(Request $request){
+        $user = Auth::user();
+        $proId = $user->profile_id;
+
+        $request->validate([
+            'created_by' => 'nullable|integer|exists:users,id',
+            'start_date' => 'nullable|date',
+            'end_date' => 'nullable|date',
+            'raw_material_id' => 'nullable|integer|exists:raw_materials,id',
+        ]);
+
+        $query = DB::table('stock_raw_details as srd')
+            ->select(
+                'rm.id as raw_material_id',
+                'rm.material_code',
+                'rm.material_name',
+                'rm.primary_unit',
+                'rm.secondary_unit',
+                DB::raw('SUM(srd.quantity) as quantity'),
+            )
+            ->join('stock_masters as sm', 'sm.stock_id', '=', 'srd.stock_id')
+            ->join('raw_materials as rm', 'rm.id', '=', 'srd.raw_material_id')
+            ->join('users as u', 'u.id', '=', 'sm.stock_created_by')
+            ->join('profiles as pf', 'pf.id', '=', 'u.profile_id')
+            ->where('sm.is_deleted', 0)
+            ->where('srd.is_deleted', 0)
+            ->where('pf.id', $proId)
+            ->groupBy(
+                'rm.id',
+                'rm.material_code',
+                'rm.material_name',
+                'rm.primary_unit',
+                'rm.secondary_unit'
+            );
+
+        if ($request->filled('created_by')) {
+            $query->where('sm.stock_created_by', $request->created_by);
+        }
+
+        if ($request->filled('raw_material_id')) {
+            $query->where('rm.id', $request->raw_material_id);
+        }
+
+        if ($request->filled('start_date') && $request->filled('end_date')) {
+            $query->whereBetween('sm.stock_date', [$request->start_date, $request->end_date]);
+        } elseif ($request->filled('start_date')) {
+            $query->where('sm.stock_date', '>=', $request->start_date);
+        } elseif ($request->filled('end_date')) {
+            $query->where('sm.stock_date', '<=', $request->end_date);
+        }
+
+        $results = $query->get();
+
+        return response()->json([
+            'message' => 'stock report by raw material retrieved successfully',
+            'status' => 200,
+            'data' => $results
+        ], 200);
+    }
+
     public function saleReportByItem(Request $request)
     {
         $user = Auth::user();

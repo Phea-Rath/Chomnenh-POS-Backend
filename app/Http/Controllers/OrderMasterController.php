@@ -443,7 +443,7 @@ class OrderMasterController extends Controller
             'order_customer_id' => $validated['order_customer_id'] ?? null,
             'sale_type' => $validated['sale_type'] ?? null,
             'online' => $validated['online'],
-            'status' => $validated['status'],
+            'status' => $validated['delivery_fee'] > 0 ? 1 : $validated['status'],
             'order_tel' => $validated['order_tel'],
             'deliver_id' => $validated['deliver_id'],
             'order_address' => $validated['order_address'],

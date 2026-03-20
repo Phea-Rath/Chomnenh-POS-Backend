@@ -117,6 +117,12 @@ class WarehouseController extends Controller
             ], 404);
         }
 
+        if($id ==1 || $id ==2 || $id ==3 || $id ==4 || $id ==5){
+            return response()->json([
+                "message" => "You can not update it!",
+            ], 401);
+        }
+
         $validated = $request->validate([
             'warehouse_name' => 'required|string|max:255',
             'status' => 'required|string|max:255',
@@ -142,6 +148,13 @@ class WarehouseController extends Controller
             return response()->json([
                 "message" => "This warehouse not found!",
             ], 404);
+        }
+
+
+        if($id ==1 || $id ==2 || $id ==3 || $id ==4 || $id ==5){
+            return response()->json([
+                "message" => "You can not delete it!",
+            ], 401);
         }
 
         $warehouses->is_deleted = 1;

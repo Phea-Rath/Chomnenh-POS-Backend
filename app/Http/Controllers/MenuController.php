@@ -58,7 +58,30 @@ class MenuController extends Controller
     public function getMenuSidebarByCurrentUser(){
         $user = auth()->user();
         $permissions = Permission::where('user_id', $user->id)->pluck('menu_id');
-        $menus = Menus::where('menu_type', '=', 1)
+        $menus = Menus::whereIn('menu_type', [1,6])
+        ->select('menu_id', 'menu_name', 'menu_icon', 'menu_path', 'order_menu')
+        ->orderBy('order_menu', 'asc')
+        ->get();
+
+        foreach ($menus as $item) {
+            if ($item->menu_icon) {
+                $filenameOnly = basename($item->menu_icon);
+                $item->menu_icon = url('storage/images/' . $filenameOnly);
+            }
+            $item->active = in_array($item->menu_id, $permissions->toArray()) ? 1 : 0;
+        }
+
+        return response()->json([
+            'message' => 'menus sidebar get successfully',
+            'status' => 200,
+            'data' => $menus
+        ]);
+    }
+
+    public function getMenuInventoryByCurrentUser(){
+        $user = auth()->user();
+        $permissions = Permission::where('user_id', $user->id)->pluck('menu_id');
+        $menus = Menus::where('menu_type', "=", 5)
         ->select('menu_id', 'menu_name', 'menu_icon', 'menu_path', 'order_menu')
         ->orderBy('order_menu', 'asc')
         ->get();
@@ -154,7 +177,28 @@ class MenuController extends Controller
 
     public function getMenuSidebarByUserId($id){
         $permissions = Permission::where('user_id', $id)->pluck('menu_id');
-        $menus = Menus::where('menu_type', '=', 1)
+        $menus = Menus::whereIn('menu_type', [1,6])
+        ->select('menu_id', 'menu_name', 'menu_icon', 'menu_path', 'order_menu')
+        ->orderBy('order_menu', 'asc')
+        ->get();
+
+        foreach ($menus as $item) {
+            if ($item->menu_icon) {
+                $filenameOnly = basename($item->menu_icon);
+                $item->menu_icon = url('storage/images/' . $filenameOnly);
+            }
+            $item->active = in_array($item->menu_id, $permissions->toArray()) ? 1 : 0;
+        }
+
+        return response()->json([
+            'message' => 'menus sidebar get successfully',
+            'status' => 200,
+            'data' => $menus
+        ]);
+    }
+    public function getMenuInventoryByUserId($id){
+        $permissions = Permission::where('user_id', $id)->pluck('menu_id');
+        $menus = Menus::where('menu_type', '=', 5)
         ->select('menu_id', 'menu_name', 'menu_icon', 'menu_path', 'order_menu')
         ->orderBy('order_menu', 'asc')
         ->get();
@@ -268,7 +312,7 @@ class MenuController extends Controller
             'menu_icon' => '',
             'menu_path' => 'required|string',
             'order_menu' => 'required|integer',
-            'parent_menu' => 'required|integer',
+            'parent_menu' => 'nullable|integer',
         ]);
 
         $imageName = null;
@@ -311,7 +355,7 @@ class MenuController extends Controller
             'menu_icon' => '',
             'menu_path' => 'sometimes|string',
             'order_menu' => 'required|integer',
-            'parent_menu' => 'required|integer',
+            'parent_menu' => 'nullable|integer',
         ]);
         $imageName = null;
         if ($request->hasFile('menu_icon')) {

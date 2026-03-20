@@ -103,6 +103,7 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::get('/items_by_code', [ItemController::class, 'showGroupByCode']);
     Route::get('/item_by_stock', [orderPageController::class, 'stockByItem']);
     Route::get('/item_in_stock', [orderPageController::class, 'showInStockByItem']);
+    Route::get('/delivery_tracking', [orderPageController::class, 'orderDelivery']);
     Route::resource('items', ItemController::class)->only(['index', 'show', 'store', 'destroy']);
     Route::post('/items/image/{id}', [ItemController::class, 'updateImage']);
     Route::post('/items/{id}', [ItemController::class, 'update']);
@@ -114,10 +115,12 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     //M
     Route::resource('menus', MenuController::class)->only(['index', 'show', 'store', 'update']);
     Route::get('/menu-sidebar', [MenuController::class, 'getMenuSidebarByCurrentUser']);
+    Route::get('/menu-inventories', [MenuController::class, 'getMenuInventoryByCurrentUser']);
     Route::get('/menu-home', [MenuController::class, 'getMenuHomeByCurrentUser']);
     Route::get('/menu-setting', [MenuController::class, 'getMenuSettingByCurrentUser']);
     Route::get('/menu-report', [MenuController::class, 'getMenuReportByCurrentUser']);
     Route::get('/menu-sidebar/{id}', [MenuController::class, 'getMenuSidebarByUserId']);
+    Route::get('/menu-inventories/{id}', [MenuController::class, 'getMenuInventoryByUserId']);
     Route::get('/menu-home/{id}', [MenuController::class, 'getMenuHomeByUserId']);
     Route::get('/menu-setting/{id}', [MenuController::class, 'getMenuSettingByUserId']);
     Route::get('/menu-report/{id}', [MenuController::class, 'getMenuReportByUserId']);
@@ -189,6 +192,7 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     //S
     Route::get("/stock_card", [DashboardController::class, "showCard"]);
     Route::post('/stock_report', [ReportController::class, 'stockReport']);
+    Route::post('/stock_report_raw', [ReportController::class, 'stockReportByRaw']);
     Route::post('/stock_report_item', [ReportController::class, 'stockReportByItem']);
     Route::get("/stock_by_warehouse/{id}", [StockMasterController::class, "stockByWarehouse"]);
     Route::post("/stock_graphic", [DashboardController::class, "showGraphic"]);

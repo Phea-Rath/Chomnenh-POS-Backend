@@ -498,4 +498,102 @@ public function stockByItem(Request $request)
             ]
         ], 200);
     }
+
+    public function orderDelivery(Request $request)
+    {
+        $user = Auth::user();
+        $proId = $user->profile_id;
+        $limit = (int) $request->input('limit', 10);
+        $page = (int) $request->input('page', 1);
+        $deliverId = $request->input('deliver_id');
+        $userId = $request->input('user_id');
+        $search = trim((string) $request->input('search', ''));
+
+        $orderMasters = DB::table('order_masters as om')
+            ->join('users', 'om.through', '=', 'users.id')
+            ->join('profiles', 'users.profile_id', '=', 'profiles.id')
+            ->leftJoin('delivers', 'om.deliver_id', '=', 'delivers.deliver_id')
+            ->where('profiles.id', $proId)
+            ->where('om.is_deleted', 0)
+            ->where(function ($query) {
+                $query->where(function ($subQuery) {
+                    $subQuery->where('om.online', 1)
+                        ->where('om.delivery_fee', 0);
+                })->orWhere(function ($subQuery) {
+                    $subQuery->where('om.online', 0)
+                        ->where('om.delivery_fee', '!=', 0);
+                });
+            })
+            ->when(!empty($deliverId), function ($query) use ($deliverId) {
+                $query->where('om.deliver_id', $deliverId);
+            })
+            ->when(!empty($userId), function ($query) use ($userId) {
+                $query->where('om.created_by', $userId);
+            })
+            ->when($search !== '', function ($query) use ($search) {
+                $query->where(function ($subQuery) use ($search) {
+                    $subQuery->where('om.order_tel', 'like', "%{$search}%")
+                        ->orWhere('om.order_address', 'like', "%{$search}%")
+                        ->orWhere('om.order_no', 'like', "%{$search}%");
+                });
+            })
+            ->select('om.*', 'delivers.deliver_name', 'delivers.image as deliver_image')
+            ->orderBy('om.order_id', 'desc')
+            ->paginate($limit, ['*'], 'page', $page);
+
+        if ($orderMasters->isEmpty()) {
+            return response()->json([
+                'message' => 'Order not fount!',
+                'status' => 200,
+                'data' => [],
+                'pagination' => [
+                    'current_page' => $orderMasters->currentPage(),
+                    'per_page' => $orderMasters->perPage(),
+                    'total' => $orderMasters->total(),
+                    'last_page' => $orderMasters->lastPage(),
+                ]
+            ], 201);
+        }
+
+        $ordersWithItems = collect($orderMasters->items())->map(function ($order) {
+            if ($order->deliver_image) {
+                $filenameOnly = basename($order->deliver_image);
+                $order->deliver_image = url('storage/images/' . $filenameOnly);
+            }
+
+            $order->items = DB::table('order_items as oi')
+                ->join('items as i', 'oi.item_id', '=', 'i.item_id')
+                ->join('categories as c', 'i.category_id', '=', 'c.category_id')
+                ->select(
+                    'i.item_name',
+                    'i.item_code',
+                    'i.category_id',
+                    'c.category_name',
+                    'oi.*'
+                )
+                ->where('oi.is_deleted', 0)
+                ->where('order_id', $order->order_id)
+                ->get();
+
+            foreach ($order->items as $item) {
+                $images = $this->itemService->getImage($item->item_id);
+                $item->images = $images;
+                $item->item_image = $images[0]['image'] ?? null;
+            }
+
+            return $order;
+        });
+
+        return response()->json([
+            'message' => 'Order online fetched successfully!',
+            'status' => 200,
+            'data' => $ordersWithItems->values(),
+            'pagination' => [
+                'current_page' => $orderMasters->currentPage(),
+                'per_page' => $orderMasters->perPage(),
+                'total' => $orderMasters->total(),
+                'last_page' => $orderMasters->lastPage(),
+            ]
+        ], 200);
+    }
 }
