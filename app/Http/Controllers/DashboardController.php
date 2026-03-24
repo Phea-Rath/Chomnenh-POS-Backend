@@ -336,6 +336,22 @@ class DashboardController extends Controller
         return $query;
     }
 
+    private function expenseQuantityBaseQuery(array $filters)
+    {
+        $query = DB::table('expense_items as ei')
+            ->join('expense_masters as em', 'ei.expense_id', '=', 'em.expense_id')
+            ->join('users as u', 'em.created_by', '=', 'u.id')
+            ->where('ei.is_deleted', 0)
+            ->where('em.is_deleted', 0)
+            ->where('u.profile_id', Auth::user()->profile_id);
+
+        if (!empty($filters['user_id'])) {
+            $query->where('em.created_by', $filters['user_id']);
+        }
+
+        return $query;
+    }
+
     private function stockTotals(array $filters, Carbon $start, Carbon $end, bool $includeSaleType = false): array
     {
         $select = [
@@ -428,6 +444,13 @@ class DashboardController extends Controller
             ->sum('em.amount');
     }
 
+    private function expenseQuantitySum(array $filters, Carbon $start, Carbon $end): float
+    {
+        return (float) $this->expenseQuantityBaseQuery($filters)
+            ->whereBetween('em.expense_date', [$start->format('Y-m-d H:i:s'), $end->format('Y-m-d H:i:s')])
+            ->sum('ei.quantity');
+    }
+
     private function profitAmountSum(array $filters, Carbon $start, Carbon $end): float
     {
         return $this->saleAmountSum($filters, $start, $end)
@@ -450,6 +473,7 @@ class DashboardController extends Controller
         return match ($operation) {
             'sale' => $this->sumWithOptionalRange($this->saleQuantityBaseQuery($filters), 'om.order_date', 'oi.quantity', $start, $end),
             'purchase' => $this->sumWithOptionalRange($this->purchaseQuantityBaseQuery($filters), 'p.purchase_date', 'pd.quantity', $start, $end),
+            'expense' => $this->sumWithOptionalRange($this->expenseQuantityBaseQuery($filters), 'em.expense_date', 'ei.quantity', $start, $end),
             default => 0.0,
         };
     }

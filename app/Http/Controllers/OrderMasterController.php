@@ -412,7 +412,7 @@ class OrderMasterController extends Controller
             'deliver_id' => 'nullable|integer',
             'through' => 'nullable|integer',
             'sale_type' => 'nullable|string|max:255',
-            'delivery_fee' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
+            'delivery_fee' => 'nullable|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
             'order_tax' => 'nullable|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
             'payment' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
             'items' => 'required|array|min:1',
@@ -440,7 +440,7 @@ class OrderMasterController extends Controller
         // Create the order master
         $order_masters = OrderMaster::create([
             'order_no' => $order_no,
-            'order_customer_id' => $validated['order_customer_id'] ?? null,
+            'order_customer_id' => $validated['order_customer_id'] ?? 1,
             'sale_type' => $validated['sale_type'] ?? null,
             'online' => $validated['online'],
             'status' => $validated['delivery_fee'] > 0 ? 1 : $validated['status'],
@@ -448,7 +448,7 @@ class OrderMasterController extends Controller
             'deliver_id' => $validated['deliver_id'],
             'order_address' => $validated['order_address'],
             'order_date' => $order_date,
-            'delivery_fee' => $validated['delivery_fee'],
+            'delivery_fee' => $validated['delivery_fee'] ?? 0,
             'through' => $validated['through'] ?? $uid,
             'order_payment_status' => $validated['order_payment_status'],
             'order_payment_method' => $validated['order_payment_method'],
@@ -858,6 +858,13 @@ class OrderMasterController extends Controller
             return response()->json([
                 'message' => 'order not found!',
                 'status' => 404,
+            ]);
+        }
+
+        if($order->status == 6){
+            return response()->json([
+                'message' => 'Cannot change because it completed',
+                'status' => 200,
             ]);
         }
 

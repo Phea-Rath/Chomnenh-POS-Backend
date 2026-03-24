@@ -36,15 +36,31 @@ class ExpanseItemController extends Controller
         ]);
     }
 
-    public function PopularExpanse()
+    public function PopularExpanse(Request $request)
     {
         $user = Auth::user();
         $proId = $user->profile_id;
+
+        $request->validate([
+            'start_date' => 'nullable|date',
+            'end_date' => 'nullable|date|after_or_equal:start_date',
+            'user_id' => 'nullable|integer|exists:users,id',
+        ]);
+
         $items = DB::table('expense_items as ei')
             ->join('expense_masters as em', 'ei.expense_id', '=', 'em.expense_id')
             ->join('users as u', 'em.created_by', '=', 'u.id')
-            ->where('u.profile_id', $proId)
-            ->select(
+            ->where('u.profile_id', $proId);
+
+        if ($request->filled('user_id')) {
+            $items->where('em.created_by', $request->user_id);
+        }
+
+        if ($request->filled('start_date') && $request->filled('end_date')) {
+            $items->whereBetween('em.expense_date', [$request->start_date, $request->end_date]);
+        }
+
+        $items = $items->select(
                 'ei.description',
                 DB::raw('SUM(ei.sub_total) as total_price'),
                 DB::raw('SUM(ei.quantity) as quantity')

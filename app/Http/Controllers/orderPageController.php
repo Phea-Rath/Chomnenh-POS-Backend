@@ -517,11 +517,10 @@ public function stockByItem(Request $request)
             ->where('om.is_deleted', 0)
             ->where(function ($query) {
                 $query->where(function ($subQuery) {
-                    $subQuery->where('om.online', 1)
-                        ->where('om.delivery_fee', 0);
-                })->orWhere(function ($subQuery) {
                     $subQuery->where('om.online', 0)
                         ->where('om.delivery_fee', '!=', 0);
+                })->orWhere(function ($subQuery) {
+                    $subQuery->where('om.online', 1);
                 });
             })
             ->when(!empty($deliverId), function ($query) use ($deliverId) {

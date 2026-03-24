@@ -104,31 +104,46 @@ class OrderItemController extends Controller
         ]);
     }
 
-    public function monthlyOrderPercentCompare()
+    public function monthlyOrderPercentCompare(Request $request)
     {
         $user = Auth::user();
         $uid = $user->id;
         $proId = $user->profile_id;
 
-        $now = \Carbon\Carbon::now();
-        $currentStart = $now->copy()->startOfMonth()->toDateString();
-        $currentEnd   = $now->copy()->endOfMonth()->toDateString();
-        $prevStart    = $now->copy()->subMonth()->startOfMonth()->toDateString();
-        $prevEnd      = $now->copy()->subMonth()->endOfMonth()->toDateString();
+        $request->validate([
+            'start_date' => 'nullable|date',
+            'end_date' => 'nullable|date|after_or_equal:start_date',
+            'user_id' => 'nullable|integer|exists:users,id',
+        ]);
 
-        $currentTotal = (float) DB::table('order_items')
+        $now = \Carbon\Carbon::now();
+        if ($request->filled('start_date') && $request->filled('end_date')) {
+            $currentStart = $request->start_date;
+            $currentEnd = $request->end_date;
+            $prevStart = \Carbon\Carbon::parse($currentStart)->subDays(\Carbon\Carbon::parse($currentStart)->diffInDays(\Carbon\Carbon::parse($currentEnd)) + 1)->toDateString();
+            $prevEnd = \Carbon\Carbon::parse($currentStart)->subDay()->toDateString();
+        } else {
+            $currentStart = $now->copy()->startOfMonth()->toDateString();
+            $currentEnd   = $now->copy()->endOfMonth()->toDateString();
+            $prevStart    = $now->copy()->subMonth()->startOfMonth()->toDateString();
+            $prevEnd      = $now->copy()->subMonth()->endOfMonth()->toDateString();
+        }
+
+        $query = DB::table('order_items')
             ->join('order_masters', 'order_items.order_id', '=', 'order_masters.order_id')
             ->join('users', 'order_masters.created_by', '=', 'users.id')
               ->where('users.profile_id', $proId)
-            ->where('order_items.is_deleted', 0)
-            ->whereBetween(DB::raw('DATE(order_masters.created_at)'), [$currentStart, $currentEnd])
+            ->where('order_items.is_deleted', 0);
+
+        if ($request->filled('user_id')) {
+            $query->where('order_masters.created_by', $request->user_id);
+        }
+
+        $currentTotal = (float) (clone $query)->whereBetween(DB::raw('DATE(order_masters.created_at)'), [$currentStart, $currentEnd])
             ->selectRaw('SUM(order_items.item_price * order_items.quantity) as total')
             ->value('total') ?? 0.0;
 
-        $previousTotal = (float) DB::table('order_items')
-            ->join('order_masters', 'order_items.order_id', '=', 'order_masters.order_id')
-            ->where('order_items.is_deleted', 0)
-            ->whereBetween(DB::raw('DATE(order_masters.created_at)'), [$prevStart, $prevEnd])
+        $previousTotal = (float) (clone $query)->whereBetween(DB::raw('DATE(order_masters.created_at)'), [$prevStart, $prevEnd])
             ->selectRaw('SUM(order_items.item_price * order_items.quantity) as total')
             ->value('total') ?? 0.0;
 
@@ -153,11 +168,17 @@ class OrderItemController extends Controller
         ], 200);
     }
 
-    public function popularSales()
+    public function popularSales(Request $request)
     {
         $user = Auth::user();
         $uid = $user->id;
         $proId = $user->profile_id;
+
+        $request->validate([
+            'start_date' => 'nullable|date',
+            'end_date' => 'nullable|date|after_or_equal:start_date',
+            'user_id' => 'nullable|integer|exists:users,id',
+        ]);
 
         $order_items = DB::table('order_items')
             ->join('items', 'order_items.item_id', '=', 'items.item_id')
@@ -165,8 +186,17 @@ class OrderItemController extends Controller
             ->join('order_masters', 'order_items.order_id', '=', 'order_masters.order_id')
             ->join('users', 'order_masters.created_by', '=', 'users.id')
               ->where('users.profile_id', $proId)
-            ->where('order_items.is_deleted', 0)
-            ->select(
+            ->where('order_items.is_deleted', 0);
+
+        if ($request->filled('user_id')) {
+            $order_items->where('order_masters.created_by', $request->user_id);
+        }
+
+        if ($request->filled('start_date') && $request->filled('end_date')) {
+            $order_items->whereBetween('order_masters.order_date', [$request->start_date, $request->end_date]);
+        }
+
+        $order_items = $order_items->select(
                 'order_items.item_id','brands.brand_name','items.item_name',
                 DB::raw('
                     SUM(

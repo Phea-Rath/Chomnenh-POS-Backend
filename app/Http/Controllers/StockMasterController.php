@@ -218,55 +218,123 @@ class StockMasterController extends Controller
     }
 
 
-    public function index()
-{
-    $user = Auth::user();
-    $uid = $user->id;
-    $proId = $user->profile_id;
+    public function index(Request $request)
+    {
+        $user = Auth::user();
+        $proId = $user->profile_id;
 
-    // MAIN STOCK MASTER QUERY
-    $stock_masters = DB::table('stock_masters as sm')
-        ->join('warehouses as from_w', 'sm.from_warehouse', '=', 'from_w.warehouse_id')
-        ->join('warehouses as to_w', 'sm.warehouse_id', '=', 'to_w.warehouse_id')
-        ->join('stock_types as st', 'sm.stock_type_id', '=', 'st.stock_type_id')
-        ->join('users as s', 'sm.stock_created_by', '=', 's.id')
-        ->join('profiles as p', 's.profile_id', '=', 'p.id')
-        ->select(
-            'from_w.warehouse_name as from_warehouse_name',
-            'to_w.warehouse_name as to_warehouse_name',
-            's.username as created_by_name',
-            'st.stock_type_name',
-            'sm.*'
-        )
-        ->where('p.id', $proId)
-        ->where('sm.is_deleted', 0)
-        ->whereNotIn('to_w.warehouse_id', [2,3,4])
-        // ->where('sm.stock_created_by', $uid)
-        ->get();
+        $limit  = $request->input('limit', 10);
+        $page   = $request->input('page', 1);
+        $search = $request->input('search');
 
-    if ($stock_masters->count() == 0) {
+        // MAIN STOCK MASTER QUERY
+        $stock_masters = DB::table('stock_masters as sm')
+            ->join('warehouses as from_w', 'sm.from_warehouse', '=', 'from_w.warehouse_id')
+            ->join('warehouses as to_w', 'sm.warehouse_id', '=', 'to_w.warehouse_id')
+            ->join('stock_types as st', 'sm.stock_type_id', '=', 'st.stock_type_id')
+            ->join('users as s', 'sm.stock_created_by', '=', 's.id')
+            ->join('profiles as p', 's.profile_id', '=', 'p.id')
+            ->select(
+                'from_w.warehouse_name as from_warehouse_name',
+                'to_w.warehouse_name as to_warehouse_name',
+                's.username as created_by_name',
+                'st.stock_type_name',
+                'sm.*'
+            )
+            ->where('p.id', $proId)
+            ->where('sm.is_deleted', 0)
+            ->whereNotIn('to_w.warehouse_id', [2,3,4,5])
+            ->when($search, function ($query) use ($search) {
+                $query->where(function ($q) use ($search) {
+                    $q->where('sm.stock_no', 'like', "%{$search}%")
+                    ->orWhere('from_w.warehouse_name', 'like', "%{$search}%")
+                    ->orWhere('to_w.warehouse_name', 'like', "%{$search}%")
+                    ->orWhere('st.stock_type_name', 'like', "%{$search}%")
+                    ->orWhere('s.username', 'like', "%{$search}%");
+                });
+            })
+            ->orderBy('sm.stock_id', 'desc')
+            ->paginate($limit, ['*'], 'page', $page);
+
+        // BUILD DATA RESULT
+        $data = $stock_masters->getCollection()->map(function ($master) {
+            return [
+                ...((array)$master),
+                'items' => $this->detailService->stockDetail($master->stock_id)
+            ];
+        });
+
         return response()->json([
-            'message' => 'StockMaster not found!',
-            'status'  => 404,
-            'data'    => []
+            'message' => $stock_masters->count() > 0 ? 'StockMaster selected successfully' : 'StockMaster not found!',
+            'status'  => $stock_masters->count() > 0 ? 200 : 404,
+            'data'    => $data->toArray(),
+            'pagination' => [
+                'current_page' => $stock_masters->currentPage(),
+                'per_page'     => $stock_masters->perPage(),
+                'total'        => $stock_masters->total(),
+                'last_page'    => $stock_masters->lastPage(),
+            ],
         ]);
     }
 
-    // BUILD DATA RESULT
-    $data = $stock_masters->map(function ($master) {
+    public function indexRaw(Request $request)
+    {
+        $user = Auth::user();
+        $proId = $user->profile_id;
 
-        return [
-            ...((array)$master),
-            'items' => $this->detailService->stockDetail($master->stock_id)
-        ];
-    });
+        $limit  = $request->input('limit', 10);
+        $page   = $request->input('page', 1);
+        $search = $request->input('search');
 
-    return response()->json([
-        'message' => 'StockMaster selected successfully',
-        'status'  => 200,
-        'data'    => array_reverse($data->toArray()),
-    ]);
-}
+        // MAIN STOCK MASTER QUERY
+        $stock_masters = DB::table('stock_masters as sm')
+            ->join('warehouses as from_w', 'sm.from_warehouse', '=', 'from_w.warehouse_id')
+            ->join('warehouses as to_w', 'sm.warehouse_id', '=', 'to_w.warehouse_id')
+            ->join('stock_types as st', 'sm.stock_type_id', '=', 'st.stock_type_id')
+            ->join('users as s', 'sm.stock_created_by', '=', 's.id')
+            ->join('profiles as p', 's.profile_id', '=', 'p.id')
+            ->select(
+                'from_w.warehouse_name as from_warehouse_name',
+                'to_w.warehouse_name as to_warehouse_name',
+                's.username as created_by_name',
+                'st.stock_type_name',
+                'sm.*'
+            )
+            ->where('p.id', $proId)
+            ->where('sm.is_deleted', 0)
+            ->whereNotIn('to_w.warehouse_id', [1, 2,3,4])
+            ->when($search, function ($query) use ($search) {
+                $query->where(function ($q) use ($search) {
+                    $q->where('sm.stock_no', 'like', "%{$search}%")
+                    ->orWhere('from_w.warehouse_name', 'like', "%{$search}%")
+                    ->orWhere('to_w.warehouse_name', 'like', "%{$search}%")
+                    ->orWhere('st.stock_type_name', 'like', "%{$search}%")
+                    ->orWhere('s.username', 'like', "%{$search}%");
+                });
+            })
+            ->orderBy('sm.stock_id', 'desc')
+            ->paginate($limit, ['*'], 'page', $page);
+
+        // BUILD DATA RESULT
+        $data = $stock_masters->getCollection()->map(function ($master) {
+            return [
+                ...((array)$master),
+                'items' => $this->detailService->stockRawDetail($master->stock_id)
+            ];
+        });
+
+        return response()->json([
+            'message' => $stock_masters->count() > 0 ? 'StockMaster selected successfully' : 'StockMaster not found!',
+            'status'  => $stock_masters->count() > 0 ? 200 : 404,
+            'data'    => $data->toArray(),
+            'pagination' => [
+                'current_page' => $stock_masters->currentPage(),
+                'per_page'     => $stock_masters->perPage(),
+                'total'        => $stock_masters->total(),
+                'last_page'    => $stock_masters->lastPage(),
+            ],
+        ]);
+    }
 
 
     public function popularStockIn(Request $request)
@@ -274,6 +342,12 @@ class StockMasterController extends Controller
         $user = Auth::user();
         $proId = $user->profile_id;
         $limit = (int) $request->input('limit', 5);
+
+        $request->validate([
+            'start_date' => 'nullable|date',
+            'end_date' => 'nullable|date|after_or_equal:start_date',
+            'user_id' => 'nullable|integer|exists:users,id',
+        ]);
 
         $popular = DB::table('stock_details as sd')
             ->join('stock_masters as sm', 'sd.stock_id', '=', 'sm.stock_id')
@@ -284,8 +358,17 @@ class StockMasterController extends Controller
             ->where('sm.stock_type_id', 2) // stock_in
             ->where('sd.is_deleted', 0)
             ->where('sm.is_deleted', 0)
-            ->where('p.id', $proId)
-            ->select(
+            ->where('p.id', $proId);
+
+        if ($request->filled('user_id')) {
+            $popular = $popular->where('sm.stock_created_by', $request->user_id);
+        }
+
+        if ($request->filled('start_date') && $request->filled('end_date')) {
+            $popular = $popular->whereBetween('sm.stock_date', [$request->start_date, $request->end_date]);
+        }
+
+        $popular = $popular->select(
                 'i.item_id',
                 'i.item_name',
                 'b.brand_name',
@@ -943,22 +1026,26 @@ private function formatMobileStockTransfer(int $stockId, int $profileId, bool $i
         ]);
 
 
-        if($validated['from_warehouse'] != 1||$validated['from_warehouse'] != 3){
-            return response()->json([
-                'message'=>'Main Warehouse can to use stock  only "stock in" and "stock out"',
-            ],200);
+        if($validated['from_warehouse'] == 1||$validated['from_warehouse'] == 5){
+            if($validated['stock_type_id'] != 3){
+                return response()->json([
+                    'message'=>'Raw Material Warehouse can to use stock  only "stock out"',
+                ],200);
+            }
+        }
+        if($validated['warehouse_id'] == 1||$validated['warehouse_id'] == 5){
+            if($validated['stock_type_id'] != 2 && $validated['stock_type_id'] != 1){
+                return response()->json([
+                    'message'=>'Raw Material Warehouse can to use stock  only "stock in"',
+                ],200);
+            }
         }
 
         $exchange_rate = ExchangeRate::find($proId);
         // Create the post
         $data = StockMaster::create([
             'stock_no' => $stock_no,
-            'stock_type_id' => $validated['from_warehouse'] == 1
-                                ? 1
-                                : ($validated['to_warehouse'] == 1
-                                    ? 3
-                                    : $validated['stock_type_id']
-                                ),
+            'stock_type_id' => $validated['stock_type_id'],
             'from_warehouse' => $validated['from_warehouse'],
             'warehouse_id' => $validated['warehouse_id'],
             'quantity' => array_sum(array_column($validated['items'], 'quantity')),
@@ -1010,18 +1097,27 @@ private function formatMobileStockTransfer(int $stockId, int $profileId, bool $i
             'from_warehouse' => 'required|integer',
             'warehouse_id' => 'required|integer',
             'stock_remark' => 'nullable|string|max:255',
-            'exchange_rate'      => 'nullable|numeric',
+            'exchange_rate' => 'nullable|numeric',
             'items' => 'array||min:1',
-            'items.*.item_id' => 'required|integer',
+            'items.*.raw_material_id' => 'required|integer',
             'items.*.quantity' => 'required|integer',
             'items.*.item_cost' => 'required|numeric',
             'items.*.expire_date' => 'required|date',
         ]);
 
-        if($validated['from_warehouse'] != 1||$validated['from_warehouse'] != 3){
-            return response()->json([
-                'message'=>'Raw Material Warehouse can to use stock  only "stock in" and "stock out"',
-            ],200);
+        if($validated['from_warehouse'] == 1||$validated['from_warehouse'] == 5){
+            if($validated['stock_type_id'] != 3){
+                return response()->json([
+                    'message'=>'Raw Material Warehouse can to use stock  only "stock out"',
+                ],200);
+            }
+        }
+        if($validated['warehouse_id'] == 1||$validated['warehouse_id'] == 5){
+            if($validated['stock_type_id'] != 2 && $validated['stock_type_id'] != 1){
+                return response()->json([
+                    'message'=>'Raw Material Warehouse can to use stock  only "stock in"',
+                ],200);
+            }
         }
 
 
@@ -1030,18 +1126,13 @@ private function formatMobileStockTransfer(int $stockId, int $profileId, bool $i
         // Create the post
         $data = StockMaster::create([
             'stock_no' => $stock_no,
-            'stock_type_id' => $validated['from_warehouse'] == 5
-                                ? 1
-                                : ($validated['to_warehouse'] == 5
-                                    ? 3
-                                    : $validated['stock_type_id']
-                                ),
+            'stock_type_id' => $validated['stock_type_id'],
             'from_warehouse' => $validated['from_warehouse'],
             'warehouse_id' => $validated['warehouse_id'],
             'quantity' => array_sum(array_column($validated['items'], 'quantity')),
             'stock_date' => $stock_date,
             'stock_remark' => $validated['stock_remark'],
-            'exchange_rate' => $validated['exchange_rate'],
+            'exchange_rate' => $validated['exchange_rate'] ?? $exchange_rate->usd_to_khr,
             'stock_created_by' => $uid,
         ]);
         $items = [];
@@ -1049,9 +1140,9 @@ private function formatMobileStockTransfer(int $stockId, int $profileId, bool $i
             // $attr = json_encode($item['attributes']);
 
 
-            $items[] = StockRawDetails::create([
+            $items[] = StockRawDetail::create([
                 'stock_id' => StockMaster::max('stock_id'),
-                'raw_material_id' => $item['item_id'],
+                'raw_material_id' => $item['raw_material_id'],
                 'quantity' => $item['quantity'],
                 'item_cost' => $item['item_cost'],
                 'transection_date' => $stock_date,
@@ -1071,47 +1162,89 @@ private function formatMobileStockTransfer(int $stockId, int $profileId, bool $i
      * Display the specified resource.
      */
     public function show($id)
-{
-    $user = Auth::user();
-    $uid = $user->id;
-    $proId = $user->profile_id;
+    {
+        $user = Auth::user();
+        $uid = $user->id;
+        $proId = $user->profile_id;
 
-    // FETCH SINGLE STOCK MASTER
-    $master = DB::table('stock_masters as sm')
-        ->join('warehouses as from_w', 'sm.from_warehouse', '=', 'from_w.warehouse_id')
-        ->join('warehouses as to_w', 'sm.warehouse_id', '=', 'to_w.warehouse_id')
-        ->join('stock_types as st', 'sm.stock_type_id', '=', 'st.stock_type_id')
-        ->join('users as s', 'sm.stock_created_by', '=', 's.id')
-        ->join('profiles as p', 's.profile_id', '=', 'p.id')
-        ->select(
-            'from_w.warehouse_name as from_warehouse_name',
-            'to_w.warehouse_name as to_warehouse_name',
-            's.username as created_by_name',
-            'st.stock_type_name',
-            'sm.*'
-        )
-        ->where('sm.stock_id', $id)
-        ->where('sm.is_deleted', 0)
-        ->where('p.id', $proId)
-        ->first();
+        // FETCH SINGLE STOCK MASTER
+        $master = DB::table('stock_masters as sm')
+            ->join('warehouses as from_w', 'sm.from_warehouse', '=', 'from_w.warehouse_id')
+            ->join('warehouses as to_w', 'sm.warehouse_id', '=', 'to_w.warehouse_id')
+            ->join('stock_types as st', 'sm.stock_type_id', '=', 'st.stock_type_id')
+            ->join('users as s', 'sm.stock_created_by', '=', 's.id')
+            ->join('profiles as p', 's.profile_id', '=', 'p.id')
+            ->select(
+                'from_w.warehouse_name as from_warehouse_name',
+                'to_w.warehouse_name as to_warehouse_name',
+                's.username as created_by_name',
+                'st.stock_type_name',
+                'sm.*'
+            )
+            ->where('sm.stock_id', $id)
+            ->where('sm.is_deleted', 0)
+            ->where('p.id', $proId)
+            ->first();
 
-    if (!$master) {
+        if (!$master) {
+            return response()->json([
+                'message' => 'StockMaster not found!',
+                'status'  => 404,
+                'data'    => null
+            ]);
+        }
+        // RETURN RESPONSE
         return response()->json([
-            'message' => 'StockMaster not found!',
-            'status'  => 404,
-            'data'    => null
+            'message' => 'StockMaster fetched successfully',
+            'status'  => 200,
+            'data'    => [
+                ...((array)$master),
+                'items' => $this->detailService->stockDetail($id)
+            ]
         ]);
     }
-    // RETURN RESPONSE
-    return response()->json([
-        'message' => 'StockMaster fetched successfully',
-        'status'  => 200,
-        'data'    => [
-            ...((array)$master),
-            'items' => $this->detailService->stockDetail($id)
-        ]
-    ]);
-}
+    public function showRaw($id)
+    {
+        $user = Auth::user();
+        $uid = $user->id;
+        $proId = $user->profile_id;
+
+        // FETCH SINGLE STOCK MASTER
+        $master = DB::table('stock_masters as sm')
+            ->join('warehouses as from_w', 'sm.from_warehouse', '=', 'from_w.warehouse_id')
+            ->join('warehouses as to_w', 'sm.warehouse_id', '=', 'to_w.warehouse_id')
+            ->join('stock_types as st', 'sm.stock_type_id', '=', 'st.stock_type_id')
+            ->join('users as s', 'sm.stock_created_by', '=', 's.id')
+            ->join('profiles as p', 's.profile_id', '=', 'p.id')
+            ->select(
+                'from_w.warehouse_name as from_warehouse_name',
+                'to_w.warehouse_name as to_warehouse_name',
+                's.username as created_by_name',
+                'st.stock_type_name',
+                'sm.*'
+            )
+            ->where('sm.stock_id', $id)
+            ->where('sm.is_deleted', 0)
+            ->where('p.id', $proId)
+            ->first();
+
+        if (!$master) {
+            return response()->json([
+                'message' => 'StockMaster not found!',
+                'status'  => 404,
+                'data'    => null
+            ]);
+        }
+        // RETURN RESPONSE
+        return response()->json([
+            'message' => 'StockMaster fetched successfully',
+            'status'  => 200,
+            'data'    => [
+                ...((array)$master),
+                'items' => $this->detailService->stockRawDetail($id)
+            ]
+        ]);
+    }
 
 
     public function getStockByOrderNo(string $id)
@@ -1178,19 +1311,23 @@ private function formatMobileStockTransfer(int $stockId, int $profileId, bool $i
             'items.*.item_cost' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
         ]);
 
-        if($validated['from_warehouse'] != 1||$validated['from_warehouse'] != 3){
-            return response()->json([
-                'message'=>'Main Warehouse can to use stock  only "stock in" and "stock out"',
-            ],200);
+        if($validated['from_warehouse'] == 1||$validated['from_warehouse'] == 5){
+            if($validated['stock_type_id'] != 3){
+                return response()->json([
+                    'message'=>'Raw Material Warehouse can to use stock  only "stock out"',
+                ],200);
+            }
+        }
+        if($validated['warehouse_id'] == 1||$validated['warehouse_id'] == 5){
+            if($validated['stock_type_id'] != 2 && $validated['stock_type_id'] != 1){
+                return response()->json([
+                    'message'=>'Raw Material Warehouse can to use stock  only "stock in"',
+                ],200);
+            }
         }
 
         $stock_masters->update([
-            'stock_type_id' => $validated['from_warehouse'] == 1
-                                ? 1
-                                : ($validated['to_warehouse'] == 1
-                                    ? 3
-                                    : $validated['stock_type_id']
-                                ),
+            'stock_type_id' => $validated['stock_type_id'],
             'from_warehouse' => $validated['from_warehouse'],
             'warehouse_id' => $validated['warehouse_id'],
             'stock_date' => $validated['stock_date'],
@@ -1210,7 +1347,7 @@ private function formatMobileStockTransfer(int $stockId, int $profileId, bool $i
         $items = [];
         foreach ($validated['items'] as $item) {
             $items[] = StockDetails::create([
-                'stock_id' => StockMaster::max('stock_id'),
+                'stock_id' => $id,
                 'item_id' => $item['item_id'],
                 'quantity' => $item['quantity'],
                 'item_cost' => $item['item_cost'],
@@ -1251,47 +1388,51 @@ private function formatMobileStockTransfer(int $stockId, int $profileId, bool $i
             'stock_remark' => 'required|string|max:255',
             'exchange_rate' => 'nullable|numeric',
             'items' => 'array||min:1',
-            'items.*.item_id' => 'required|integer',
+            'items.*.raw_material_id' => 'required|integer',
             'items.*.quantity' => 'required|integer',
             'items.*.expire_date' => 'required|date',
             'items.*.item_cost' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
         ]);
 
-        if($validated['from_warehouse'] != 1||$validated['from_warehouse'] != 3){
-            return response()->json([
-                'message'=>'Raw Material Warehouse can to use stock  only "stock in" and "stock out"',
-            ],200);
+        if($validated['from_warehouse'] == 1||$validated['from_warehouse'] == 5){
+            if($validated['stock_type_id'] != 3){
+                return response()->json([
+                    'message'=>'Raw Material Warehouse can to use stock  only "stock out"',
+                ],200);
+            }
+        }
+        if($validated['warehouse_id'] == 1||$validated['warehouse_id'] == 5){
+            if($validated['stock_type_id'] != 2 && $validated['stock_type_id'] != 1){
+                return response()->json([
+                    'message'=>'Raw Material Warehouse can to use stock  only "stock in"',
+                ],200);
+            }
         }
 
 
+
         $stock_masters->update([
-            'stock_type_id' => $validated['from_warehouse'] == 5
-                                ? 1
-                                : ($validated['to_warehouse'] == 5
-                                    ? 3
-                                    : $validated['stock_type_id']
-                                ),
+            'stock_type_id' => $validated['stock_type_id'],
             'from_warehouse' => $validated['from_warehouse'],
             'warehouse_id' => $validated['warehouse_id'],
             'stock_date' => $validated['stock_date'],
             'quantity' => array_sum(array_column($validated['items'], 'quantity')),
             'stock_remark' => $validated['stock_remark'],
-            'exchange_rate' => $validated['exchange_rate'],
         ]);
 
 
-        $exchange_rate = ExchangeRate::find($proId);
+        // $exchange_rate = ExchangeRate::find($proId);
 
         // ✅ Update the master record using the object, not query builder
 
         if ($stock_masters) {
-            StockRawDetails::where('stock_id', $id)->delete();
+            StockRawDetail::where('stock_id', $id)->delete();
         }
         $items = [];
         foreach ($validated['items'] as $item) {
-            $items[] = StockRawDetails::create([
-                'stock_id' => StockMaster::max('stock_id'),
-                'item_id' => $item['item_id'],
+            $items[] = StockRawDetail::create([
+                'stock_id' => $id,
+                'raw_material_id' => $item['raw_material_id'],
                 'quantity' => $item['quantity'],
                 'item_cost' => $item['item_cost'],
                 'expire_date' => $item['expire_date'],
@@ -1348,7 +1489,7 @@ private function formatMobileStockTransfer(int $stockId, int $profileId, bool $i
         }
 
         // ✅ update all related stock details
-        StockRawDetails::where('stock_id', $stockMaster->stock_id)
+        StockRawDetail::where('stock_id', $stockMaster->stock_id)
             ->update(['is_deleted' => 1]);
 
         // ✅ update stock master

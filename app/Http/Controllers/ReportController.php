@@ -104,6 +104,7 @@ class ReportController extends Controller
             'created_by' => 'nullable|integer|exists:users,id',
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date',
+            'stock_type_id' => 'nullable|integer|exists:stock_types,stock_type_id',
             'raw_material_id' => 'nullable|integer|exists:raw_materials,id',
         ]);
 
@@ -133,6 +134,9 @@ class ReportController extends Controller
 
         if ($request->filled('created_by')) {
             $query->where('sm.stock_created_by', $request->created_by);
+        }
+        if ($request->filled('stock_type_id')) {
+            $query->where('sm.stock_type_id', $request->stock_type_id);
         }
 
         if ($request->filled('raw_material_id')) {
@@ -164,7 +168,7 @@ class ReportController extends Controller
         $request->validate([
             'order_customer' => 'nullable|integer',
             'user_id' => 'nullable|integer',
-            'item_id' => 'nullable|string',
+            'item_id' => 'nullable|integer',
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date',
         ]);
@@ -951,12 +955,12 @@ class ReportController extends Controller
         $request->validate([
             'created_by' => 'nullable|integer|exists:users,id',
             'stock_type_id' => 'nullable|integer|exists:stock_types,stock_type_id',
-            'item_id' => 'nullable|integer|exists:items,item_id',
+            'raw_material_id' => 'nullable|integer|exists:raw_materials,id',
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date',
         ]);
 
-        $query = DB::table('stock_details as sd')
+        $query = DB::table('stock_raw_details as sd')
             ->select(
                 DB::raw('SUM(sd.quantity) as quantity'),
                 DB::raw('AVG(sd.item_cost) as avg_item_cost'),
@@ -979,11 +983,8 @@ class ReportController extends Controller
             ->join('stock_masters as sm', 'sm.stock_id', '=', 'sd.stock_id')
             ->join('users as u', 'u.id', '=', 'sm.stock_created_by')
             ->join('profiles as pf', 'pf.id', '=', 'u.profile_id')
-            ->join('items as i', 'i.item_id', '=', 'sd.item_id')
-            ->leftJoin('categories as cg', 'cg.category_id', '=', 'i.category_id')
-            ->leftJoin('brands as br', 'br.brand_id', '=', 'i.brand_id')
+            ->join('raw_materials as rm', 'rm.id', '=', 'sd.raw_material_id')
             ->where('sm.is_deleted', 0)
-            ->where('i.item_type', 1)
             ->where('sd.is_deleted', 0)
             ->where('pf.id', $proId);
 
@@ -995,8 +996,8 @@ class ReportController extends Controller
             $query->where('sm.stock_type_id', $request->stock_type_id);
         }
 
-        if ($request->filled('item_id')) {
-            $query->where('i.item_id', $request->item_id);
+        if ($request->filled('raw_material_id')) {
+            $query->where('rm.id', $request->raw_material_id);
         }
 
         if ($request->filled('start_date') && $request->filled('end_date')) {
@@ -1025,8 +1026,8 @@ class ReportController extends Controller
             $queryProduction->where('pd.created_by', $request->created_by);
         }
 
-        if ($request->filled('item_id')) {
-            $queryProduction->where('pdd.item_id', $request->item_id);
+        if ($request->filled('raw_material_id')) {
+            $queryProduction->where('pdd.raw_material_id', $request->raw_material_id);
         }
 
         if ($request->filled('start_date') && $request->filled('end_date')) {

@@ -206,6 +206,8 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::get('/quan_stock_by_attr', [StockDetailController::class, 'quantityInStockByItemId']);
     Route::post('/suppliers/{id}', [SupplierController::class, 'update']);
     Route::post('/supplier/image/{id}', [SupplierController::class, 'updateImage']);
+    Route::get('/stock-raw', [StockMasterController::class, 'indexRaw']);
+    Route::get('/stock-raw/{id}', [StockMasterController::class, 'showRaw']);
     Route::get('/stock-list', [StockMasterController::class, 'indexMobile']);
     Route::get('/stock-raw-list', [StockMasterController::class, 'indexRawMobile']);
     Route::get('/stock-by-id/{id}', [StockMasterController::class, 'showMobile']);

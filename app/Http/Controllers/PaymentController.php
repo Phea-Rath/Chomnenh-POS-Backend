@@ -32,8 +32,8 @@ class PaymentController extends Controller
         }
 
         $merchant = new IndividualInfo(
-            bakongAccountID: env('ABA_BAKONG_ID', 'abaakhppxxx@abaa'),
-            merchantName: 'RATHA YEN',
+            bakongAccountID: env('ABA_BAKONG_ID', 'tep_phhearat@bkrt'),
+            merchantName: 'TEP PHEARAT',
             merchantCity: env('ABA_MERCHANT_CITY', 'Phnom Penh'),
             currency: $currencyCode,
             // amount: (string) $amount

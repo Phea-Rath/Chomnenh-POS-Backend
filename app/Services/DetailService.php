@@ -37,6 +37,7 @@ class DetailService {
             )
             // ->where('stock_masters.stock_created_by', $uid)
             ->where('stock_details.is_deleted', 0)
+            ->where('items.is_deleted', 0)
             ->where('stock_details.stock_id', $id)
             ->get();
 
@@ -79,6 +80,46 @@ class DetailService {
             }
             return $item;
         });
+
+        return $stock_detail;
+    }
+    public function stockRawDetail($id) {
+        $user = Auth::user();
+        $uid = $user->id;
+
+        $stock_detail = DB::table('stock_raw_details')
+            ->join('stock_masters', 'stock_raw_details.stock_id', '=', 'stock_masters.stock_id')
+            ->join('raw_materials', 'stock_raw_details.raw_material_id', '=', 'raw_materials.id')
+            ->select(
+                'stock_raw_details.*',
+                'raw_materials.material_name',
+                'raw_materials.material_image',
+                'raw_materials.material_code',
+                'stock_masters.stock_created_by as created_by'
+            )
+            // ->where('stock_masters.stock_created_by', $uid)
+            ->where('stock_raw_details.is_deleted', 0)
+            ->where('stock_raw_details.stock_id', $id)
+            ->where('raw_materials.is_deleted', 0)
+            ->get();
+
+        if ($stock_detail->isEmpty()) {
+            return response()->json([
+                "message" => "No stock detail found",
+                "status" => 404,
+                "data" => []
+            ]);
+        }
+
+            foreach($stock_detail as $stock){
+                if($stock->material_image){
+                    $filenameOnly = basename($stock->material_image);
+                    $imageUrl = url('storage/images/' . $filenameOnly);
+                    $stock->material_image = $imageUrl;
+                }
+                $stock->stock = $this->quanRaws($stock->raw_material_id)[0];
+
+            }
 
         return $stock_detail;
     }
