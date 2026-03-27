@@ -22,13 +22,13 @@ class DeliverController extends Controller
 				->join('users', 'delivers.created_by', '=', 'users.id')
 				->where('users.profile_id', $proId)
                 ->where('is_deleted',0)
-				->select('delivers.*')
+				->select('delivers.delivers.*')
 				->get();
 		} else {
 			$delivers = DB::table('delivers')
 				->join('users', 'delivers.created_by', '=', 'users.id')
 				->where('users.profile_id', $proId)
-                ->where('is_deleted',0)
+                ->where('delivers.is_deleted',0)
 				->select('delivers.*')
 				->get();
 		}
@@ -90,7 +90,7 @@ class DeliverController extends Controller
 				->join('users', 'delivers.created_by', '=', 'users.id')
 				->where('users.profile_id', $proId)
 				->where('delivers.deliver_id', $id)
-                ->where('is_deleted',0)
+                ->where('delivers.is_deleted',0)
 				->select('delivers.*')
 				->get();
 		} else {
