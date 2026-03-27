@@ -17,6 +17,7 @@ class Deliver extends Model
         'deliver_name',
         'image',
         'created_by',
+        'is_deleted',
     ];
 
     // protected $casts = [

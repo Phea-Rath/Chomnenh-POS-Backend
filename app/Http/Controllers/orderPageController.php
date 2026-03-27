@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Deliver;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
@@ -508,6 +509,10 @@ public function stockByItem(Request $request)
         $deliverId = $request->input('deliver_id');
         $userId = $request->input('user_id');
         $search = trim((string) $request->input('search', ''));
+        $delivery = Deliver::where('deliver_name',$user->username)->first();
+        if($delivery){
+            $deliverId = $delivery->deliver_id;
+        }
 
 
         $orderMasters = DB::table('order_masters as om')

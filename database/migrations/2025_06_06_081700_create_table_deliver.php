@@ -17,6 +17,7 @@ return new class extends Migration
             $table->string('deliver_name');
             $table->string('image')->nullable();
             $table->integer('created_by');
+            $table->boolean('is_deleted')->default(0);
             $table->timestamps();
         });
 
