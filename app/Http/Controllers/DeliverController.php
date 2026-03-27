@@ -28,6 +28,7 @@ class DeliverController extends Controller
 			$delivers = DB::table('delivers')
 				->join('users', 'delivers.created_by', '=', 'users.id')
 				->where('users.profile_id', $proId)
+                ->where('is_deleted',0)
 				->select('delivers.*')
 				->get();
 		}
