@@ -89,8 +89,8 @@ class DashboardController extends Controller
         } else {
             $month = (int) ($filters['month'] ?? now()->month);
             $year = (int) ($filters['year'] ?? now()->year);
-            $startDate = Carbon::create($year, $month, 1)->startOfMonth();
-            $endDate = $startDate->copy()->endOfMonth();
+            $startDate = Carbon::create($year, 1, 1)->startOfMonth();
+            $endDate = Carbon::create($year, $month, 1)->endOfMonth();
             $months = [];
 
             for ($currentMonth = 1; $currentMonth <= $month; $currentMonth++) {
@@ -112,7 +112,7 @@ class DashboardController extends Controller
         $stockData = $this->stockTotals($filters, $startDate, $endDate, true);
 
         return response()->json([
-            'message' => 'expense data geted successfully!',
+            'message' => 'Stock graphic data fetched successfully!',
             'status' => 200,
             'data' => [
                 'stock_return' => $stockData['return_total'],

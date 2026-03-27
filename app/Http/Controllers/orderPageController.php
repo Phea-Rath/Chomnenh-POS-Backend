@@ -318,7 +318,7 @@ public function stockByItem(Request $request)
     $results = $query->paginate($limit, ['*'], 'page', $page);
 
     // FORMAT OUTPUT
-    $data = $results->map(function ($item) {
+    $data = collect($results->items())->map(function ($item) {
         $item->in_stock = $this->detailService->quanItems($item->item_id)[0]->in_stock ?? 0;
         // Build main image URL
         $imagelist = $this->itemService->getImage($item->item_id);
@@ -508,6 +508,7 @@ public function stockByItem(Request $request)
         $deliverId = $request->input('deliver_id');
         $userId = $request->input('user_id');
         $search = trim((string) $request->input('search', ''));
+
 
         $orderMasters = DB::table('order_masters as om')
             ->join('users', 'om.through', '=', 'users.id')

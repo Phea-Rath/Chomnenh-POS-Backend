@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Deliver;
+use App\Models\Users;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 
@@ -134,15 +135,21 @@ class DeliverController extends Controller
             $file->storeAs('public/images', $imageName);
         }
 		if($imageName){
-		$delivers->update([
-			'deliver_name' => $validated['deliver_name'],
-            'image'        => $imageName,
-		]);
-	}else{
-		$delivers->update([
-			'deliver_name' => $validated['deliver_name'],
-		]);
-	}
+            $delivers->update([
+                'deliver_name' => $validated['deliver_name'],
+                'image'        => $imageName,
+            ]);
+
+        }else{
+            $delivers->update([
+                'deliver_name' => $validated['deliver_name'],
+            ]);
+        }
+        $user = Users::where('username',$delivers->deliver_name)->first();
+        if($user){
+            $user->username = $validated['deliver_name'];
+            $user->save();
+        }
 		return response()->json([
 			"message" => "Deliver updated successfully",
 			"status" => 200,

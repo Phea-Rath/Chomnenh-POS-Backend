@@ -25,41 +25,165 @@ class NotificationController extends Controller
         $this->itemService = $itemService;
         $this->detailService = $detailService;
     }
-    public function index()
+    public function index(Request $request)
     {
         $user = Auth::user();
         $proId = $user->profile_id;
 
-        $results = DB::table('stock_details as sd')
-            ->join('stock_masters as sm', 'sd.stock_id', '=', 'sm.stock_id')
-            ->join('warehouses as w', 'sm.warehouse_id', '=', 'w.warehouse_id')
-            ->join('items as i', 'sd.item_id', '=', 'i.item_id')
-            ->join('categories as c', 'i.category_id', '=', 'c.category_id')
-            ->join('users as u', 'sm.stock_created_by', '=', 'u.id')
-            ->join('profiles as p', 'u.profile_id', '=', 'p.id')
-            ->where('sm.warehouse_id', 1)
-            ->where('w.status', 'stock')
-            ->where('sd.is_deleted', 0)
-            ->where('i.is_deleted', 0)
-            ->where('sm.is_deleted', 0)
-            ->where('p.id', $proId)
-            ->whereDate('sd.expire_date', '<=', Carbon::now()->toDateString())
-            ->groupBy('sd.item_id', 'i.item_name', 'c.category_name')
-            ->select(
-                'sd.item_id',
-                'i.item_name',
-                'c.category_name',
-                DB::raw('SUM(sd.quantity) as wasted_qty'),
-                DB::raw('MAX(sd.expire_date) as last_expire_date')
-            )
-            ->orderBy('last_expire_date', 'desc')
-            ->get();
+        $neededQuantity = $request->input('needed_quantity', 12);
+        $itemId = $request->input('item_id');
+
+        if ($itemId) {
+            $results = $this->getStockOrderedByItem($proId, $itemId, $neededQuantity);
+        } else {
+            $results = $this->getStockOrdered($proId, $neededQuantity);
+        }
 
         return response()->json([
             'message' => 'Wasted items retrieved successfully!',
             'status' => 200,
             'data' => $results
         ], 200);
+    }
+
+    public function getStockOrdered($proId, $neededQuantity)
+    {
+        $today = Carbon::now()->toDateString();
+
+        $sql = "
+            WITH stock_ordered AS (
+                SELECT
+                    sd.item_id,
+                    i.item_name,
+                    c.category_name,
+                    sd.quantity,
+                    sd.expire_date,
+                    SUM(sd.quantity) OVER (PARTITION BY sd.item_id ORDER BY sd.expire_date ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS running_total
+                FROM stock_details sd
+                JOIN stock_masters sm ON sd.stock_id = sm.stock_id
+                JOIN warehouses w ON sm.warehouse_id = w.warehouse_id
+                JOIN items i ON sd.item_id = i.item_id
+                JOIN categories c ON i.category_id = c.category_id
+                JOIN users u ON sm.stock_created_by = u.id
+                JOIN profiles p ON u.profile_id = p.id
+                WHERE sm.warehouse_id = 1
+                    AND w.status = 'stock'
+                    AND sd.is_deleted = 0
+                    AND i.is_deleted = 0
+                    AND sm.is_deleted = 0
+                    AND p.id = ?
+                    AND sd.quantity > 0
+            )
+            SELECT
+                item_id,
+                item_name,
+                category_name,
+                SUM(
+                    CASE
+                        WHEN running_total <= ? THEN quantity
+                        WHEN running_total - quantity < ? THEN ? - (running_total - quantity)
+                        ELSE 0
+                    END
+                ) AS taken_quantity,
+                SUM(
+                    CASE
+                        WHEN expire_date <= ? THEN
+                            CASE
+                                WHEN running_total <= ? THEN quantity
+                                WHEN running_total - quantity < ? THEN ? - (running_total - quantity)
+                                ELSE 0
+                            END
+                        ELSE 0
+                    END
+                ) AS expired_quantity
+            FROM stock_ordered
+            WHERE running_total - quantity < ?
+            GROUP BY item_id, item_name, category_name
+            ORDER BY taken_quantity DESC
+        ";
+
+        return DB::select($sql, [
+            $proId,
+            $neededQuantity,
+            $neededQuantity,
+            $neededQuantity,
+            $today,
+            $neededQuantity,
+            $neededQuantity,
+            $neededQuantity,
+            $neededQuantity
+        ]);
+    }
+
+    public function getStockOrderedByItem($proId, $itemId, $neededQuantity)
+    {
+        $today = Carbon::now()->toDateString();
+
+        $sql = "
+            WITH stock_ordered AS (
+                SELECT
+                    sd.item_id,
+                    i.item_name,
+                    c.category_name,
+                    sd.quantity,
+                    sd.expire_date,
+                    SUM(sd.quantity) OVER (PARTITION BY sd.item_id ORDER BY sd.expire_date ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS running_total
+                FROM stock_details sd
+                JOIN stock_masters sm ON sd.stock_id = sm.stock_id
+                JOIN warehouses w ON sm.warehouse_id = w.warehouse_id
+                JOIN items i ON sd.item_id = i.item_id
+                JOIN categories c ON i.category_id = c.category_id
+                JOIN users u ON sm.stock_created_by = u.id
+                JOIN profiles p ON u.profile_id = p.id
+                WHERE sm.warehouse_id = 1
+                    AND w.status = 'stock'
+                    AND sd.is_deleted = 0
+                    AND i.is_deleted = 0
+                    AND sm.is_deleted = 0
+                    AND p.id = ?
+                    AND sd.item_id = ?
+                    AND sd.quantity > 0
+            )
+            SELECT
+                item_id,
+                item_name,
+                category_name,
+                SUM(
+                    CASE
+                        WHEN running_total <= ? THEN quantity
+                        WHEN running_total - quantity < ? THEN ? - (running_total - quantity)
+                        ELSE 0
+                    END
+                ) AS taken_quantity,
+                SUM(
+                    CASE
+                        WHEN expire_date <= ? THEN
+                            CASE
+                                WHEN running_total <= ? THEN quantity
+                                WHEN running_total - quantity < ? THEN ? - (running_total - quantity)
+                                ELSE 0
+                            END
+                        ELSE 0
+                    END
+                ) AS expired_quantity
+            FROM stock_ordered
+            WHERE running_total - quantity < ?
+            GROUP BY item_id, item_name, category_name
+            ORDER BY taken_quantity DESC
+        ";
+
+        return DB::select($sql, [
+            $proId,
+            $itemId,
+            $neededQuantity,
+            $neededQuantity,
+            $neededQuantity,
+            $today,
+            $neededQuantity,
+            $neededQuantity,
+            $neededQuantity,
+            $neededQuantity
+        ]);
     }
 
 

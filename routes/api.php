@@ -89,7 +89,7 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::post('/customers/{id}', [\App\Http\Controllers\CustomerController::class, 'update']);
     Route::post('/customer/image/{id}', [\App\Http\Controllers\CustomerController::class, 'updateImage']);
     Route::resource('customers', \App\Http\Controllers\CustomerController::class)->only(['index', 'show', 'store', 'destroy']);
-    Route::resource('colors', ColorController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
+    // Route::resource('colors', ColorController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
     Route::resource('delivers', DeliverController::class)->only(['index', 'show', 'store', 'destroy']);
     Route::post('delivers/{id}', [DeliverController::class,'update']);
     //E
@@ -247,6 +247,7 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::delete("/users/{id}", [UserController::class, "destroy"]);
     Route::post("/users/{id}", [UserController::class, "update"]);
     Route::post('/user/image/{id}', [UserController::class, 'updateImage']);
+    Route::put('/user/role/{id}', [UserController::class, 'updateRole']);
     Route::put('/user/number_phone/{id}', [UserController::class, 'updateNumberPhone']);
     Route::put('/user/name/{id}', [UserController::class, 'updateName']);
     Route::put('/update_waste/{id}', [NotificationController::class, 'updateWasteItem']);

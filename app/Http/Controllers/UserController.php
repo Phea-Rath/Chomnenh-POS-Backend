@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Deliver;
 use App\Models\Users;
 use Auth;
 use DB;
@@ -32,9 +33,12 @@ class UserController extends Controller
         $role = $user->role_id;
         $users = DB::table('users as u')
             ->leftJoin('users as c', 'u.created_by', '=', 'c.id')   // 👈 self join
+            ->join('roles as r', 'r.role_id','=', 'u.role_id')
             ->where('u.is_deleted', 0)
+            ->where('u.id','!=', $uid)
             ->select(
                 'u.*',
+                'r.role_name as role',
                 'c.username as created_by_name'
             );
         if ($role === 1) {
@@ -71,9 +75,11 @@ class UserController extends Controller
     {
         $user = DB::table('users as u')
             ->leftJoin('users as c', 'u.created_by', '=', 'c.id')   // 👈 self join
+            ->join('roles as r', 'r.role_id','=', 'u.role_id')
             ->where('u.is_deleted', 0)
             ->select(
                 'u.*',
+                'r.role_name as role',
                 'c.username as created_by_name'
             )->where('u.id', $id)->first();
         if (!$user) {
@@ -96,10 +102,18 @@ class UserController extends Controller
 
     public function showByProId(string $id)
     {
-        // $user = Auth::user();
-        // return  response()->json(Users::latest()->get());
-        $users = DB::table('users')
-            ->where('is_deleted', 0)->where('profile_id', $id)->get();
+        $user = Auth::user();
+        $uid = $user->id;
+        $users = DB::table('users as u')
+            ->leftJoin('users as c', 'u.created_by', '=', 'c.id')   // 👈 self join
+            ->join('roles as r', 'r.role_id','=', 'u.role_id')
+            ->where('u.is_deleted', 0)
+            ->where('u.id', '!=', $uid)
+            ->select(
+                'u.*',
+                'r.role_name as role',
+                'c.username as created_by_name'
+            )->where('profile_id', $id)->get();
         if (count($users) == 0) {
             return response()->json([
                 'message' => 'user not found!',
@@ -182,6 +196,26 @@ class UserController extends Controller
                     "image" => $filename,
                     "password" => bcrypt($fields["password"])
                 ]);
+
+                if($fields['role_id'] == 5){
+                    $delivery = Deliver::where('deliver_name',$user->username)->first();
+                    if($delivery){
+                        $delivery->is_deleted = 0;
+                        $delivery->save();
+                    }else{
+                        $user = Deliver::create([
+                            "deliver_name" => $fields["username"],
+                            "created_by" => $id,
+                            "image" => $user->image
+                        ]);
+                    }
+                }else{
+                    $delivery = Deliver::where('deliver_name',$user->username)->first();
+                    if($delivery){
+                        $delivery->is_deleted = 1;
+                        $delivery->save();
+                    }
+                }
             }
         } else {
 
@@ -308,6 +342,11 @@ class UserController extends Controller
                 unlink($imagePath);
                 $users->is_deleted = 1;
                 $users->save();
+                $delivery = Deliver::where('deliver_name',$users->username)->first();
+                if($delivery){
+                    $delivery->is_deleted = 1;
+                    $delivery->save();
+                }
                 return response()->json([
                     "message" => "User deleted successfully",
                     "status" => 200,
@@ -316,6 +355,11 @@ class UserController extends Controller
             } else {
                 $users->is_deleted = 1;
                 $users->save();
+                $delivery = Deliver::where('deliver_name',$users->username)->first();
+                if($delivery){
+                    $delivery->is_deleted = 1;
+                    $delivery->save();
+                }
 
                 return response()->json([
                     "message" => "User not folder image",
@@ -343,7 +387,7 @@ class UserController extends Controller
             ]);
         }
 
-        $validated = $request->validate([
+        $fieldd = $request->validate([
             'image' => 'required|file|image',
         ]);
 
@@ -410,6 +454,47 @@ class UserController extends Controller
         $user->save();
         return response()->json([
             "message" => "Users name updated successfully",
+            "status"  => 200,
+            "data"    => $user,
+        ]);
+    }
+    public function updateRole(Request $request, string $id)
+    {
+        $user = Users::find($id);
+        $validate = $request->validate([
+            'role_id' => 'required|string|max:200'
+        ]);
+
+        if (!$user) {
+            return response()->json([
+                'message' => 'Users not found!',
+                'status'  => 404,
+            ]);
+        }
+
+        $user->role_id = $validate['role_id'];
+        $user->save();
+        if($validate['role_id'] == 5){
+            $delivery = Deliver::where('deliver_name',$user->username)->first();
+            if($delivery){
+                $delivery->is_deleted = 0;
+                $delivery->save();
+            }else{
+                $user = Deliver::create([
+                    "deliver_name" => $user->username,
+                    "created_by" => $id,
+                    "image" => $user->image
+                ]);
+            }
+        }else{
+            $delivery = Deliver::where('deliver_name',$user->username)->first();
+            if($delivery){
+                $delivery->is_deleted = 1;
+                $delivery->save();
+            }
+        }
+        return response()->json([
+            "message" => "Users role updated successfully",
             "status"  => 200,
             "data"    => $user,
         ]);

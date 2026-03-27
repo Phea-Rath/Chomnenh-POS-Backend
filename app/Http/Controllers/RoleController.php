@@ -97,12 +97,21 @@ class RoleController extends Controller
      */
     public function update(Request $request, string $id)
     {
+        $user = Auth::user();
         $role = Roles::find($id);
 
         if (!$role || $role->is_deleted) {
             return response()->json([
                 'message' => 'This role not found!',
             ], 404);
+        }
+
+        if($role->created_by != $user->id){
+            return response()->json([
+                'message' => 'Cannot delete this role',
+                'status' => 400,
+                'data' => null,
+            ], 400);
         }
 
         $validated = $request->validate([
@@ -124,10 +133,11 @@ class RoleController extends Controller
      */
     public function destroy(string $id)
     {
+        $user = Auth::user();
         $role = Roles::find($id);
-        if($id == 1 || $id == 2 || $id == 3){
+        if($id == 1 || $id == 2 || $id == 3 || $role->created_by != $user->id){
             return response()->json([
-                'message' => 'Cannot delete admin role',
+                'message' => 'Cannot delete this role',
                 'status' => 400,
                 'data' => null,
             ], 400);

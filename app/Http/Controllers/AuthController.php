@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Deliver;
 use App\Models\ExchangeRate;
 use App\Models\Profile;
 use App\Models\Users;
@@ -52,7 +53,7 @@ class AuthController extends Controller
     public function logout(Request $request)
     {
         // Delete only the token used for the current request
-        $request->user()->currentAccessToken()->delete();
+        $request->user()->tokens()->delete();
 
         return response([
             "message"=> "Logged out successfully",
@@ -141,6 +142,14 @@ class AuthController extends Controller
                     "image" => $filename,
                     "password" => bcrypt($fields["password"])
                 ]);
+
+                if($fields["role_id"] == 5){
+                    $user = Deliver::create([
+                        "deliver_name" => $fields["username"],
+                        "created_by" => $uid,
+                        "image" => $filename
+                    ]);
+                }
             }
         } else {
 
@@ -175,7 +184,17 @@ class AuthController extends Controller
                 "image" => null,
                 "password" => bcrypt($fields["password"])
             ]);
+
+            if($fields["role_id"] == 5){
+                $user = Deliver::create([
+                    "deliver_name" => $fields["username"],
+                    "created_by" => $uid,
+                    "image" => null
+                ]);
+            }
         }
+
+
 
         return response()->json([
             'message' => 'Profile created successfully!',
