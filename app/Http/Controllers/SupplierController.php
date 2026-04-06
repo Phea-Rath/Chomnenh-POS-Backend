@@ -104,7 +104,6 @@ class SupplierController extends Controller
         return response()->json([
             'message' => 'Supplier created successfully!',
             'status' => 200,
-            'data' => $data,
         ], 201);
     }
 
@@ -221,7 +220,6 @@ class SupplierController extends Controller
         return response()->json([
             'message' => 'Supplier updated successfully',
             'status' => 200,
-            'data' => $supplier,
         ], 200);
     }
 
@@ -242,7 +240,6 @@ class SupplierController extends Controller
         return response()->json([
             'message' => 'Supplier deleted successfully',
             'status' => 200,
-            'data' => $supplier,
         ], 200);
     }
 
@@ -269,7 +266,6 @@ class SupplierController extends Controller
         return response()->json([
             "message" => "Supplier image updated successfully",
             "status" => 200,
-            "data" => $supplier,
         ]);
     }
 }

@@ -49,7 +49,6 @@ class ExchangeRateController extends Controller
         return response()->json([
             'message' => 'Exchange rate updated successfully.',
             'status' => 200,
-            'data' => $exchangeRate
         ]);
     }
 }

@@ -17,7 +17,7 @@ Broadcast::channel('App.Models.User.{id}', function ($user, $id) {
     return (int) $user->id === (int) $id;
 }, ['guards' => 'sanctum']);
 Broadcast::channel('my-private-channel.user.{id}', function ($user, $id) {
-    return (int) $user->profile_id === (int) $id;
+    return (int) $user->id === (int) $id || (int) $user->profile_id === (int) $id;
 }, ['guards' => 'sanctum']);
 Broadcast::channel('check-online.user.{id}', function ($user, $id) {
     return (int) $user->profile_id === (int) $id;

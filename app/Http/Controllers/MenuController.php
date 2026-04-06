@@ -239,6 +239,7 @@ class MenuController extends Controller
         ]);
     }
     public function getMenuSettingByUserId($id){
+        $user = 
         $permissions = Permission::where('user_id', $id)->pluck('menu_id');
         $query = Menus::select('menu_id', 'menu_name', 'menu_icon', 'menu_path', 'order_menu')
         ->orderBy('order_menu', 'asc');

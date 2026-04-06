@@ -43,7 +43,7 @@ class NotificationController extends Controller
             'message' => 'Wasted items retrieved successfully!',
             'status' => 200,
             'data' => $results
-        ], 200);
+        ], 200); 
     }
 
     public function getStockOrdered($proId, $neededQuantity)
@@ -58,6 +58,7 @@ class NotificationController extends Controller
                     c.category_name,
                     sd.quantity,
                     sd.expire_date,
+                    sd.created_at,
                     SUM(sd.quantity) OVER (PARTITION BY sd.item_id ORDER BY sd.expire_date ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS running_total
                 FROM stock_details sd
                 JOIN stock_masters sm ON sd.stock_id = sm.stock_id
@@ -78,6 +79,7 @@ class NotificationController extends Controller
                 item_id,
                 item_name,
                 category_name,
+                expire_date,
                 SUM(
                     CASE
                         WHEN running_total <= ? THEN quantity
@@ -87,7 +89,13 @@ class NotificationController extends Controller
                 ) AS taken_quantity,
                 SUM(
                     CASE
-                        WHEN expire_date <= ? THEN
+                        WHEN (
+                            CASE 
+                                WHEN DATEDIFF(expire_date, created_at) >= 365 
+                                THEN DATE_SUB(expire_date, INTERVAL 6 MONTH)
+                                ELSE DATE_SUB(expire_date, INTERVAL (DATEDIFF(expire_date, created_at) / 3) DAY)
+                            END
+                        ) <= ? THEN
                             CASE
                                 WHEN running_total <= ? THEN quantity
                                 WHEN running_total - quantity < ? THEN ? - (running_total - quantity)
@@ -98,7 +106,8 @@ class NotificationController extends Controller
                 ) AS expired_quantity
             FROM stock_ordered
             WHERE running_total - quantity < ?
-            GROUP BY item_id, item_name, category_name
+            GROUP BY item_id, item_name, category_name, expire_date
+            HAVING expired_quantity > 0
             ORDER BY taken_quantity DESC
         ";
 
@@ -127,6 +136,7 @@ class NotificationController extends Controller
                     c.category_name,
                     sd.quantity,
                     sd.expire_date,
+                    sd.created_at,
                     SUM(sd.quantity) OVER (PARTITION BY sd.item_id ORDER BY sd.expire_date ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS running_total
                 FROM stock_details sd
                 JOIN stock_masters sm ON sd.stock_id = sm.stock_id
@@ -148,6 +158,7 @@ class NotificationController extends Controller
                 item_id,
                 item_name,
                 category_name,
+                expire_date,
                 SUM(
                     CASE
                         WHEN running_total <= ? THEN quantity
@@ -157,7 +168,13 @@ class NotificationController extends Controller
                 ) AS taken_quantity,
                 SUM(
                     CASE
-                        WHEN expire_date <= ? THEN
+                        WHEN (
+                            CASE 
+                                WHEN DATEDIFF(expire_date, created_at) >= 365 
+                                THEN DATE_SUB(expire_date, INTERVAL 6 MONTH)
+                                ELSE DATE_SUB(expire_date, INTERVAL (DATEDIFF(expire_date, created_at) / 3) DAY)
+                            END
+                        ) <= ? THEN
                             CASE
                                 WHEN running_total <= ? THEN quantity
                                 WHEN running_total - quantity < ? THEN ? - (running_total - quantity)
@@ -168,7 +185,8 @@ class NotificationController extends Controller
                 ) AS expired_quantity
             FROM stock_ordered
             WHERE running_total - quantity < ?
-            GROUP BY item_id, item_name, category_name
+            GROUP BY item_id, item_name, category_name, expire_date
+            HAVING expired_quantity > 0
             ORDER BY taken_quantity DESC
         ";
 

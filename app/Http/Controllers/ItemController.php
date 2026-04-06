@@ -463,7 +463,6 @@ class ItemController extends Controller
         return response()->json([
             'message'=>'item created successfully',
             'status'=>200,
-            'data'=>$items
         ]);
     }
 
@@ -592,7 +591,6 @@ class ItemController extends Controller
         return response()->json([
             'message'=>'item update successfully',
             'status'=>200,
-            'data'=>$items
         ]);
     }
 
@@ -633,7 +631,6 @@ class ItemController extends Controller
         return response()->json([
             "message" => "Item deleted successfully",
             "status" => 200,
-            "data" => $item,
         ], 200);
     }
 
@@ -665,7 +662,6 @@ class ItemController extends Controller
             return response()->json([
                 "message" => "Item deleted successfully",
                 "status" => 200,
-                "data" => $items,
             ], 200);
 }
     }

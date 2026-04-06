@@ -79,7 +79,6 @@ class WarehouseController extends Controller
         return response()->json([
             'message' => 'Warehouse created successfully!',
             'status' => 200,
-            'data' => $data,
         ], 201);
     }
 
@@ -133,7 +132,6 @@ class WarehouseController extends Controller
         return response()->json([
             "message" => "Warehouse updated successfully",
             "status" => 200,
-            "data" => $warehouses,
         ], 200);
     }
 
@@ -162,7 +160,6 @@ class WarehouseController extends Controller
         return response()->json([
             "message" => "Warehouse deleted successfully",
             "status" => 200,
-            "data" => $warehouses,
         ], 200);
     }
 }

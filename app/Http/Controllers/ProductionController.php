@@ -217,7 +217,6 @@ class ProductionController extends Controller
             $item = Items::find($validated['item_id']);
 
             $exchange_rate = ExchangeRate::find($proId);
-            $stockItems;
             $stockItems = StockDetails::create([
                 'stock_id' => (int)$stockMasterId,
                 'item_id' => $item->item_id,

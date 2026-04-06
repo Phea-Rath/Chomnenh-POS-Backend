@@ -64,7 +64,6 @@ class ExpanseTypeController extends Controller
         return response()->json([
             'message' => 'ExpanseType created successfully!',
             'status' => 200,
-            'data' => $data,
         ], 201);
     }
 
@@ -112,7 +111,6 @@ class ExpanseTypeController extends Controller
         return response()->json([
             "message" => "ExpanseType updated successfully",
             "status" => 200,
-            "data" => $expense_types,
         ], 200);
     }
 
@@ -134,7 +132,6 @@ class ExpanseTypeController extends Controller
         return response()->json([
             "message" => "ExpanseType deleted successfully",
             "status" => 200,
-            "data" => $expense_types,
         ], 200);
     }
 }

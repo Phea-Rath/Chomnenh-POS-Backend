@@ -622,9 +622,6 @@ class PurchaseController extends Controller
         return response()->json([
             'message'  => 'Purchase created successfully!',
             'status'   => 201,
-            'data'     => $purchase,
-            'details'  => $details,
-            'payments' => $payments
         ], 201);
     }
 
@@ -1032,7 +1029,6 @@ class PurchaseController extends Controller
         return response()->json([
             'message' => 'Purchase canceled successfully',
             'status' => 200,
-            'data' => $purchase
         ]);
     }
     public function purchaseUncancel($id)
@@ -1049,7 +1045,6 @@ class PurchaseController extends Controller
         return response()->json([
             'message' => 'Purchase uncanceled successfully',
             'status' => 200,
-            'data' => $purchase
         ]);
     }
 

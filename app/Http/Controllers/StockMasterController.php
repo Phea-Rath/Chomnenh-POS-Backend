@@ -1078,8 +1078,6 @@ private function formatMobileStockTransfer(int $stockId, int $profileId, bool $i
         return response()->json([
             'message' => 'StockMaster created successfully!',
             'status' => 200,
-            'data' => $data,
-            'items' => $items,
         ], 201);
     }
 
@@ -1153,8 +1151,6 @@ private function formatMobileStockTransfer(int $stockId, int $profileId, bool $i
         return response()->json([
             'message' => 'StockMaster created successfully!',
             'status' => 200,
-            'data' => $data,
-            'items' => $items,
         ], 201);
     }
 
@@ -1360,8 +1356,6 @@ private function formatMobileStockTransfer(int $stockId, int $profileId, bool $i
         return response()->json([
             "message" => "StockMaster updated successfully",
             "status" => 200,
-            "data" => $stock_masters,
-            "details" => $items,
         ], 200);
     }
 
@@ -1444,8 +1438,6 @@ private function formatMobileStockTransfer(int $stockId, int $profileId, bool $i
         return response()->json([
             "message" => "StockMaster updated successfully",
             "status" => 200,
-            "data" => $stock_masters,
-            "details" => $items,
         ], 200);
     }
 
@@ -1475,7 +1467,6 @@ private function formatMobileStockTransfer(int $stockId, int $profileId, bool $i
         return response()->json([
             'message' => 'StockMaster deleted successfully',
             'status' => 200,
-            'data' => $stockMaster,
         ], 200);
     }
     public function destroyRaw(string $id)
@@ -1499,7 +1490,6 @@ private function formatMobileStockTransfer(int $stockId, int $profileId, bool $i
         return response()->json([
             'message' => 'StockMaster deleted successfully',
             'status' => 200,
-            'data' => $stockMaster,
         ], 200);
     }
 

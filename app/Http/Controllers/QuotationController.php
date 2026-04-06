@@ -200,7 +200,6 @@ class QuotationController extends Controller
             return response()->json([
                 'message' => 'Quotation created successfully',
                 'status' => 200,
-                'data' => $quotation->load('details')
             ], 201);
 
         } catch (\Exception $e) {
@@ -278,7 +277,6 @@ class QuotationController extends Controller
             return response()->json([
                 'message' => 'Quotation updated successfully',
                 'status' => 200,
-                'data' => $quotation->load('details')
             ], 200);
 
         } catch (\Exception $e) {
@@ -439,7 +437,6 @@ class QuotationController extends Controller
             return response()->json([
                 'message' => 'Quotation approved successfully',
                 'status' => 200,
-                'data' => $order_masters,
             ], 200);
         } catch (\Exception $e) {
             DB::rollBack();

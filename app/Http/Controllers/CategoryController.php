@@ -70,7 +70,6 @@ class CategoryController extends Controller
         return response()->json([
             'message' => 'Category created successfully!',
             'status' => 200,
-            'data' => $data,
         ], 200);
     }
 
@@ -122,7 +121,6 @@ class CategoryController extends Controller
         return response()->json([
             "message" => "Category updated successfully",
             "status" => 200,
-            "data" => $category,
         ], 200);
     }
 
@@ -144,7 +142,6 @@ class CategoryController extends Controller
         return response()->json([
             "message" => "Category deleted successfully",
             "status" => 200,
-            "data" => $category,
         ], 200);
     }
 }

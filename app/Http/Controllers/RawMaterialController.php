@@ -163,7 +163,6 @@ class RawMaterialController extends Controller
         return response()->json([
             'message' => 'Raw material created successfully!',
             'status' => 200,
-            'data' => $data,
         ], 200);
     }
 
@@ -274,7 +273,6 @@ class RawMaterialController extends Controller
         return response()->json([
             'message' => 'Raw material updated successfully',
             'status' => 200,
-            'data' => $material,
         ], 200);
     }
 
@@ -295,7 +293,6 @@ class RawMaterialController extends Controller
         return response()->json([
             'message' => 'Raw material deleted successfully',
             'status' => 200,
-            'data' => $material,
         ], 200);
     }
 

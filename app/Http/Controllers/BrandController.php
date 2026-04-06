@@ -82,7 +82,6 @@ class BrandController extends Controller
         return response()->json([
             'message' => 'Brand created successfully!',
             'status' => 200,
-            'data' => $data,
         ], 201);
     }
 
@@ -148,7 +147,6 @@ class BrandController extends Controller
         return response()->json([
             "message" => "Brand updated successfully",
             "status" => 200,
-            "data" => $brands,
         ], 200);
     }
 
@@ -170,7 +168,6 @@ class BrandController extends Controller
         return response()->json([
             "message" => "Brand deleted successfully",
             "status" => 200,
-            "data" => $brands,
         ], 200);
     }
 }

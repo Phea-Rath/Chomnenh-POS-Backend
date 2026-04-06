@@ -103,7 +103,6 @@ class CustomerController extends Controller
 		return response()->json([
 			'message' => 'Customer created successfully!',
 			'status' => 200,
-			'data' => $data,
 		], 201);
 	}
 
@@ -211,7 +210,6 @@ class CustomerController extends Controller
 		return response()->json([
 			"message" => "Customer updated successfully",
 			"status" => 200,
-			"data" => $customers,
 		], 200);
 	}
 
@@ -233,7 +231,6 @@ class CustomerController extends Controller
 		return response()->json([
 			"message" => "Customer deleted successfully",
 			"status" => 200,
-			"data" => $customers,
 		], 200);
 	}
 
@@ -260,7 +257,6 @@ class CustomerController extends Controller
 		return response()->json([
 			"message" => "Customer image updated successfully",
 			"status" => 200,
-			"data" => $customer,
 		]);
 	}
 }

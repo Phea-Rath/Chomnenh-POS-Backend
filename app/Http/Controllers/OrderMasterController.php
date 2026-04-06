@@ -522,7 +522,11 @@ class OrderMasterController extends Controller
             TelegramService::sendMessage($message, $profile_id);
         }
         // return $message;
-        return $this->show($order_masters->order_id);
+        // return $this->show($order_masters->order_id);
+        return response()->json([
+            'message' => 'order master created successfully!',
+            'status' => 200,
+        ]);
     }
 
 
@@ -655,7 +659,11 @@ class OrderMasterController extends Controller
             ]);
         }
 
-        return $this->show($id);
+        // return $this->show($id);
+        return response()->json([
+            'message' => 'order master updated successfully!',
+            'status' => 200,
+        ]);
     }
 
     /**
@@ -683,7 +691,6 @@ class OrderMasterController extends Controller
         return response()->json([
             'message' => 'order master deleted successfully!',
             'status' => 200,
-            'data' => $order_master
         ]);
     }
 
@@ -706,7 +713,6 @@ class OrderMasterController extends Controller
         return response()->json([
             'message' => 'order cancelled successfully!',
             'status' => 200,
-            'data' => $orders->first()
         ]);
     }
 
@@ -730,7 +736,6 @@ class OrderMasterController extends Controller
         return response()->json([
             'message' => 'order cancelled successfully!',
             'status' => 200,
-            'data' => $orders->first()
         ]);
     }
     public function receiveOrder(string $id)
@@ -746,8 +751,8 @@ class OrderMasterController extends Controller
         $orders->update([
             'status' => 5,
         ]);
-        if (!$order_items->isEmpty()) {
-            foreach ($order_items as $item) {
+        if (!$orderItems->isEmpty()) {
+            foreach ($orderItems as $item) {
                 $item->update([
                     'status' => 5,
                 ]);
@@ -907,7 +912,7 @@ class OrderMasterController extends Controller
 
         broadcast(new OnlineEvent('New Status', $proId))->toOthers();
         return response()->json([
-            'message' => 'new status!',
+            'message' => 'Order updated status successfully',
             'status' => 200,
         ]);
     }

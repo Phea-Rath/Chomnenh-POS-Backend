@@ -17,20 +17,32 @@ class AuthController extends Controller
 {
     public function login(Request $request)
     {
-        $fields = $request->validate([
-            "phone_number" => "required|string",
-            "password" => "required|string",
+        $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
+            "phone_number" => "required",
+            "password" => "required",
         ]);
 
+        if ($validator->fails()) {
+            return response()->json(['message' => $validator->errors()->first()], 400);
+        }
+
+        $fields = $validator->validated();
         $loginAt = now()->format('Y-m-d');
 
         $user = Users::where("phone_number", $fields["phone_number"])->first();
 
-        if (!$user || !Hash::check($fields['password'], $user->password)) {
+        if (!$user) {
             return response([
-                "message" => "Bad Credentials",
+                "message" => "Phone number not found!",
             ], 404);
         }
+
+        if (!Hash::check($fields['password'], $user->password)) {
+            return response([
+                "message" => "Incorrect password!",
+            ], 404);
+        }
+
         if ($user->status == 0) {
             return response([
                 "message" => "User disabled!",
@@ -45,7 +57,9 @@ class AuthController extends Controller
 
         $respones = [
             'user' => $user,
-            'token' => $token
+            'token' => $token,
+            'message' => 'Login successful',
+            'status' => 200
         ];
         return response($respones, 200);
     }

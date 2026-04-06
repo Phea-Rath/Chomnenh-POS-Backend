@@ -75,7 +75,6 @@ class DeliverController extends Controller
 		return response()->json([
 			'message' => 'Deliver created successfully!',
 			'status' => 200,
-			'data' => $data,
 		], 201);
 	}
 
@@ -156,7 +155,6 @@ class DeliverController extends Controller
 		return response()->json([
 			"message" => "Deliver updated successfully",
 			"status" => 200,
-			"data" => $delivers,
 		], 200);
 	}
 
@@ -172,7 +170,6 @@ class DeliverController extends Controller
 		return response()->json([
 			"message" => "Deliver deleted successfully",
 			"status" => 200,
-			"data" => $delivers,
 		], 200);
 	}
 }

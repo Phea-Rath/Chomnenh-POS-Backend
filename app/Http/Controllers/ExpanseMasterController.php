@@ -137,15 +137,12 @@ class ExpanseMasterController extends Controller
             ]);
         }
 
-        return $this->show($expense_masters->expense_id);
-        // return response()->json([
-        //     'message' => 'expense created successfully!',
-        //     'status' => 200,
-        //     'data' => [
-        //         'expense_masters' => $expense_masters,
-        //         'expense_items' => $expense_items,
-        //     ],
-        // ]);
+        // return $this->show($expense_masters->expense_id);
+        return response()->json([
+            'message' => 'expense created successfully!',
+            'status' => 200,
+
+        ]);
     }
 
     /**
@@ -249,16 +246,12 @@ class ExpanseMasterController extends Controller
             ]);
         }
 
-        return $this->show($id);
+        // return $this->show($id);
 
-        // return response()->json([
-        //     'message' => 'expense updated successfully!',
-        //     'status' => 200,
-        //     'data' => [
-        //         'expense_masters' => $expense_masters,
-        //         'expense_items' => $expense_items,
-        //     ],
-        // ]);
+        return response()->json([
+            'message' => 'expense updated successfully!',
+            'status' => 200,
+        ]);
     }
 
     /**
@@ -287,7 +280,6 @@ class ExpanseMasterController extends Controller
         return response()->json([
             'message' => 'expense master deleted successfully!',
             'status' => 200,
-            'data' => $expense_masters
         ]);
     }
 }
