@@ -106,7 +106,7 @@ class StockMasterController extends Controller
         ]);
     }
 
-    private function formatMobileStock(int $stockId, int $profileId, bool $isRaw = false): ?array
+    private function    formatMobileStock(int $stockId, int $profileId, bool $isRaw = false): ?array
     {
         $stock = DB::table('stock_masters as sm')
             ->join('warehouses as from_w', 'sm.from_warehouse', '=', 'from_w.warehouse_id')
@@ -138,7 +138,7 @@ class StockMasterController extends Controller
         $items = [];
 
         if($isRaw) {
-             $items = DB::table('stock_raw_details as srd')
+            $items = DB::table('stock_raw_details as srd')
             ->join('raw_materials as rm', 'srd.raw_material_id', '=', 'rm.id')
             ->where('srd.stock_id', $stockId)
             ->where('srd.is_deleted', 0)
@@ -181,6 +181,8 @@ class StockMasterController extends Controller
             ->values()
             ->toArray();
         }
+
+
 
         return [
             'stock_id' => (int) $stock->stock_id,
@@ -319,7 +321,7 @@ class StockMasterController extends Controller
         $data = $stock_masters->getCollection()->map(function ($master) {
             return [
                 ...((array)$master),
-                'items' => $this->detailService->stockRawDetail($master->stock_id)
+                'items' => $this->detailService->stockRawDetail($master->stock_id),
             ];
         });
 

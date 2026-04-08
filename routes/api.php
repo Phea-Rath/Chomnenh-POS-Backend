@@ -138,6 +138,7 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::put('/edit_delivery_fee/{id}/{delivery_fee}', [OrderMasterController::class, 'addDeliveryFee']);
     Route::resource('order_items', OrderItemController::class)->only(['index', 'show']);
     Route::put('/order_uncancel/{id}', [OrderMasterController::class, 'uncancel']);
+    Route::put('/order_payment/{id}/{payment}', [OrderMasterController::class, 'addPayment']);
     Route::get('/order-list', [OrderMasterController::class, 'indexMobile']);
     Route::get('/order-by-id/{id}', [OrderMasterController::class, 'showMobile']);
     Route::get('/quan_order_by_attr', [OrderItemController::class, 'quantityInOrderByItemId']);

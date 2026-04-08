@@ -75,6 +75,7 @@ class SupplierController extends Controller
             'village_id' => 'required|integer',
             'supplier_tel' => 'nullable|string|max:20',
             'supplier_email' => 'nullable|email|max:255',
+            'description' => 'nullable|string|max:255',
             'image'       => '',
         ]);
 
@@ -97,6 +98,7 @@ class SupplierController extends Controller
             'village_id' => $validated['village_id'],
             'supplier_tel' => $validated['supplier_tel'],
             'supplier_email' => $validated['supplier_email'],
+            'description' => $validated['description'],
             'created_by' => $uid,
             'image'        => $imageName,
         ]);
@@ -174,6 +176,7 @@ class SupplierController extends Controller
             'village_id' => 'required|integer',
             'supplier_tel' => 'nullable|string|max:20',
             'supplier_email' => 'nullable|email|max:255',
+            'description' => 'nullable|string|max:255',
             'image'       => '',
         ]);
         $imageName = null;
@@ -198,6 +201,7 @@ class SupplierController extends Controller
             'village_id' => $validated['village_id'],
             'supplier_tel' => $validated['supplier_tel'],
             'supplier_email' => $validated['supplier_email'],
+            'description' => $validated['description'],
             'image' => $imageName,
         ]);
         }else{
@@ -214,6 +218,7 @@ class SupplierController extends Controller
             'village_id' => $validated['village_id'],
             'supplier_tel' => $validated['supplier_tel'],
             'supplier_email' => $validated['supplier_email'],
+            'description' => $validated['description'],
         ]);
         }
 

@@ -157,6 +157,31 @@ class QuotationController extends Controller
             'items.*.price' => 'required|numeric',
         ]);
 
+        $outOfStockItems = [];
+        $messages = '';
+        foreach ($request->items as $item) {
+            $inStock = (double)($this->detailService->quanItems($item['item_id'])[0]->in_stock ?? 0);
+            $requiredQty = (double)($item['quantity'] ?? 0);
+
+            if ($requiredQty > $inStock) {
+                $outOfStockItems[] = [
+                    'item_id' => $item['item_id'],
+                    'item_name' => $item['item_name'],
+                    'required_quantity' => $requiredQty,
+                    'available_quantity' => $inStock,
+                ];
+                $messages .= "Stock is not enough for item: {$item['item_name']}. Missing: " . ($requiredQty - $inStock) . ", Available: {$inStock}. ";
+            }
+        }
+
+        if (!empty($outOfStockItems)) {
+            return response()->json([
+                'message' => $messages,
+                'status' => 422,
+                'out_of_stock_items' => $outOfStockItems,
+            ], 422);
+        }
+
         DB::beginTransaction();
 
         try {
@@ -231,6 +256,31 @@ class QuotationController extends Controller
             'items.*.quantity' => 'required|numeric',
             'items.*.price' => 'required|numeric',
         ]);
+
+        $outOfStockItems = [];
+        $messages = '';
+        foreach ($request->items as $item) {
+            $inStock = (double)($this->detailService->quanItems($item['item_id'])[0]->in_stock ?? 0);
+            $requiredQty = (double)($item['quantity'] ?? 0);
+
+            if ($requiredQty > $inStock) {
+                $outOfStockItems[] = [
+                    'item_id' => $item['item_id'],
+                    'item_name' => $item['item_name'],
+                    'required_quantity' => $requiredQty,
+                    'available_quantity' => $inStock,
+                ];
+                $messages .= "Stock is not enough for item: {$item['item_name']}. Missing: " . ($requiredQty - $inStock) . ", Available: {$inStock}. ";
+            }
+        }
+
+        if (!empty($outOfStockItems)) {
+            return response()->json([
+                'message' => $messages,
+                'status' => 422,
+                'out_of_stock_items' => $outOfStockItems,
+            ], 422);
+        }
 
         DB::beginTransaction();
 
@@ -358,23 +408,30 @@ class QuotationController extends Controller
             ])->findOrFail($id);
 
         $outOfStockItems = [];
+        $messages = '';
         foreach ($quote->details as $item) {
             $inStock = (double)($this->detailService->quanItems($item->item_id)[0]->in_stock ?? 0);
             $requiredQty = (double)($item->quantity ?? 0);
+            $itemData = DB::table('items')
+                ->where('item_id', $item->item_id)
+                ->first();
 
             if ($requiredQty > $inStock) {
                 $outOfStockItems[] = [
                     'item_id' => $item->item_id,
+                    'item_name' => $itemData->item_name,
                     'item_name' => $item->item_name,
                     'required_quantity' => $requiredQty,
                     'available_quantity' => $inStock,
                 ];
+                $messages .= "Stock is not enough for item: {$item->item_name}. Missing: " . ($requiredQty - $inStock) . ", Available: {$inStock}. ";
             }
         }
 
         if (!empty($outOfStockItems)) {
+
             return response()->json([
-                'message' => 'Stock is not enough for some items',
+                'message' => $messages,
                 'status' => 422,
                 'out_of_stock_items' => $outOfStockItems,
             ], 422);
@@ -423,7 +480,7 @@ class QuotationController extends Controller
                     'discount' => $item['discount'],
                     'price' => $item['total_price'],
                     'quantity' => $item['quantity'],
-                    'item_cost' => $item['item']->item_cost ?? 0,
+                    // 'item_cost' => $item['item']->item_cost ?? 0,
                     'item_wholesale_price' => $item['price'] ?? 0,
                     'exchange_rate' => (double)($exchange_rate->usd_to_khr ?? 0),
                 ]);

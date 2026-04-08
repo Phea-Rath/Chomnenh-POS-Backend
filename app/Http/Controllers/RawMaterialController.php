@@ -68,7 +68,7 @@ class RawMaterialController extends Controller
                 'raw_materials.material_cost',
                 'raw_materials.created_at',
                 'raw_materials.updated_at',
-                DB::raw('0 as in_stock'),
+                DB::raw('0 as stock'),
             )
             ->orderBy('raw_materials.id', 'DESC')
             ->paginate($limit, ['*'], 'page', $page);
@@ -90,7 +90,7 @@ class RawMaterialController extends Controller
             }
             $stock = $this->detailService->quanRaws($item->id);
             $item->conversion_value  = number_format($item->conversion_value,'2','.','');
-            $item->in_stock = $stock[0]->in_stock ?? 0;
+            $item->stock = $stock[0];
             $items[] = $item;
         }
 

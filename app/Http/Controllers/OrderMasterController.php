@@ -450,7 +450,7 @@ class OrderMasterController extends Controller
             'order_date' => $order_date,
             'delivery_fee' => $validated['delivery_fee'] ?? 0,
             'through' => $validated['through'] ?? $uid,
-            'order_payment_status' => $validated['order_payment_status'],
+            'order_payment_status' => $balance <= 0 ? 'paid' : $validated['order_payment_status'],
             'order_payment_method' => $validated['order_payment_method'],
             'balance' => $balance,
             'payment' => $payment,
@@ -526,6 +526,7 @@ class OrderMasterController extends Controller
         return response()->json([
             'message' => 'order master created successfully!',
             'status' => 200,
+            "data" => $order_masters,
         ]);
     }
 
@@ -564,17 +565,7 @@ class OrderMasterController extends Controller
         ]);
     }
 
-    /**
-     * Show the form for editing the specified resource.
-     */
-    public function edit(string $id)
-    {
-        //
-    }
 
-    /**
-     * Update the specified resource in storage.
-     */
     public function update(Request $request, string $id)
     {
         $user = Auth::user();
@@ -628,7 +619,7 @@ class OrderMasterController extends Controller
             'deliver_id' => $validated['deliver_id'],
             'order_date' => $validated['order_date'],
             'delivery_fee' => $validated['delivery_fee'],
-            'order_payment_status' => $validated['order_payment_status'],
+            'order_payment_status' => $balance <= 0 ? 'paid' : $validated['order_payment_status'],
             'order_payment_method' => $validated['order_payment_method'],
             'balance' => $balance,
             'payment' => $payment,
@@ -955,6 +946,44 @@ class OrderMasterController extends Controller
         broadcast(new OnlineEvent('New Status', $proId))->toOthers();
         return response()->json([
             'message' => 'update delivery fee!',
+            'status' => 200,
+        ]);
+    }
+
+    public function addPayment($id,$payment){
+        $user = Auth::user();
+        $proId = $user->profile_id;
+        $order = OrderMaster::find($id);
+        if (empty($order)) {
+            return response()->json([
+                'message' => 'order not found!',
+                'status' => 404,
+            ]);
+        }
+
+        if($order->order_payment_status == 'paid'){
+            return response()->json([
+                'message' => 'Order already paid!',
+                'status' => 422,
+            ]);
+        }
+
+        if($payment > $order->balance){
+            return response()->json([
+                'message' => 'Payment exceeds balance!',
+                'status' => 422,
+            ]);
+        }
+
+        $order->payment = $order->payment + $payment;
+        $order->balance = $order->balance - $payment;
+        if($order->balance <= 0){
+            $order->order_payment_status = 'paid';
+        }
+        $order->save();
+        broadcast(new OnlineEvent('New Status', $proId))->toOthers();
+        return response()->json([
+            'message' => 'update payment!',
             'status' => 200,
         ]);
     }
