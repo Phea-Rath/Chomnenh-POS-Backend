@@ -58,6 +58,8 @@ class ItemService {
                 'scales.scale_id',
                 'scales.scale_name',
                 'brands.brand_id',
+                'items.created_by',
+                'profiles.id as profile_id',
                 'brands.brand_name',
                 'categories.category_id',
                 'categories.category_name',
@@ -111,6 +113,8 @@ class ItemService {
             "created_at" => $item->created_at,
             "updated_at" => $item->updated_at,
             "description" => $item->description ?? null,
+            "profile_id" => $item->profile_id,
+            "created_by" => $item->created_by,
             // "is_active" => (bool)$item->is_active
         ];
 
