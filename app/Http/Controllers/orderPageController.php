@@ -320,40 +320,14 @@ class orderPageController extends Controller
 
 
         $items = $query->select(
-                'i.item_id',
-                'i.item_code',
-                'i.barcode',
-                'i.item_name',
-                'i.category_id',
-                'i.item_cost',
-                'i.item_price',
-                'i.discount',
-                'i.wholesale_price',
-                DB::raw('i.item_price - (i.item_price * (i.discount / 100)) as price_discount'),
-                DB::raw('i.wholesale_price - (i.wholesale_price * (i.discount / 100)) as wholesale_price_discount'),
-                DB::raw('SUM(CASE WHEN sm.stock_type_id = 1 THEN sd.quantity ELSE 0 END)
-                    + SUM(CASE WHEN sm.stock_type_id = 2 THEN sd.quantity ELSE 0 END)
-                    - SUM(CASE WHEN sm.stock_type_id = 3 THEN sd.quantity ELSE 0 END)
-                    - SUM(CASE WHEN sm.stock_type_id = 4 THEN sd.quantity ELSE 0 END)
-                    - SUM(CASE WHEN sm.stock_type_id = 5 THEN sd.quantity ELSE 0 END)
-                    AS in_stock'),
-                DB::raw('SUM(CASE WHEN sm.stock_type_id = 2 THEN sd.quantity ELSE 0 END) AS stock_in'),
-                DB::raw('SUM(CASE WHEN sm.stock_type_id = 3 THEN sd.quantity ELSE 0 END) AS stock_out'),
-                DB::raw('SUM(CASE WHEN sm.stock_type_id = 5 THEN sd.quantity ELSE 0 END) AS sold')
-            )
-            ->groupBy('i.item_id', 'i.item_code', 'i.item_name', 'i.item_cost', 'i.discount', 'i.item_price',
-                'i.category_id', 'i.wholesale_price')
-            ->orderBy('i.item_id')
+                'i.item_id')
+                ->orderBy('i.item_id')
             ->paginate($limit, ['*'], 'page', $page);
 
         $pageItems = collect($items->items());
-
+        $saleItems = [];
         foreach($pageItems as $it){
-            $orderQuan = $this->detailService->quanItems($it->item_id)[0];
-            if($orderQuan){
-                $it->sold = $orderQuan->sold;
-                $it->in_stock = $orderQuan->in_stock;
-            }
+            $saleItems[] = $this->itemService->getItem($it->item_id);
         }
         if ($items->isEmpty()) {
             return response()->json([
@@ -363,73 +337,11 @@ class orderPageController extends Controller
             ], 404);
         }
 
-        $itemIds = $pageItems->pluck('item_id')->filter()->unique()->toArray();
-
-        // ----- Attributes -----
-        $groupedAttrs = [];
-        if (!empty($itemIds)) {
-            $attrs = [];
-
-            foreach ($itemIds as $a) {
-                $attrs = $this->attributeService->transformAttributes($a);
-                $groupedAttrs[$a] = ['attributes' => $attrs];
-            }
-        }
-
-        // ----- Images -----
-        $groupedImages = [];
-        if (!empty($itemIds)) {
-            $images = DB::table('item_images')
-                ->join('images', 'images.id', '=', 'item_images.image_id')
-                ->whereIn('item_images.item_id', $itemIds)
-                ->select('item_images.item_id', 'images.id as image_id', 'images.image')
-                ->orderBy('item_images.item_id')
-                ->orderBy('images.id')
-                ->get();
-
-            foreach ($images as $img) {
-                $url = url('storage/images/' . $img->image);
-                if (!isset($groupedImages[$img->item_id])) {
-                    $groupedImages[$img->item_id] = ['image' => $url, 'images' => []];
-                }
-                $groupedImages[$img->item_id]['images'][] = [
-                    'image_id' => $img->image_id,
-                    'image' => $url
-                ];
-            }
-        }
-
-        // ---- Build Final Data -----
-        $result = [];
-        foreach ($pageItems as $it) {
-            $id = $it->item_id;
-
-            $result[] = [
-                'id' => $it->item_id,
-                'code' => $it->item_code,
-                'barcode' => $it->barcode,
-                'name' => $it->item_name,
-                'category_id' => $it->category_id,
-                'cost' => (float)$it->item_cost,
-                'price' => (float)$it->item_price,
-                'discount' => (float)$it->discount,
-                'price_discount' => (float)$it->price_discount,
-                'wholesale_price_discount' => (float)$it->wholesale_price_discount,
-                'wholesale_price' => (float)$it->wholesale_price,
-                'in_stock' => (int)$it->in_stock,
-                'stock_in' => (int)$it->stock_in,
-                'stock_out' => (int)$it->stock_out,
-                'sold' => (int)$it->sold,
-                'image' => $groupedImages[$id]['image'] ?? null,
-                'images' => $groupedImages[$id]['images'] ?? [],
-                'attributes' => $groupedAttrs[$id]['attributes'] ?? [],
-            ];
-        }
-
+        
         return response()->json([
             'message' => 'All items retrieved',
             'status' => 200,
-            'data' => $result,
+            'data' => $saleItems,
             'pagination' => [
                 'current_page' => $items->currentPage(),
                 'per_page' => $items->perPage(),
