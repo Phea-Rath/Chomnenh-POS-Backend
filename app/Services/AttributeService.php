@@ -39,7 +39,7 @@ class AttributeService {
                 return [
                     'id' => $first->name_id,
                     'name' => $first->name,
-                    'type' => $first->type,
+                    // 'type' => $first->type,
                     'value' => $first->type === 'select'
                         ? $items->map(function($item) {
                             return [
