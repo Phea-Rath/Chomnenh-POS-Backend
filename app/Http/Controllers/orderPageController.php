@@ -321,6 +321,7 @@ class orderPageController extends Controller
 
         $items = $query->select(
                 'i.item_id')
+                ->groupBy('i.item_id')
                 ->orderBy('i.item_id')
             ->paginate($limit, ['*'], 'page', $page);
 
