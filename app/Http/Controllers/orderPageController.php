@@ -126,6 +126,7 @@ class orderPageController extends Controller
             ->join('profiles as p', 'u.profile_id', '=', 'p.id')
             ->where('sd.is_deleted', 0)
             ->where('sm.is_deleted', 0)
+            ->where('sm.warehouse_id',1)
             ->where('i.is_deleted', 0)
             ->where('p.id', $proId)
             ->where('i.item_type', 0);
@@ -284,6 +285,7 @@ class orderPageController extends Controller
             ->join('profiles as p', 'u.profile_id', '=', 'p.id')
             ->where('sd.is_deleted', 0)
             ->where('sm.is_deleted', 0)
+            ->where('sm.warehouse_id',1)
             ->where('i.is_deleted', 0)
             ->where('i.item_type', 0);
 
