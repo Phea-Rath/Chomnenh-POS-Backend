@@ -58,7 +58,7 @@ Route::post("/new-password", [AuthController::class, "forgotPassword"]);
 Route::post('/send-otp', [OtpController::class, 'sendOtp']);
 Route::post('/verify-otp', [OtpController::class, 'verifyOtp']);
 Route::get('/get-all-profiles', [ProfileController::class, 'getAll']);
-Route::get('all-items', [ItemController::class, 'getAllItems']);
+Route::get('sale-item-marketplace', [orderPageController::class, 'saleItemMarketPlace']);
 Route::get('item-marketplace/{id}', [ItemController::class, 'show']);
 
 
