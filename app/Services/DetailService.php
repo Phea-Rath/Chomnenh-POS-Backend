@@ -42,11 +42,7 @@ class DetailService {
             ->get();
 
         if ($stock_detail->isEmpty()) {
-            return response()->json([
-                "message" => "No stock detail found",
-                "status" => 404,
-                "data" => []
-            ]);
+            return null;
         }
 
             foreach($stock_detail as $stock){
@@ -104,11 +100,7 @@ class DetailService {
             ->get();
 
         if ($stock_detail->isEmpty()) {
-            return response()->json([
-                "message" => "No stock detail found",
-                "status" => 404,
-                "data" => []
-            ]);
+            return null;
         }
 
             foreach($stock_detail as $stock){
@@ -371,7 +363,7 @@ class DetailService {
 
     public function quanItems($item_id) {
         $user = auth()->user();
-        $proId = $user->profile_id;
+        $proId = $user->profile_id ?? 0;
         $query = DB::table('stock_details as sd')
             ->join('stock_masters as sm', 'sd.stock_id', '=', 'sm.stock_id')
             ->join('items as i', 'sd.item_id', '=', 'i.item_id')
@@ -380,11 +372,11 @@ class DetailService {
             ->where('sd.is_deleted', 0)
             ->where('sm.is_deleted', 0)
             ->where('i.is_deleted', 0)
-            ->where('i.item_id', $item_id)
-            ->where('p.id', $proId);
-
-
-            $items = $query->select(
+            ->where('i.item_id', $item_id);
+        if($proId){
+            $query->where('p.id', $proId);
+        }
+        $items = $query->select(
                 DB::raw('COALESCE(
                     SUM(CASE WHEN sm.stock_type_id = 1 THEN sd.quantity ELSE 0 END)
                     + SUM(CASE WHEN sm.stock_type_id = 2 THEN sd.quantity ELSE 0 END)

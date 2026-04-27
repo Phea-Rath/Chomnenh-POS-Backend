@@ -57,6 +57,9 @@ Route::post("/login", [AuthController::class, "login"]);
 Route::post("/new-password", [AuthController::class, "forgotPassword"]);
 Route::post('/send-otp', [OtpController::class, 'sendOtp']);
 Route::post('/verify-otp', [OtpController::class, 'verifyOtp']);
+Route::get('/get-all-profiles', [ProfileController::class, 'getAll']);
+Route::get('all-items', [ItemController::class, 'getAllItems']);
+Route::get('item-marketplace/{id}', [ItemController::class, 'show']);
 
 
 Broadcast::routes(['middleware' => ['auth:sanctum']]);
@@ -210,7 +213,7 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::get('/stock-raw', [StockMasterController::class, 'indexRaw']);
     Route::get('/stock-raw/{id}', [StockMasterController::class, 'showRaw']);
     Route::get('/stock-list', [StockMasterController::class, 'indexMobile']);
-    Route::get('/stock-raw-list', [StockMasterController::class, 'indexRawMobile']);
+    Route::get('/stock-raw-list', [StockMasterController::class, 'indexRawMobile']); 
     Route::get('/stock-by-id/{id}', [StockMasterController::class, 'showMobile']);
     Route::get('/stock-raw-by-id/{id}', [StockMasterController::class, 'showRawMobile']);
     Route::resource('suppliers', SupplierController::class)->only(['index', 'show', 'store', 'destroy']);

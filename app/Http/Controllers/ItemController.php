@@ -203,6 +203,78 @@ class ItemController extends Controller
         ];
     }
 
+    public function getAllItems(Request $request)
+    {
+        $limit = $request->input('limit', 10);
+        $page = $request->input('page', 1);
+        $categoryId = $request->input('category_id', 0);
+        $brandId = $request->input('brand_id', 0);
+        $profileId = $request->input('profile_id', 0);
+        $priceRange = $request->input('price_range', 0);
+        $search = $request->input('search');
+
+        $query = DB::table('items')
+            ->leftJoin('users', 'users.id', '=', 'items.created_by')
+            ->leftJoin('profiles', 'users.profile_id', '=', 'profiles.id')
+            ->where('items.item_type', 0)
+            ->where('items.is_deleted', 0);
+
+        if (!empty($search)) {
+            $query->where(function($q) use ($search) {
+                $q->where('items.item_name', 'LIKE', "%{$search}%")
+                ->orWhere('items.item_code', 'LIKE', "%{$search}%");
+            });
+        }
+
+        if($priceRange != null && $priceRange != 0)
+        {
+            $query->where('items.item_price', '<=', $priceRange);
+        }
+
+        if($profileId != 0)
+        {
+            $query->where('profiles.id', $profileId);
+        }
+        if($categoryId != 0)
+        {
+            $query->where('items.category_id', $categoryId);
+        }
+        if($brandId != 0)
+        {
+            $query->where('items.brand_id', $brandId);
+        }
+
+        $rawItems = $query->select('items.*')
+            ->orderBy('items.item_id', 'DESC')
+            ->paginate($limit, ['*'], 'page', $page);
+
+        // 3. Handle Empty Results
+        if ($rawItems->total() == 0) {
+            return response()->json([
+                'message' => 'Items not found!',
+                'status' => 404,
+                'data' => []
+            ]);
+        }
+
+        $items = [];
+        foreach ($rawItems as $item) {
+            $items[] = $this->itemService->getItem($item->item_id);
+        }
+
+        return response()->json([
+            'message' => 'Items selected successfully',
+            'status' => 200,
+            'data' => $items,
+            'pagination' => [
+                'current_page' => $rawItems->currentPage(),
+                'per_page' => $rawItems->perPage(),
+                'total' => $rawItems->total(),
+                'last_page' => $rawItems->lastPage(),
+            ]
+        ]);
+    }
+
     public function index(Request $request)
     {
         $user = Auth::user();

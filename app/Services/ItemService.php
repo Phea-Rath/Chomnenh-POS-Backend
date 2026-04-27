@@ -39,9 +39,9 @@ class ItemService {
     public function getItem($id)
     {
         $user = Auth::user();
-        $proId = $user->profile_id;
+        $proId = $user->profile_id ?? 0;
 
-        $rows = DB::table('items')
+        $query = DB::table('items')
             ->leftJoin('categories', 'categories.category_id', '=', 'items.category_id')
             ->leftJoin('attribute_details', 'attribute_details.item_id', '=', 'items.item_id')
             ->leftJoin('attributes', 'attributes.id', '=', 'attribute_details.attribute_id')
@@ -51,7 +51,6 @@ class ItemService {
             ->leftJoin('item_images', 'item_images.item_id', '=', 'items.item_id')
             ->leftJoin('images', 'images.id', '=', 'item_images.image_id')
             ->leftJoin('profiles', 'users.profile_id', '=', 'profiles.id')
-            ->where('profiles.id', $proId)
             ->where('items.item_id', $id)
             ->where('items.is_deleted', 0)
             ->select(
@@ -68,15 +67,16 @@ class ItemService {
                 'images.image as img_path',
                 DB::raw('items.item_price - (items.item_price * (items.discount / 100)) as price_discount'),
                 DB::raw('items.wholesale_price - (items.wholesale_price * (items.discount / 100)) as wholesale_price_discount')
-            )
-            ->get();
+            );
+        if($proId){
+            $query->where('profiles.id', $proId);
+        }
+
+        $rows = $query->get();
+        
 
         if ($rows->count() == 0) {
-            return response()->json([
-                "message" => "Item not found",
-                "status" => 404,
-                "data" => null
-            ]);
+            return null;
         }
 
         $item = $rows->first();

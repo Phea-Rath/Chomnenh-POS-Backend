@@ -48,6 +48,39 @@ class ProfileController extends Controller
         ]);
     }
 
+    public function getAll()
+    {
+        $profiles = DB::table('profiles')
+            ->where('is_deleted', 0)
+            ->where('created_by','!=',0)
+            ->get();
+
+        foreach ($profiles as $item) {
+            if ($item->image) {
+                $filenameOnly = basename($item->image);
+                $item->image = url('storage/images/' . $filenameOnly);
+            }
+            if ($item->qr_code) {
+                $filenameOnly = basename($item->qr_code);
+                $item->qr_code = url('storage/images/' . $filenameOnly);
+            }
+        }
+
+        if ($profiles->isEmpty()) {
+            return response()->json([
+                'message' => 'Profiles not found!',
+                'status' => 404,
+                'data' => $profiles,
+            ]);
+        }
+
+        return response()->json([
+            'message' => 'Profiles selected successfully',
+            'status' => 200,
+            'data' => array_reverse($profiles->toArray()),
+        ]);
+    }
+
     public function store(Request $request)
     {
         $user = Auth::user();

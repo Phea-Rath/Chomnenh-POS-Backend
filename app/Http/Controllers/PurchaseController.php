@@ -61,7 +61,7 @@ class PurchaseController extends Controller
 
         if ($rawPurchases->total() === 0) {
             return response()->json([
-                'message' => 'Order details retrieved successfully',
+                'message' => 'Purchase get successfully',
                 'status' => 200,
                 'data' => [],
             ]);
@@ -76,7 +76,7 @@ class PurchaseController extends Controller
         }
 
         return response()->json([
-            'message' => 'Order details retrieved successfully',
+            'message' => 'Purchase get successfully',
             'status' => 200,
             'data' => $purchases,
             'pagination' => [
@@ -102,7 +102,7 @@ class PurchaseController extends Controller
         }
 
         return response()->json([
-            'message' => 'Order details retrieved successfully',
+            'message' => 'Purchase get successfully',
             'status' => 200,
             'data' => $data,
         ]);
@@ -162,7 +162,8 @@ class PurchaseController extends Controller
             $price = (float) ($item->unit_price > 0 ? $item->unit_price : $item->item_cost);
 
             return [
-                'id' => (int) $item->id,
+                'item_id' => (int) $item->id,
+                'item_name' => $item->item_name,
                 'price' => $price,
                 'quantity' => (int) $item->quantity,
                 'total' => (float) $item->subtotal,
@@ -235,7 +236,7 @@ class PurchaseController extends Controller
 
         if ($rawPurchases->total() === 0) {
             return response()->json([
-                'message' => 'Order details retrieved successfully',
+                'message' => 'Purchase get successfully',
                 'status' => 200,
                 'data' => [],
             ]);
@@ -250,7 +251,7 @@ class PurchaseController extends Controller
         }
 
         return response()->json([
-            'message' => 'Order details retrieved successfully',
+            'message' => 'Purchase get successfully',
             'status' => 200,
             'data' => $purchases,
             'pagination' => [
@@ -277,7 +278,7 @@ class PurchaseController extends Controller
         }
 
         return response()->json([
-            'message' => 'Order details retrieved successfully',
+            'message' => 'Purchase get successfully',
             'status' => 200,
             'data' => $data,
         ]);
@@ -340,7 +341,8 @@ class PurchaseController extends Controller
 
         $items = $itemRows->map(function ($item) {
             return [
-                'id' => (int) $item->id,
+                'item_id' => (int) $item->id,
+                'item_name' => $item->material_name,
                 'price' => (float) $item->item_cost,
                 'quantity' => (int) $item->quantity,
                 'total' => (float) $item->subtotal,
@@ -1243,8 +1245,20 @@ class PurchaseController extends Controller
 
         $user = Auth::user();
         $uid = $user->id;
+        if($validated['amount'] <= 0){
+            return response()->json([
+                'message' => 'Payment amount must be greater than zero',
+                'status'  => 400
+            ], 400);
+        }
+        if($validated['amount'] > $purchase->balance){
+            return response()->json([
+                'message' => 'Payment amount exceeds remaining balance',
+                'status'  => 400
+            ], 400);
+        }
 
-        $payment = PurchasePayment::create([
+        PurchasePayment::create([
             'purchase_id' => $id,
             'amount'      => $validated['amount'],
             'paid_at'     => $validated['paid_at'],
@@ -1259,8 +1273,6 @@ class PurchaseController extends Controller
         return response()->json([
             'message' => 'Payment added successfully',
             'status'  => 200,
-            'data'    => $payment,
-            'purchase'=> $purchase
         ], 200);
     }
 }
