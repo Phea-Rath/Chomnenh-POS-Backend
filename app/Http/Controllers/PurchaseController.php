@@ -549,6 +549,7 @@ class PurchaseController extends Controller
             'shipping_fee'       => 'nullable|numeric',
             'total_paid'         => 'nullable|numeric',
             'exchange_rate'      => 'nullable|numeric',
+            'invoice_number' => 'nullable|string|max:50',
             'status'             => 'required|integer',
             'purchase_type'      => 'required|integer',
             'items'              => 'required|array|min:1',
@@ -588,6 +589,7 @@ class PurchaseController extends Controller
             'balance'       => $balance,
             'purchase_type' => $validated['purchase_type'] ?? 0,
             'exchange_rate' => $exchange_rate->usd_to_khr ?? 4000,
+            'invoice_number' => $validated['invoice_number'] ?? '',
             'status'        => $validated['status'],
             'created_by'    => $uid,
         ]);
@@ -641,6 +643,7 @@ class PurchaseController extends Controller
             'shipping_fee'       => 'nullable|numeric',
             'total_paid'         => 'nullable|numeric',
             'exchange_rate'      => 'nullable|numeric',
+            'invoice_number' => 'nullable|string|max:50',
             'status'             => 'required|integer',
             'purchase_type'      => 'required|integer',
             'items'              => 'required|array|min:1',
@@ -679,6 +682,7 @@ class PurchaseController extends Controller
             'balance'       => $balance,
             'purchase_type' => $validated['purchase_type'] ?? 0,
             'exchange_rate' => $validated['exchange_rate'],
+            'invoice_number' => $validated['invoice_number'] ?? '',
             'status'        => $validated['status'],
             'created_by'    => $uid,
         ]);
@@ -817,6 +821,7 @@ class PurchaseController extends Controller
             'shipping_fee'  => 'nullable|numeric',
             'total_paid'    => 'nullable|numeric',
             'exchange_rate' => 'nullable|numeric',
+            'invoice_number' => 'nullable|string|max:50',
             'status'        => 'required|integer',
             'items'         => 'required|array|min:1',
             'items.*.item_id'    => 'required|integer|exists:items,item_id',
@@ -854,6 +859,7 @@ class PurchaseController extends Controller
             'total_paid'    => $totalPaid,
             'balance'       => $balance,
             'exchange_rate' => $validated['exchange_rate'] ?? $purchase->exchange_rate,
+            'invoice_number' => $validated['invoice_number'] ?? $purchase->invoice_number,
             'status'        => $validated['status'],
         ]);
 
@@ -911,6 +917,7 @@ class PurchaseController extends Controller
             'shipping_fee'  => 'nullable|numeric',
             'total_paid'    => 'nullable|numeric',
             'exchange_rate' => 'nullable|numeric',
+            'invoice_number' => 'nullable|string|max:50',
             'status'        => 'required|integer',
             'items'         => 'required|array|min:1',
             'items.*.item_id'    => 'required|integer',
@@ -942,6 +949,7 @@ class PurchaseController extends Controller
             'total_paid'    => $totalPaid,
             'balance'       => $balance,
             'exchange_rate' => $validated['exchange_rate'] ?? $purchase->exchange_rate,
+            'invoice_number' => $validated['invoice_number'] ?? $purchase->invoice_number,
             'status'        => $validated['status'],
         ]);
 

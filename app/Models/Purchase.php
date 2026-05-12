@@ -25,6 +25,7 @@ class Purchase extends Model
         'purchase_type',
         'created_by',
         'exchange_rate',
+        'invoice_number',
         'status',
         'updated_by',
         'is_deleted'
