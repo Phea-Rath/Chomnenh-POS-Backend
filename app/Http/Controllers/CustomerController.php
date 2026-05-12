@@ -68,14 +68,14 @@ class CustomerController extends Controller
 			'customer_email' => 'nullable|string|max:255',
 			'customer_tel' => 'nullable|string|max:255',
 			'customer_address' => 'nullable|string|max:255',
-            'communes' => 'required|string|max:500',
-            'districts' => 'required|string|max:500',
-            'provinces' => 'required|string|max:500',
-            'villages' => 'required|string|max:500',
-            'commune_id' => 'required|integer',
-            'district_id' => 'required|integer',
-            'province_id' => 'required|integer',
-            'village_id' => 'required|integer',
+            'communes' => 'nullable|string|max:500',
+            'districts' => 'nullable|string|max:500',
+            'provinces' => 'nullable|string|max:500',
+            'villages' => 'nullable|string|max:500',
+            'commune_id' => 'nullable|integer',
+            'district_id' => 'nullable|integer',
+            'province_id' => 'nullable|integer',
+            'village_id' => 'nullable|integer',
             'image'       => '',
 		]);
 		$imageName = null;
@@ -89,14 +89,14 @@ class CustomerController extends Controller
 			'customer_email' => $validated['customer_email'] ?? null,
 			'customer_tel' => $validated['customer_tel'] ?? null,
 			'customer_address' => $validated['customer_address'] ?? null,
-            'communes' => $validated['communes'],
-            'districts' => $validated['districts'],
-            'provinces' => $validated['provinces'],
-            'villages' => $validated['villages'],
-            'commune_id' => $validated['commune_id'],
-            'district_id' => $validated['district_id'],
-            'province_id' => $validated['province_id'],
-            'village_id' => $validated['village_id'],
+            'communes' => $validated['communes'] ?? null,
+            'districts' => $validated['districts'] ?? null,
+            'provinces' => $validated['provinces'] ?? null,
+            'villages' => $validated['villages'] ?? null,
+            'commune_id' => $validated['commune_id'] ?? null,
+            'district_id' => $validated['district_id'] ?? null,
+            'province_id' => $validated['province_id'] ?? null,
+            'village_id' => $validated['village_id'] ?? null,
 			'created_by' => $uid,
             'image'        => $imageName,
 		]);
@@ -258,5 +258,56 @@ class CustomerController extends Controller
 			"message" => "Customer image updated successfully",
 			"status" => 200,
 		]);
+	}
+
+	//import customers from array object
+	function importCustomers(Request $request){
+		$validated = $request->validate([
+			'data' => 'required|array',
+			'data.*.name' => 'required|string|max:255',
+			'data.*.email' => 'nullable|string|max:255',
+			'data.*.tel' => 'nullable|string|max:255',
+			'data.*.address' => 'nullable|string|max:255',
+		]);
+		$customers = $request->data;
+		// return response()->json([
+		// 	"message" => "Customers imported successfully",
+		// 	"status" => 200,
+		// 	"data" => $customers[0]["address"],
+		// ], 200);
+		$user = Auth::user();
+		$uid = $user->id;
+		$proId = $user->profile_id;
+		$country_code = '+855';
+		foreach ($customers as $customer) {
+			//remove 0 from tel if has 0 at first
+			$tel = $customer['tel'];
+			if (strpos($tel, '0') === 0) {
+				$tel = $country_code . substr($tel, 1);
+			}else{
+				$tel = $country_code . $tel;
+			}
+			//check if customer_tel is unique
+			$existcustomer = Customers::where('customer_tel', $tel)->first();
+			if ($existcustomer) {
+				continue;
+			}
+			// return response()->json([
+			// 	"message" => "Customers imported successfully",
+			// 	"status" => 200,
+			// 	"data" => $customer,
+			// ], 200);
+			Customers::create([
+				'customer_name' => $customer['name'],
+				'customer_email' => $customer['email'] ?? null,
+				'customer_tel' => $tel,
+				'customer_address' => $customer['address'] ?? null,
+				'created_by' => $uid,
+			]);
+		}
+		return response()->json([
+			"message" => "Customers imported successfully",
+			"status" => 200,
+		], 200);
 	}
 }

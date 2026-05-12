@@ -22,7 +22,7 @@ class ScaleController extends Controller
         $scales = DB::table('scales')
             ->join('users', "scales.created_by", '=', 'users.id')
             ->join('profiles', 'users.profile_id', '=', 'profiles.id')
-            ->where('users.profile_id', '=', $proId)
+            // ->where('users.profile_id', '=', $proId)
             ->where('scales.is_deleted', 0)
             ->select('users.username as created_by_name','scales.*')
             // ->paginate($page);

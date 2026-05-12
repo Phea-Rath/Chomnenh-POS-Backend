@@ -281,6 +281,9 @@ class ItemController extends Controller
         $proId = $user->profile_id;
         $limit = $request->input('limit', 10);
         $page = $request->input('page', 1);
+        $categoryId = $request->input('category_id', 0);
+        $brandId = $request->input('brand_id', 0);
+        
 
         // 1. Capture the search term
         $search = $request->input('search');
@@ -300,6 +303,12 @@ class ItemController extends Controller
                 ->orWhere('items.item_code', 'LIKE', "%{$search}%");
                 // Add other columns here if needed, e.g., ->orWhere('items.description', 'LIKE', ...)
             });
+        }
+        if($categoryId != 0 && $categoryId != "" && $categoryId != null) {
+            $query->where('items.category_id', $categoryId);
+        }
+        if($brandId != 0 && $brandId != "" && $brandId != null) {
+            $query->where('items.brand_id', $brandId);
         }
 
         $rawItems = $query->select('items.*')

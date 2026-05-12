@@ -52,7 +52,7 @@ class ProfileController extends Controller
     {
         $profiles = DB::table('profiles')
             ->where('is_deleted', 0)
-            ->where('created_by','!=',0)
+            ->where('created_by', '!=', 0)
             ->get();
 
         foreach ($profiles as $item) {
@@ -124,9 +124,9 @@ class ProfileController extends Controller
 
     public function show(string $id)
     {
-        $user = Auth::user();
+        // $user = Auth::user();
         // $uid = $user->id;
-        $proId = $user->profile_id;
+        // $proId = $user->profile_id;
 
         $profile = Profile::where('id', $id)->where('is_deleted', 0)
             // ->where('created_by', $proId)
@@ -146,7 +146,7 @@ class ProfileController extends Controller
             $profile->qr_code = url('storage/images/' . basename($profile->qr_code));
         }
 
-        return response()->json([ 
+        return response()->json([
             'message' => 'Profile retrieved successfully!',
             'status'  => 200,
             'data'    => $profile,

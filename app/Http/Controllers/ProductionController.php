@@ -12,15 +12,18 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use App\Services\ItemService;
+use App\Services\DetailService;
 
 class ProductionController extends Controller
 {
     protected $itemService;
+    protected $detailService;
 
 
-    public function __construct( ItemService $itemService)
+    public function __construct( ItemService $itemService, DetailService $detailService)
     {
         $this->itemService = $itemService;
+        $this->detailService = $detailService;
     }
     public function index(Request $request)
     {
@@ -163,6 +166,23 @@ class ProductionController extends Controller
             'raw_materials.*.cost_per_unit' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
         ]);
 
+        //check stock available or not
+        $errors = [];
+        foreach($validated['raw_materials'] as $material){
+            $stock = $this->detailService->quanRaws($material['raw_material_id'])[0];
+            if($stock->in_stock < $material['quantity']){
+                $rawName = DB::table('raw_materials')->where('id', $material['raw_material_id'])->first();
+                $errors[] = $rawName->material_name." is not available, Now we have ".$stock->in_stock.$rawName->primary_unit.", please check stock first!";
+            }
+
+        }
+        if(!empty($errors)){
+            return response()->json([
+                'message' => $errors,
+                'status' => 400,
+            ]);
+        }
+        
         $productionNo = 'PROD-' . now()->format('Ymd') . '-' . str_pad((Production::max('id') + 1), 5, '0', STR_PAD_LEFT);
 
         DB::beginTransaction();

@@ -58,8 +58,8 @@ class orderPageController extends Controller
                 + SUM(CASE WHEN stock_masters.stock_type_id = 2 THEN stock_details.quantity ELSE 0 END)
                 - SUM(CASE WHEN stock_masters.stock_type_id = 4 THEN stock_details.quantity ELSE 0 END) AS in_stock
                 '),
-            DB::raw('SUM(CASE WHEN items.discount = 0 THEN items.item_price ELSE items.item_price - (items.item_price * (items.discount / 100)) END) as price_discount'),
-            DB::raw('CASE WHEN items.discount = 0 THEN items.wholesale_price ELSE items.wholesale_price - (items.wholesale_price * (items.discount / 100)) END as wholesale_price_discount')
+                DB::raw('SUM(CASE WHEN items.discount = 0 THEN items.item_price ELSE items.item_price - (items.item_price * (items.discount / 100)) END) as price_discount'),
+                DB::raw('CASE WHEN items.discount = 0 THEN items.wholesale_price ELSE items.wholesale_price - (items.wholesale_price * (items.discount / 100)) END as wholesale_price_discount')
             )
             ->where('stock_details.is_deleted', 0)
             ->where('items.is_deleted', 0)
@@ -69,9 +69,22 @@ class orderPageController extends Controller
             // ->where('warehouses.warehouse_id', function ($query) {
             //     $query->selectRaw('MIN(w.warehouse_id)')->from('warehouses as w')->join('stock_masters as sm', 'sm.warehouse_id', '=', 'w.warehouse_id')->join('users as u', 'sm.stock_created_by', '=', 'u.id')->whereColumn('u.profile_id', 'profiles.id');
             // })
-            ->groupBy('items.item_id', 'items.item_code',
+            ->groupBy(
+                'items.item_id',
+                'items.item_code',
                 'items.barcode',
-                'items.discount', 'items.item_name', 'items.item_image', 'items.item_price','items.wholesale_price', 'categories.category_name', 'categories.category_id', 'items.color_pick', 'items.color_id', 'sizes.size_id', 'sizes.size_name',)->orderBy('items.item_id')->get();
+                'items.discount',
+                'items.item_name',
+                'items.item_image',
+                'items.item_price',
+                'items.wholesale_price',
+                'categories.category_name',
+                'categories.category_id',
+                'items.color_pick',
+                'items.color_id',
+                'sizes.size_id',
+                'sizes.size_name',
+            )->orderBy('items.item_id')->get();
         foreach ($results as $item) {
             // $url = asset($item->item_image);
             if ($item->item_image) {
@@ -83,7 +96,7 @@ class orderPageController extends Controller
         return response()->json(['message' => 'StockMaster show successfully!', 'status' => 200, 'data' => $results,], 200);
     }
 
-    public function orderQuantityByItem($id):int
+    public function orderQuantityByItem($id): int
     {
         $user = auth()->user();
         $proId = $user->profile_id;
@@ -96,9 +109,9 @@ class orderPageController extends Controller
             ->where('oi.item_id', $id)
             ->where('oi.is_deleted', 0)
             ->where('om.is_deleted', 0)
-            ->whereIn('om.status', [4,5,6])
+            ->whereIn('om.status', [4, 5, 6])
             ->sum('oi.quantity');
-        if(!$totalOrdered){
+        if (!$totalOrdered) {
             $totalOrdered = 0;
         }
 
@@ -126,7 +139,7 @@ class orderPageController extends Controller
             ->join('profiles as p', 'u.profile_id', '=', 'p.id')
             ->where('sd.is_deleted', 0)
             ->where('sm.is_deleted', 0)
-            ->where('sm.warehouse_id',1)
+            ->where('sm.warehouse_id', 1)
             ->where('i.is_deleted', 0)
             ->where('p.id', $proId)
             ->where('i.item_type', 0);
@@ -138,44 +151,52 @@ class orderPageController extends Controller
         if (!empty($search)) {
             $query->where(function ($q) use ($search) {
                 $q->where('i.item_name', 'like', '%' . $search . '%')
-                  ->orWhere('i.item_code', 'like', '%' . $search . '%')
-                  ->orWhere('i.barcode', 'like', '%' . $search . '%');
+                    ->orWhere('i.item_code', 'like', '%' . $search . '%')
+                    ->orWhere('i.barcode', 'like', '%' . $search . '%');
             });
         }
 
 
         $items = $query->select(
-                'i.item_id',
-                'i.item_code',
-                'i.barcode',
-                'i.item_name',
-                'i.category_id',
-                'i.item_cost',
-                'i.item_price',
-                'i.discount',
-                'i.wholesale_price',
-                DB::raw('i.item_price - (i.item_price * (i.discount / 100)) as price_discount'),
-                DB::raw('i.wholesale_price - (i.wholesale_price * (i.discount / 100)) as wholesale_price_discount'),
-                DB::raw('SUM(CASE WHEN sm.stock_type_id = 1 THEN sd.quantity ELSE 0 END)
+            'i.item_id',
+            'i.item_code',
+            'i.barcode',
+            'i.item_name',
+            'i.category_id',
+            'i.item_cost',
+            'i.item_price',
+            'i.discount',
+            'i.wholesale_price',
+            DB::raw('i.item_price - (i.item_price * (i.discount / 100)) as price_discount'),
+            DB::raw('i.wholesale_price - (i.wholesale_price * (i.discount / 100)) as wholesale_price_discount'),
+            DB::raw('SUM(CASE WHEN sm.stock_type_id = 1 THEN sd.quantity ELSE 0 END)
                     + SUM(CASE WHEN sm.stock_type_id = 2 THEN sd.quantity ELSE 0 END)
                     - SUM(CASE WHEN sm.stock_type_id = 3 THEN sd.quantity ELSE 0 END)
                     - SUM(CASE WHEN sm.stock_type_id = 4 THEN sd.quantity ELSE 0 END)
                     - SUM(CASE WHEN sm.stock_type_id = 5 THEN sd.quantity ELSE 0 END)
                     AS in_stock'),
-                DB::raw('SUM(CASE WHEN sm.stock_type_id = 2 THEN sd.quantity ELSE 0 END) AS stock_in'),
-                DB::raw('SUM(CASE WHEN sm.stock_type_id = 3 THEN sd.quantity ELSE 0 END) AS stock_out'),
-                DB::raw('SUM(CASE WHEN sm.stock_type_id = 5 THEN sd.quantity ELSE 0 END) AS sold')
+            DB::raw('SUM(CASE WHEN sm.stock_type_id = 2 THEN sd.quantity ELSE 0 END) AS stock_in'),
+            DB::raw('SUM(CASE WHEN sm.stock_type_id = 3 THEN sd.quantity ELSE 0 END) AS stock_out'),
+            DB::raw('SUM(CASE WHEN sm.stock_type_id = 5 THEN sd.quantity ELSE 0 END) AS sold')
+        )
+            ->groupBy(
+                'i.item_id',
+                'i.item_code',
+                'i.item_name',
+                'i.item_cost',
+                'i.discount',
+                'i.item_price',
+                'i.category_id',
+                'i.wholesale_price'
             )
-            ->groupBy('i.item_id', 'i.item_code', 'i.item_name', 'i.item_cost', 'i.discount', 'i.item_price',
-                'i.category_id', 'i.wholesale_price')
             ->orderBy('i.item_id')
             ->paginate($limit, ['*'], 'page', $page);
 
         $pageItems = collect($items->items());
 
-        foreach($pageItems as $it){
+        foreach ($pageItems as $it) {
             $orderQuan = $this->detailService->quanItems($it->item_id)[0];
-            if($orderQuan){
+            if ($orderQuan) {
                 $it->sold = $orderQuan->sold;
                 $it->in_stock = $orderQuan->in_stock;
             }
@@ -275,6 +296,7 @@ class orderPageController extends Controller
         $brandId = $request->input('brand_id', 0);
         $profileId = $request->input('profile_id', 0);
         $priceRange = $request->input('price_range', 0);
+        $isDiscouted = $request->input('is_discounted', null);
 
         $itemFilter = $request->input('item_id');
 
@@ -285,11 +307,11 @@ class orderPageController extends Controller
             ->join('profiles as p', 'u.profile_id', '=', 'p.id')
             ->where('sd.is_deleted', 0)
             ->where('sm.is_deleted', 0)
-            ->where('sm.warehouse_id',1)
+            ->where('sm.warehouse_id', 1)
             ->where('i.is_deleted', 0)
             ->where('i.item_type', 0);
 
-        if($profileId > 0){
+        if ($profileId > 0) {
             $query->where('p.id', $profileId);
         }
 
@@ -300,36 +322,44 @@ class orderPageController extends Controller
         if ($categoryId > 0) {
             $query->where('i.category_id', $categoryId);
         }
-        
+
         // Brand Filter
         if ($brandId > 0) {
             $query->where('i.brand_id', $brandId);
         }
-        
+
         // Price Range Filter
-        if($priceRange != null && $priceRange != 0)
-        {
+        if ($priceRange != null && $priceRange != 0) {
             $query->where('items.item_price', '<=', $priceRange);
+        }
+
+        if ($isDiscouted !== null || empty($isDiscouted)) {
+            if ($isDiscouted) {
+                $query->where('i.discount', '>', 0);
+            } else {
+                $query->where('i.discount', '=', 0);
+            }
         }
 
         if (!empty($search)) {
             $query->where(function ($q) use ($search) {
                 $q->where('i.item_name', 'like', '%' . $search . '%')
-                  ->orWhere('i.item_code', 'like', '%' . $search . '%')
-                  ->orWhere('i.barcode', 'like', '%' . $search . '%');
+                    ->orWhere('i.item_code', 'like', '%' . $search . '%')
+                    ->orWhere('i.barcode', 'like', '%' . $search . '%');
             });
         }
 
 
         $items = $query->select(
-                'i.item_id')
-                ->groupBy('i.item_id')
-                ->orderBy('i.item_id')
+            'i.item_id'
+        )
+            ->groupBy('i.item_id')
+            ->orderBy('i.item_id')
             ->paginate($limit, ['*'], 'page', $page);
 
         $pageItems = collect($items->items());
         $saleItems = [];
-        foreach($pageItems as $it){
+        foreach ($pageItems as $it) {
             $saleItems[] = $this->itemService->getItem($it->item_id);
         }
         if ($items->isEmpty()) {
@@ -340,7 +370,7 @@ class orderPageController extends Controller
             ], 404);
         }
 
-        
+
         return response()->json([
             'message' => 'All items retrieved',
             'status' => 200,
@@ -355,102 +385,102 @@ class orderPageController extends Controller
     }
 
 
-public function stockByItem(Request $request)
-{
-    $user = Auth::user();
-    $uid = $user->id;
-    $proId = $user->profile_id;
-    $limit = (int) $request->input('limit', 10);
-    $page = (int) $request->input('page', 1);
-    $search = trim((string) $request->input('search', ''));
+    public function stockByItem(Request $request)
+    {
+        $user = Auth::user();
+        $uid = $user->id;
+        $proId = $user->profile_id;
+        $limit = (int) $request->input('limit', 10);
+        $page = (int) $request->input('page', 1);
+        $search = trim((string) $request->input('search', ''));
 
-    $query = DB::table('stock_details')
-        ->join('stock_masters', 'stock_details.stock_id', '=', 'stock_masters.stock_id')
-        ->join('warehouses', 'stock_masters.warehouse_id', '=', 'warehouses.warehouse_id')
-        ->join('items', 'stock_details.item_id', '=', 'items.item_id')
-        ->join('categories', 'items.category_id', '=', 'categories.category_id')
-        ->join('users', 'stock_masters.stock_created_by', '=', 'users.id')
-        ->join('profiles', 'users.profile_id', '=', 'profiles.id')
-        ->select(
-            'items.item_id',
-            'items.item_code',
-            'items.barcode',
-            'items.item_name',
-            'items.item_price',
-            'items.wholesale_price',
-            'categories.category_name',
-            DB::raw('items.item_price - (items.item_price * (items.discount / 100)) as price_discount'),
-            DB::raw('items.wholesale_price - (items.wholesale_price * (items.discount / 100)) as wholesale_price_discount'),
-            DB::raw('0 AS in_stock')
-        )
-        ->where('stock_details.is_deleted', 0)
-        ->where('warehouses.status', 'stock')
-        ->where('items.item_type', 0)
-        ->where('profiles.id', $proId)
-        ->groupBy(
-            'items.item_id',
-            'items.item_code',
-            'items.barcode',
-            'items.item_name',
-            'items.item_price',
-            'items.wholesale_price',
-            'categories.category_name'
-        )
-        ->orderBy('items.item_id');
+        $query = DB::table('stock_details')
+            ->join('stock_masters', 'stock_details.stock_id', '=', 'stock_masters.stock_id')
+            ->join('warehouses', 'stock_masters.warehouse_id', '=', 'warehouses.warehouse_id')
+            ->join('items', 'stock_details.item_id', '=', 'items.item_id')
+            ->join('categories', 'items.category_id', '=', 'categories.category_id')
+            ->join('users', 'stock_masters.stock_created_by', '=', 'users.id')
+            ->join('profiles', 'users.profile_id', '=', 'profiles.id')
+            ->select(
+                'items.item_id',
+                'items.item_code',
+                'items.barcode',
+                'items.item_name',
+                'items.item_price',
+                'items.wholesale_price',
+                'categories.category_name',
+                DB::raw('items.item_price - (items.item_price * (items.discount / 100)) as price_discount'),
+                DB::raw('items.wholesale_price - (items.wholesale_price * (items.discount / 100)) as wholesale_price_discount'),
+                DB::raw('0 AS in_stock')
+            )
+            ->where('stock_details.is_deleted', 0)
+            ->where('warehouses.status', 'stock')
+            ->where('items.item_type', 0)
+            ->where('profiles.id', $proId)
+            ->groupBy(
+                'items.item_id',
+                'items.item_code',
+                'items.barcode',
+                'items.item_name',
+                'items.item_price',
+                'items.wholesale_price',
+                'categories.category_name'
+            )
+            ->orderBy('items.item_id');
 
 
         if (!empty($search)) {
             $query->where(function ($q) use ($search) {
                 $q->where('items.item_name', 'like', '%' . $search . '%')
-                  ->orWhere('items.item_code', 'like', '%' . $search . '%')
-                  ->orWhere('items.barcode', 'like', '%' . $search . '%');
+                    ->orWhere('items.item_code', 'like', '%' . $search . '%')
+                    ->orWhere('items.barcode', 'like', '%' . $search . '%');
             });
         }
 
-    $results = $query->paginate($limit, ['*'], 'page', $page);
+        $results = $query->paginate($limit, ['*'], 'page', $page);
 
-    // FORMAT OUTPUT
-    $data = collect($results->items())->map(function ($item) {
-        $item->in_stock = $this->detailService->quanItems($item->item_id)[0]->in_stock ?? 0;
-        // Build main image URL
-        $imagelist = $this->itemService->getImage($item->item_id);
-        $images = !empty($imagelist) ? $imagelist : null;
-        $image = !empty($imagelist) ? $imagelist[0]['image'] : null;
+        // FORMAT OUTPUT
+        $data = collect($results->items())->map(function ($item) {
+            $item->in_stock = $this->detailService->quanItems($item->item_id)[0]->in_stock ?? 0;
+            // Build main image URL
+            $imagelist = $this->itemService->getImage($item->item_id);
+            $images = !empty($imagelist) ? $imagelist : null;
+            $image = !empty($imagelist) ? $imagelist[0]['image'] : null;
 
-        return [
-            "id" => $item->item_id,
-            "name" => $item->item_name,
-            "code" => $item->item_code,
-            "barcode" => $item->barcode,
-            "price" => (float)$item->item_price,
-            "price_discount" => (float)$item->price_discount,
-            "wholesale_price" => (float)$item->wholesale_price,
-            "wholesale_price_discount" => (float)$item->wholesale_price_discount,
-            "image" => $image,
-            "images" => $images, // YOU CAN UPDATE LATER IF YOU ADD MULTIPLE IMAGES
-            "category" => $item->category_name,
-            "brand" => "unknown",
-            // "rating" => 0,
-            // "reviews" => 0,
-            "sold" => 0,
-            "stock" => $item->in_stock,
-            "discount" => 0,
-            "in_stock" => $item->in_stock
-        ];
-    });
+            return [
+                "id" => $item->item_id,
+                "name" => $item->item_name,
+                "code" => $item->item_code,
+                "barcode" => $item->barcode,
+                "price" => (float)$item->item_price,
+                "price_discount" => (float)$item->price_discount,
+                "wholesale_price" => (float)$item->wholesale_price,
+                "wholesale_price_discount" => (float)$item->wholesale_price_discount,
+                "image" => $image,
+                "images" => $images, // YOU CAN UPDATE LATER IF YOU ADD MULTIPLE IMAGES
+                "category" => $item->category_name,
+                "brand" => "unknown",
+                // "rating" => 0,
+                // "reviews" => 0,
+                "sold" => 0,
+                "stock" => $item->in_stock,
+                "discount" => 0,
+                "in_stock" => $item->in_stock
+            ];
+        });
 
-    return response()->json([
-        'message' => 'Items selected successfully',
-        'status' => 200,
-        'data' => $data,
-        'pagination' => [
+        return response()->json([
+            'message' => 'Items selected successfully',
+            'status' => 200,
+            'data' => $data,
+            'pagination' => [
                 'current_page' => $results->currentPage(),
                 'per_page' => $results->perPage(),
                 'total' => $results->total(),
                 'last_page' => $results->lastPage(),
             ]
-    ], 200);
-}
+        ], 200);
+    }
 
 
 
@@ -488,15 +518,15 @@ public function stockByItem(Request $request)
         }
 
         $paginator = $query->select(
-                'i.item_id',
-                'i.item_code',
-                'i.item_name',
-                'i.item_price',
-                'i.wholesale_price',
-                DB::raw('SUM(CASE WHEN sm.stock_type_id = 1 THEN sd.quantity ELSE 0 END) + SUM(CASE WHEN sm.stock_type_id = 2 THEN sd.quantity ELSE 0 END) - SUM(CASE WHEN sm.stock_type_id = 3 THEN sd.quantity ELSE 0 END) - SUM(CASE WHEN sm.stock_type_id = 4 THEN sd.quantity ELSE 0 END) - SUM(CASE WHEN sm.stock_type_id = 5 THEN sd.quantity ELSE 0 END) AS in_stock'),
-                DB::raw('SUM(CASE WHEN sm.stock_type_id = 2 THEN sd.quantity ELSE 0 END) AS stock_in'),
-                DB::raw('SUM(CASE WHEN sm.stock_type_id = 3 THEN sd.quantity ELSE 0 END) AS stock_out')
-            )
+            'i.item_id',
+            'i.item_code',
+            'i.item_name',
+            'i.item_price',
+            'i.wholesale_price',
+            DB::raw('SUM(CASE WHEN sm.stock_type_id = 1 THEN sd.quantity ELSE 0 END) + SUM(CASE WHEN sm.stock_type_id = 2 THEN sd.quantity ELSE 0 END) - SUM(CASE WHEN sm.stock_type_id = 3 THEN sd.quantity ELSE 0 END) - SUM(CASE WHEN sm.stock_type_id = 4 THEN sd.quantity ELSE 0 END) - SUM(CASE WHEN sm.stock_type_id = 5 THEN sd.quantity ELSE 0 END) AS in_stock'),
+            DB::raw('SUM(CASE WHEN sm.stock_type_id = 2 THEN sd.quantity ELSE 0 END) AS stock_in'),
+            DB::raw('SUM(CASE WHEN sm.stock_type_id = 3 THEN sd.quantity ELSE 0 END) AS stock_out')
+        )
             ->groupBy('i.item_id', 'i.item_code', 'i.item_name', 'i.item_price', 'i.wholesale_price')
             ->orderBy('i.item_id')
             ->paginate($limit, ['*'], 'page', $page);
@@ -600,8 +630,8 @@ public function stockByItem(Request $request)
         $deliverId = $request->input('deliver_id');
         $userId = $request->input('user_id');
         $search = trim((string) $request->input('search', ''));
-        $delivery = Deliver::where('deliver_name',$user->username)->first();
-        if($delivery){
+        $delivery = Deliver::where('deliver_name', $user->username)->first();
+        if ($delivery) {
             $deliverId = $delivery->deliver_id;
         }
 

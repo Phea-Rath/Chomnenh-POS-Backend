@@ -60,6 +60,7 @@ Route::post('/verify-otp', [OtpController::class, 'verifyOtp']);
 Route::get('/get-all-profiles', [ProfileController::class, 'getAll']);
 Route::get('sale-item-marketplace', [orderPageController::class, 'saleItemMarketPlace']);
 Route::get('item-marketplace/{id}', [ItemController::class, 'show']);
+Route::get('/profile-by-id/{id}', [ProfileController::class, 'show']);
 
 
 Broadcast::routes(['middleware' => ['auth:sanctum']]);
@@ -92,6 +93,7 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::post('/customers/{id}', [\App\Http\Controllers\CustomerController::class, 'update']);
     Route::post('/customer/image/{id}', [\App\Http\Controllers\CustomerController::class, 'updateImage']);
     Route::resource('customers', \App\Http\Controllers\CustomerController::class)->only(['index', 'show', 'store', 'destroy']);
+    Route::post('/import/customers', [\App\Http\Controllers\CustomerController::class, 'importCustomers']);
     // Route::resource('colors', ColorController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
     Route::resource('delivers', DeliverController::class)->only(['index', 'show', 'store', 'destroy']);
     Route::post('delivers/{id}', [DeliverController::class,'update']);

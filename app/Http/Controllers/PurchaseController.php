@@ -827,6 +827,12 @@ class PurchaseController extends Controller
             'payments.*.paid_at' => 'date'
         ]);
 
+        // return response()->json([
+        //     'message' => 'Purchase fetched successfully!',
+        //     'status'  => 200,
+        //     'data'    => $validated
+        // ]);
+
         $subTotal = collect($validated['items'])->sum(function ($item) {
             return (float) $item['quantity'] * (float) $item['item_cost'];
         });
@@ -870,7 +876,7 @@ class PurchaseController extends Controller
         if (!empty($validated['payments'])) {
             foreach ($validated['payments'] as $payment) {
                 $payments[] = PurchasePayment::create([
-                    'purchase_id' => $purchase->purchase_id,
+                    'purchase_id' => $id,
                     'amount'      => $payment['amount'],
                     'paid_at'     => $payment['paid_at'],
                     'created_by'  => $uid,
