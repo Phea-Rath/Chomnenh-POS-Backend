@@ -106,6 +106,7 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::resource('expense_items', ExpanseItemController::class)->only(['index', 'show']);
     //I
     Route::get('/items_by_code', [ItemController::class, 'showGroupByCode']);
+    Route::post('/import-items-by-code/{type}', [ItemController::class, 'filterItemsByCode']);
     Route::get('/item_by_stock', [orderPageController::class, 'stockByItem']);
     Route::get('/item_in_stock', [orderPageController::class, 'showInStockByItem']);
     Route::get('/delivery_tracking', [orderPageController::class, 'orderDelivery']);

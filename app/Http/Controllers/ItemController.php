@@ -18,6 +18,7 @@ use App\Services\AttributeService;
 use App\Models\AttributeValue;
 use App\Models\Attribute;
 use App\Models\AttributeValueDetail;
+use App\Models\RawMaterial;
 use App\Services\ItemService;
 use App\Services\DetailService;
 use App\Services\PostImage;
@@ -868,6 +869,88 @@ class ItemController extends Controller
             ], 201);
 
         } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'message' => 'Import failed: ' . $e->getMessage(),
+                'status'  => 500
+            ], 500);
+        }
+    }
+
+
+    function filterItemsByCode(Request $request, $type)
+    {
+        $validate = $request->validate([
+            'data' => 'required|array|min:1',
+            'data.*.code' => 'required|string',
+            'data.*.quantity' => 'required|integer',
+            'data.*.cost' => 'required|numeric',
+        ]);
+        $messing_code = '';
+        $result = [];
+        try {
+            $data = $request->input('data');
+            $codes = array_column($data, 'code');
+            $dataByCode = array_column($data, null, 'code');
+            DB::beginTransaction();
+            if($type == 'material'){
+                $items = RawMaterial::whereIn('material_code', $codes)->get();
+                $foundCodes = $items->pluck('item_code')->toArray();
+
+                $missingCodes = array_diff($codes, $foundCodes);
+
+                if (!empty($missingCodes)) {
+                    $messing_code .=implode(', ',$missingCodes);
+                }
+                foreach($items as $index => $item){
+                    $matchedData = $dataByCode[$item->material_code] ?? null;
+                    $quantity = $matchedData['quantity'] ?? 0;
+                    $cost = $matchedData['cost'] ?? null;
+                    $result[] = [
+                        'id' => $item->material_id,
+                        'code' => $item->material_code,
+                        'name' => $item->material_name,
+                        'price' => $item->material_price,
+                        'quantity' => $quantity,
+                        'cost' => $cost ?? $item->material_cost,
+                    ];
+                }
+            }else{
+                $items = Items::whereIn('item_code', $codes)->get();
+
+                $foundCodes = $items->pluck('item_code')->toArray();
+
+                $missingCodes = array_diff($codes, $foundCodes);
+
+                if (!empty($missingCodes)) {
+                    $messing_code .=implode(', ',$missingCodes);
+                }
+                // dd($items);
+                foreach($items as $index => $item){
+                    $matchedData = $dataByCode[$item->item_code] ?? null;
+                    $quantity = $matchedData['quantity'] ?? 0;
+                    $cost = $matchedData['cost'] ?? null;
+                    $result[] = [
+                        'id' => $item->item_id,
+                        'code' => $item->item_code,
+                        'name' => $item->item_name,
+                        'price' => $item->item_price,
+                        'quantity' => $quantity,
+                        'cost' => $cost ?? $item->item_cost,
+                    ];
+                }
+            }
+            
+            if ($items) {
+                return response()->json([
+                    'message' => 'Item found successfully',
+                    'missing_codes' => $messing_code,
+                    'status'  => 200,
+                    'data'    => $result
+                ], 200);
+            }
+            DB::commit();
+        }catch (\Exception $e) {
             DB::rollBack();
             return response()->json([
                 'message' => 'Import failed: ' . $e->getMessage(),
