@@ -27,6 +27,7 @@ return new class extends Migration
             $table->string("order_payment_method");
             $table->string("order_payment_status");
             $table->double("order_total");
+            $table->string('reference_no')->nullable();
             $table->double("order_tax")->default(0);
             $table->double("exchange_rate")->default(4000);
             $table->double("balance");

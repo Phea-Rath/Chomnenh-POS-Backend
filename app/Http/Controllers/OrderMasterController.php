@@ -265,6 +265,7 @@ class OrderMasterController extends Controller
         ->join('profiles as p', 'u.profile_id', '=', 'p.id')
         ->where('om.is_deleted', 0)
         ->where('om.is_active', 1)
+        ->whereNull('om.reference_no')
         ->where('p.id', $proId)
 
         // 🔍 SEARCH FILTER
@@ -321,6 +322,107 @@ class OrderMasterController extends Controller
         ]
     ]);
 }
+
+
+    public function OrderInvoices(Request $request)
+    {
+        $user  = Auth::user();
+        $proId = $user->profile_id;
+
+        $created_by = $request->input('created_by');
+        $customer_id = $request->input('customer_id');
+        $start_date = $request->input('start_date');
+        $end_date = $request->input('end_date');
+        $item_for = $request->input('item_for');
+        $limit  = $request->input('limit', 10);
+        $page   = $request->input('page', 1);
+        $search = $request->input('search'); // 🔍 search keyword
+
+        $orderMasters = DB::table('order_masters as om')
+            ->join('customers as cu', 'om.order_customer_id', '=', 'cu.customer_id')
+            ->join('delivers as dl', 'om.deliver_id', '=', 'dl.deliver_id')
+            ->join('users as u', 'om.created_by', '=', 'u.id')
+            ->join('profiles as p', 'u.profile_id', '=', 'p.id')
+            ->where('om.is_deleted', 0)
+            ->where('om.is_active', 1)
+            ->where('p.id', $proId)
+            // ->whereNotNull('om.reference_no')
+            ->when($created_by, function ($query) use ($created_by) {
+                $query->where('om.created_by', $created_by);
+            })
+            ->when($customer_id, function ($query) use ($customer_id) {
+                $query->where('om.order_customer_id', $customer_id);
+            })
+            ->when($start_date, function ($query) use ($start_date) {
+                $query->whereDate('om.order_date', '>=', $start_date);
+            })
+            ->when($end_date, function ($query) use ($end_date) {
+                $query->whereDate('om.order_date', '<=', $end_date);
+            })
+            ->when($item_for, function ($query) use ($item_for) {
+                $query->whereExists(function ($subQuery) use ($item_for) {
+                    $subQuery->select(DB::raw(1))
+                        ->from('order_items as oi')
+                        ->whereColumn('oi.order_id', 'om.order_id')
+                        ->where('oi.item_for', $item_for)
+                        ->where('oi.is_deleted', 0);
+                });
+            })
+
+            // 🔍 SEARCH FILTER
+            ->when($search, function ($query) use ($search) {
+                $query->where(function ($q) use ($search) {
+                    $q->where('om.order_no', 'like', "%{$search}%")
+                    ->orWhere('cu.customer_name', 'like', "%{$search}%")
+                    ->orWhere('cu.customer_email', 'like', "%{$search}%")
+                    ->orWhere('dl.deliver_name', 'like', "%{$search}%");
+                });
+            })
+
+            ->select(
+                'cu.customer_name',
+                'cu.customer_email',
+                'dl.deliver_name',
+                'dl.image as deliver_image',
+                'om.*'
+            )
+            ->orderBy('om.order_id', 'desc')
+            ->paginate($limit, ['*'], 'page', $page);
+
+        if ($orderMasters->isEmpty()) {
+            return response()->json([
+                'message' => 'Order masters not found!',
+                'status'  => 404,
+                'data'    => []
+            ]);
+        }
+
+        // Fix deliver image URL
+        foreach ($orderMasters as $item) {
+            if ($item->deliver_image) {
+                $filenameOnly = basename($item->deliver_image);
+                $item->deliver_image = url('storage/images/' . $filenameOnly);
+            }
+        }
+
+        // Attach items to each order (current page only)
+        $ordersWithItems = collect($orderMasters->items())->map(function ($order) {
+            $order->items = $this->detailService->orderDetailById($order->order_id);
+            return $order;
+        });
+
+        return response()->json([
+            'message' => 'Order masters fetched successfully!',
+            'status'  => 200,
+            'data'    => $ordersWithItems->toArray(),
+            'pagination' => [
+                'current_page' => $orderMasters->currentPage(),
+                'per_page'     => $orderMasters->perPage(),
+                'total'        => $orderMasters->total(),
+                'last_page'    => $orderMasters->lastPage(),
+            ]
+        ]);
+    }
 
     public function orderByUser($id)
     {
@@ -402,15 +504,17 @@ class OrderMasterController extends Controller
         $order_date = $now->format('Y-m-d');
 
         $validated = $request->validate([
-            'online' => 'required|integer',
-            'status' => 'required|integer',
-            'order_tel' => 'required|string|max:255',
-            'order_address' => 'required|string|max:255',
+            'online' => 'nullable|integer',
+            'order_tel' => 'nullable|string|max:255',
+            'order_address' => 'nullable|string|max:255',
             'order_payment_status' => 'nullable|string|max:255',
             'order_payment_method' => 'nullable|string|max:255',
+            'status' => 'required|integer',
             'order_customer_id' => 'nullable|integer',
             'deliver_id' => 'nullable|integer',
             'through' => 'nullable|integer',
+            'created_by' => 'nullable|integer',
+            'reference_no' => 'nullable|string|max:255',
             'sale_type' => 'nullable|string|max:255',
             'delivery_fee' => 'nullable|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
             'order_tax' => 'nullable|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
@@ -418,6 +522,7 @@ class OrderMasterController extends Controller
             'items' => 'required|array|min:1',
             'items.*.item_id' => 'required|integer|exists:items,item_id',
             'items.*.item_name' => 'required|string|max:255',
+            'items.*.item_for' => 'nullable|string|in:sale,sample,free',
             'items.*.item_price' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
             'items.*.quantity' => 'required|integer',
             'items.*.discount' => 'nullable|numeric|min:0',
@@ -437,16 +542,20 @@ class OrderMasterController extends Controller
         $payment = (float) $validated['payment'];
         $balance = round($grandTotal - $payment, 2);
 
+        $online = $validated['online'] ?? 0;
+        $created_by = $validated['created_by'] ?? $uid;
+
         // Create the order master
         $order_masters = OrderMaster::create([
             'order_no' => $order_no,
             'order_customer_id' => $validated['order_customer_id'] ?? 1,
             'sale_type' => $validated['sale_type'] ?? null,
-            'online' => $validated['online'],
+            'online' => $validated['online'] ?? 0,
             'status' => $validated['delivery_fee'] > 0 ? 1 : $validated['status'],
-            'order_tel' => $validated['order_tel'],
-            'deliver_id' => $validated['deliver_id'],
-            'order_address' => $validated['order_address'],
+            'order_tel' => $validated['order_tel']??null,
+            'reference_no' => $validated['reference_no'] ?? null,
+            'deliver_id' => $validated['deliver_id']??1,
+            'order_address' => $validated['order_address']??null,
             'order_date' => $order_date,
             'delivery_fee' => $validated['delivery_fee'] ?? 0,
             'through' => $validated['through'] ?? $uid,
@@ -459,7 +568,7 @@ class OrderMasterController extends Controller
             'order_tax' => $taxAmount,
             'order_total' => $grandTotal,
             'exchange_rate' => (double)$exchange_rate->usd_to_khr,
-            'created_by' => $uid,
+            'created_by' => $created_by,
         ]);
 
         $order_id = $order_masters->order_id;
@@ -476,6 +585,7 @@ class OrderMasterController extends Controller
                 'order_id' => $order_id,
                 'item_id' => $item['item_id'],
                 'item_name' => $item['item_name'],
+                'item_for' => $item['item_for'] ?? null,
                 'item_price' => $item['item_price'],
                 'discount' => $discountPercent,
                 'price' => $lineTotal,
@@ -484,7 +594,7 @@ class OrderMasterController extends Controller
         }
 
 
-        if ($validated['online'] == 1) {
+        if ($online == 1) {
             $customer = Customers::find($validated['order_customer_id']);
             $profile_id = Users::where('id', $validated['through'])->value('profile_id');
             $profile = DB::table('profiles')->where('id', $profile_id)->first();

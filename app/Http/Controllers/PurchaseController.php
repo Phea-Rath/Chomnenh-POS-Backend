@@ -804,6 +804,12 @@ class PurchaseController extends Controller
     public function update(Request $request, $id)
     {
         $purchase = Purchase::find($id);
+        if($purchase->status == 1){
+            return response()->json([
+                'message' => 'Purchase is already completed!',
+                'status'  => 400
+            ]);
+        }
         $user = Auth::user();
         $uid = $user->id;
 
@@ -900,6 +906,12 @@ class PurchaseController extends Controller
     public function updateRaw(Request $request, $id)
     {
         $purchase = Purchase::find($id);
+        if($purchase->status == 1){
+            return response()->json([
+                'message' => 'Purchase is already completed!',
+                'status'  => 400
+            ]);
+        }
         $user = Auth::user();
         $uid = $user->id;
 
@@ -989,6 +1001,13 @@ class PurchaseController extends Controller
     {
         $purchase = Purchase::find($id);
 
+        if($purchase->status == 1){
+            return response()->json([
+                'message' => 'Purchase is already completed!',
+                'status'  => 400
+            ]);
+        }
+
         if (!$purchase) {
             return response()->json([
                 'message' => 'Purchase not found!',
@@ -1011,7 +1030,12 @@ class PurchaseController extends Controller
     public function destroyRaw($id)
     {
         $purchase = Purchase::find($id);
-
+        if($purchase->status == 1){
+            return response()->json([
+                'message' => 'Purchase is already completed!',
+                'status'  => 400
+            ]);
+        }
         if (!$purchase) {
             return response()->json([
                 'message' => 'Purchase not found!',
@@ -1033,6 +1057,12 @@ class PurchaseController extends Controller
     public function purchaseCancel($id)
     {
         $purchase = Purchase::find($id);
+        if($purchase->status == 1){
+            return response()->json([
+                'message' => 'Purchase is already completed!',
+                'status'  => 400
+            ]);
+        }
         if (!$purchase) {
             return response()->json([
                 'message' => 'Purchase not found!',
@@ -1067,6 +1097,12 @@ class PurchaseController extends Controller
     public function purchaseConfirm($id)
     {
         $purchaseDB = Purchase::find($id);
+        if($purchaseDB->status == 1){
+            return response()->json([
+                'message' => 'Purchase is already completed!',
+                'status'  => 400
+            ]);
+        }
         $purchase = $this->show($id)->original['data'];
         // dd($purchase);
         if (!$purchase) {
@@ -1158,6 +1194,12 @@ class PurchaseController extends Controller
     public function purchaseConfirmRaw($id)
     {
         $purchaseDB = Purchase::find($id);
+        if($purchaseDB->status == 1){
+            return response()->json([
+                'message' => 'Purchase is already completed!',
+                'status'  => 400
+            ]);
+        }
         $purchase = $this->showRaw($id)->original['data'];
         // dd($purchase);
         if (!$purchase) {

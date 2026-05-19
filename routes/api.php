@@ -97,7 +97,7 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     // Route::resource('colors', ColorController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
     Route::resource('delivers', DeliverController::class)->only(['index', 'show', 'store', 'destroy']);
     Route::post('delivers/{id}', [DeliverController::class,'update']);
-    //E
+    //E 
     Route::put('exchange_rate/{id}', [ExchangeRateController::class, 'update']);
     Route::get('exchange_rate/{id}', [ExchangeRateController::class, 'show']);
     Route::post('/expense_report', [ReportController::class, 'expenseReport']);
@@ -138,6 +138,7 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::get('/order_persent_montly', [OrderItemController::class, 'monthlyOrderPercentCompare']);
     //O
     Route::resource('order_masters', OrderMasterController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
+    Route::get('/order_invoices', [OrderMasterController::class, 'OrderInvoices']);
     Route::put('/order_cancel/{id}', [OrderMasterController::class, 'cancel']);
     Route::put('/status_order/{id}/{status}', [OrderMasterController::class, 'statusOrder']);
     Route::put('/edit_delivery_service/{id}/{deliver_id}', [OrderMasterController::class, 'addDeliver']);
@@ -220,6 +221,7 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::get('/stock-by-id/{id}', [StockMasterController::class, 'showMobile']);
     Route::get('/stock-raw-by-id/{id}', [StockMasterController::class, 'showRawMobile']);
     Route::resource('suppliers', SupplierController::class)->only(['index', 'show', 'store', 'destroy']);
+    Route::post('/import/suppliers', [SupplierController::class, 'importSuppliers']);
     //report
     Route::post('/sale_report', [ReportController::class, 'saleReport']);
     Route::post('/sale_report_item', [ReportController::class, 'saleReportByItem']);

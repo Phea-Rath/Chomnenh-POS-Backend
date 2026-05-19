@@ -498,7 +498,7 @@ class ItemController extends Controller
                     'item_type' => 0,
                     'item_cost' => $validated['item_cost'],
                     'item_price' => $validated['item_price'],
-                    'wholesale_price' => $validated['wholesale_price'],
+                    'wholesale_price' => $validated['wholesale_price'] ?? $validated['item_price'],
                     'created_by' => $uid,
                     // 'item_image' => $storedImageValue,
                     'barcode' => $barcode,

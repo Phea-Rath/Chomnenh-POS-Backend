@@ -273,4 +273,46 @@ class SupplierController extends Controller
             "status" => 200,
         ]);
     }
+
+    //import suppliers from array object
+	function importSuppliers(Request $request){
+		$validated = $request->validate([
+			'data' => 'required|array',
+			'data.*.name' => 'required|string|max:255',
+			'data.*.email' => 'nullable|string|max:255',
+			'data.*.phone_number' => 'nullable|string|max:255',
+			'data.*.address' => 'nullable|string|max:255',
+		]);
+		$suppliers = $request->data;
+		
+		$user = Auth::user();
+		$uid = $user->id;
+		$proId = $user->profile_id;
+		$country_code = '+855';
+		foreach ($suppliers as $supplier) {
+			//remove 0 from tel if has 0 at first
+			$tel = $supplier['phone_number'];
+			if (strpos($tel, '0') === 0) {
+				$tel = $country_code . substr($tel, 1);
+			}else{
+				$tel = $country_code . $tel;
+			}
+			//check if supplier_tel is unique
+			$existsupplier = Suppliers::where('supplier_tel', $tel)->first();
+			if ($existsupplier) {
+				continue;
+			}
+			Suppliers::create([
+				'supplier_name' => $supplier['name'],
+				'supplier_email' => $supplier['email'] ?? null,
+				'supplier_tel' => $tel,
+				'supplier_address' => $supplier['address'] ?? null,
+				'created_by' => $uid,
+			]);
+		}
+		return response()->json([
+			"message" => "Suppliers imported successfully",
+			"status" => 200,
+		], 200);
+	}
 }

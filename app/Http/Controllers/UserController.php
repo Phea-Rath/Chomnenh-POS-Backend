@@ -25,12 +25,13 @@ class UserController extends Controller
             'data' => $user,
         ]);
     }
-    public function index()
+    public function index(Request $request)
     {
         $user = Auth::user();
         $uid = $user->id;
         $proid = $user->profile_id;
         $role = $user->role_id;
+        $roleFilter = $request->input('role_id');
         $users = DB::table('users as u')
             ->leftJoin('users as c', 'u.created_by', '=', 'c.id')   // 👈 self join
             ->join('roles as r', 'r.role_id','=', 'u.role_id')
@@ -41,6 +42,9 @@ class UserController extends Controller
                 'r.role_name as role',
                 'c.username as created_by_name'
             );
+        if($roleFilter){
+            $users = $users->where('u.role_id', $roleFilter);
+        }
         if ($role === 1) {
             // get all users (no filter)
             $users = $users->whereIn('u.created_by', [0, $uid])->get();

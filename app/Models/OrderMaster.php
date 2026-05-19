@@ -29,6 +29,7 @@ class OrderMaster extends Model
         'is_active',
         'is_delete',
         'online',
-        'exchange_rate'
+        'exchange_rate',
+        'reference_no'
     ];
 }

@@ -266,22 +266,18 @@ class CustomerController extends Controller
 			'data' => 'required|array',
 			'data.*.name' => 'required|string|max:255',
 			'data.*.email' => 'nullable|string|max:255',
-			'data.*.tel' => 'nullable|string|max:255',
+			'data.*.phone_number' => 'nullable|string|max:255',
 			'data.*.address' => 'nullable|string|max:255',
 		]);
 		$customers = $request->data;
-		// return response()->json([
-		// 	"message" => "Customers imported successfully",
-		// 	"status" => 200,
-		// 	"data" => $customers[0]["address"],
-		// ], 200);
+		
 		$user = Auth::user();
 		$uid = $user->id;
 		$proId = $user->profile_id;
 		$country_code = '+855';
 		foreach ($customers as $customer) {
 			//remove 0 from tel if has 0 at first
-			$tel = $customer['tel'];
+			$tel = $customer['phone_number'];
 			if (strpos($tel, '0') === 0) {
 				$tel = $country_code . substr($tel, 1);
 			}else{
@@ -292,11 +288,6 @@ class CustomerController extends Controller
 			if ($existcustomer) {
 				continue;
 			}
-			// return response()->json([
-			// 	"message" => "Customers imported successfully",
-			// 	"status" => 200,
-			// 	"data" => $customer,
-			// ], 200);
 			Customers::create([
 				'customer_name' => $customer['name'],
 				'customer_email' => $customer['email'] ?? null,
