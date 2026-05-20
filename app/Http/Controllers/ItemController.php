@@ -284,7 +284,7 @@ class ItemController extends Controller
         $page = $request->input('page', 1);
         $categoryId = $request->input('category_id', 0);
         $brandId = $request->input('brand_id', 0);
-        
+
 
         // 1. Capture the search term
         $search = $request->input('search');
@@ -925,7 +925,6 @@ class ItemController extends Controller
                 if (!empty($missingCodes)) {
                     $messing_code .=implode(', ',$missingCodes);
                 }
-                // dd($items);
                 foreach($items as $index => $item){
                     $matchedData = $dataByCode[$item->item_code] ?? null;
                     $quantity = $matchedData['quantity'] ?? 0;
@@ -940,7 +939,64 @@ class ItemController extends Controller
                     ];
                 }
             }
-            
+
+            if ($items) {
+                return response()->json([
+                    'message' => 'Item found successfully',
+                    'missing_codes' => $messing_code,
+                    'status'  => 200,
+                    'data'    => $result
+                ], 200);
+            }
+            DB::commit();
+        }catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'message' => 'Import failed: ' . $e->getMessage(),
+                'status'  => 500
+            ], 500);
+        }
+    }
+
+    function filterItemsByCodeNotType(Request $request)
+    {
+        $validate = $request->validate([
+            'data' => 'required|array|min:1',
+            'data.*.code' => 'required|string',
+            'data.*.quantity' => 'required|integer',
+            'data.*.price' => 'required|numeric',
+        ]);
+        $messing_code = '';
+        $result = [];
+        try {
+            $data = $request->input('data');
+            $codes = array_column($data, 'code');
+            $dataByCode = array_column($data, null, 'code');
+            DB::beginTransaction();
+
+            $items = Items::whereIn('item_code', $codes)->get();
+
+            $foundCodes = $items->pluck('item_code')->toArray();
+
+            $missingCodes = array_diff($codes, $foundCodes);
+
+            if (!empty($missingCodes)) {
+                $messing_code .=implode(', ',$missingCodes);
+            }
+            foreach($items as $index => $item){
+                $matchedData = $dataByCode[$item->item_code] ?? null;
+                $quantity = $matchedData['quantity'] ?? 0;
+                $price = $matchedData['price'] ?? 0;
+                $result[] = [
+                    'id' => $item->item_id,
+                    'code' => $item->item_code,
+                    'name' => $item->item_name,
+                    'price' => $price ?? $item->wholesale_price,
+                    'quantity' => $quantity,
+                ];
+            }
+
+
             if ($items) {
                 return response()->json([
                     'message' => 'Item found successfully',

@@ -30,6 +30,7 @@ class OrderMaster extends Model
         'is_delete',
         'online',
         'exchange_rate',
-        'reference_no'
+        'reference_no',
+        'due_date',
     ];
 }

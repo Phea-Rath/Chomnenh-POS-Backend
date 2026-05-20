@@ -346,7 +346,7 @@ class OrderMasterController extends Controller
             ->where('om.is_deleted', 0)
             ->where('om.is_active', 1)
             ->where('p.id', $proId)
-            // ->whereNotNull('om.reference_no')
+            ->whereNotNull('om.reference_no')
             ->when($created_by, function ($query) use ($created_by) {
                 $query->where('om.created_by', $created_by);
             })
@@ -382,6 +382,7 @@ class OrderMasterController extends Controller
             ->select(
                 'cu.customer_name',
                 'cu.customer_email',
+                'u.username as created_by_name',
                 'dl.deliver_name',
                 'dl.image as deliver_image',
                 'om.*'
@@ -516,6 +517,7 @@ class OrderMasterController extends Controller
             'created_by' => 'nullable|integer',
             'reference_no' => 'nullable|string|max:255',
             'sale_type' => 'nullable|string|max:255',
+            'due_date' => 'nullable|date',
             'delivery_fee' => 'nullable|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
             'order_tax' => 'nullable|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
             'payment' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
@@ -554,6 +556,7 @@ class OrderMasterController extends Controller
             'status' => $validated['delivery_fee'] > 0 ? 1 : $validated['status'],
             'order_tel' => $validated['order_tel']??null,
             'reference_no' => $validated['reference_no'] ?? null,
+            'due_date' => $validated['due_date'] ?? null,
             'deliver_id' => $validated['deliver_id']??1,
             'order_address' => $validated['order_address']??null,
             'order_date' => $order_date,
@@ -691,19 +694,21 @@ class OrderMasterController extends Controller
         $exchange_rate = ExchangeRate::find($proId);
         $order_date = now()->format('Y-m-d');
         $validated = $request->validate([
-            'order_tel' => 'required|string|max:255',
-            'order_address' => 'required|string|max:255',
+            'order_tel' => 'nullable|string|max:255',
+            'order_address' => 'nullable|string|max:255',
             'order_date' => 'date',
             'order_payment_status' => 'nullable|string|max:255',
             'order_payment_method' => 'nullable|string|max:255',
             'deliver_id' => 'nullable|integer',
+            'created_by' => 'nullable|integer',
             'delivery_fee' => 'numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
             'order_tax' => 'nullable|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
             'payment' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
+            'due_date' => 'nullable|date',
             'items' => 'required|array|min:1',
             'items.*.item_id' => 'required|integer|exists:items,item_id',
             'items.*.item_name' => 'required|string|max:255',
-            'items.*.discount' => 'required|integer',
+            'items.*.discount' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
             'items.*.unit_price' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
             'items.*.quantity' => 'required|integer',
         ]);
@@ -722,12 +727,14 @@ class OrderMasterController extends Controller
         $payment = (float) $validated['payment'];
         $balance = round($grandTotal - $payment, 2);
 
+        $created_by = $validated['created_by'] ?? $uid;
         // Create the order master
         $order_masters->update([
             'order_tel' => $validated['order_tel'],
             'order_address' => $validated['order_address'],
             'deliver_id' => $validated['deliver_id'],
             'order_date' => $validated['order_date'],
+            'created_by' => $created_by,
             'delivery_fee' => $validated['delivery_fee'],
             'order_payment_status' => $balance <= 0 ? 'paid' : $validated['order_payment_status'],
             'order_payment_method' => $validated['order_payment_method'],
@@ -737,6 +744,7 @@ class OrderMasterController extends Controller
             'order_discount' => $discountAmount,
             'order_tax' => $taxAmount,
             'order_total' => $grandTotal,
+            'due_date' => $validated['due_date'] ?? null,
         ]);
 
         $order_items = [];
@@ -749,12 +757,15 @@ class OrderMasterController extends Controller
             $lineDiscount = round($lineSubtotal * $discountPercent / 100, 2);
             $lineTotal = round($lineSubtotal - $lineDiscount, 2);
 
+            // return response()->json([
+            //     'discount' => $item['discount'],
+            // ]);
             $order_items[] = OrderItems::create([
                 'order_id' => $order_masters->order_id,
                 'item_id' => $item['item_id'],
                 'item_name' => $item['item_name'],
                 'item_price' => $item['unit_price'],
-                'discount' => $item['discount'],
+                'discount' => (float)$item['discount'],
                 'price' => $lineTotal,
                 'quantity' => $item['quantity'],
             ]);

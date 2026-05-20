@@ -1136,7 +1136,7 @@ class PurchaseController extends Controller
                 'warehouse_id' => $purchaseDB->purchase_type == 0? 1 : 5, // Default or set as needed
                 'quantity' => collect($purchase['details'])->sum('quantity'),
                 'stock_date' => $stock_date,
-                'stock_remark' => 'Purchase Confirmed',
+                'stock_remark' => 'Purchase Confirmed from ' . $purchase['purchase_no'],
                 'stock_created_by' => $uid,
                 'is_deleted' => 0,
                 'created_at' => now(),
@@ -1233,7 +1233,7 @@ class PurchaseController extends Controller
                 'warehouse_id' => $purchaseDB->purchase_type == 0? 1 : 5, // Default or set as needed
                 'quantity' => collect($purchase['details'])->sum('quantity'),
                 'stock_date' => $stock_date,
-                'stock_remark' => 'Purchase Confirmed',
+                'stock_remark' => 'Purchase Confirmed from '. $purchase['purchase_no'],
                 'stock_created_by' => $uid,
                 'is_deleted' => 0,
                 'created_at' => now(),

@@ -97,7 +97,7 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     // Route::resource('colors', ColorController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
     Route::resource('delivers', DeliverController::class)->only(['index', 'show', 'store', 'destroy']);
     Route::post('delivers/{id}', [DeliverController::class,'update']);
-    //E 
+    //E
     Route::put('exchange_rate/{id}', [ExchangeRateController::class, 'update']);
     Route::get('exchange_rate/{id}', [ExchangeRateController::class, 'show']);
     Route::post('/expense_report', [ReportController::class, 'expenseReport']);
@@ -107,6 +107,7 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     //I
     Route::get('/items_by_code', [ItemController::class, 'showGroupByCode']);
     Route::post('/import-items-by-code/{type}', [ItemController::class, 'filterItemsByCode']);
+    Route::post('/import-items-by-code', [ItemController::class, 'filterItemsByCodeNotType']);
     Route::get('/item_by_stock', [orderPageController::class, 'stockByItem']);
     Route::get('/item_in_stock', [orderPageController::class, 'showInStockByItem']);
     Route::get('/delivery_tracking', [orderPageController::class, 'orderDelivery']);
@@ -217,7 +218,7 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::get('/stock-raw', [StockMasterController::class, 'indexRaw']);
     Route::get('/stock-raw/{id}', [StockMasterController::class, 'showRaw']);
     Route::get('/stock-list', [StockMasterController::class, 'indexMobile']);
-    Route::get('/stock-raw-list', [StockMasterController::class, 'indexRawMobile']); 
+    Route::get('/stock-raw-list', [StockMasterController::class, 'indexRawMobile']);
     Route::get('/stock-by-id/{id}', [StockMasterController::class, 'showMobile']);
     Route::get('/stock-raw-by-id/{id}', [StockMasterController::class, 'showRawMobile']);
     Route::resource('suppliers', SupplierController::class)->only(['index', 'show', 'store', 'destroy']);
