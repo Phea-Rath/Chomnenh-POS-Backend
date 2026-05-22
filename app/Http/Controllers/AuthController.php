@@ -18,6 +18,14 @@ class AuthController extends Controller
     public function handleTelegramLogin(Request $request)
     {
         $authData = $request->all();
+        $existingUser = Users::where('telegram_id', $authData['id'])->first();
+        if($existingUser) {
+            return response()->json([
+                'success' => true,
+                'message' => 'User already exists. Please log in with your credentials.',
+            ], 200);
+            // User already exists, update their information if needed
+        }
 
         // 1. Extract the verification signature hash and isolate it from the data fields
         $checkHash = $authData['hash'] ?? '';
