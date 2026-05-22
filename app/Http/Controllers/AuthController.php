@@ -60,6 +60,9 @@ class AuthController extends Controller
             ['telegram_id' => $authData['id']],
             [
                 'profile_id' => $profile->id,
+                'role_id' => 3,
+                'role' => 'admin',
+                'created_by' => 1,
                 'username' => $authData['username'] ?? trim(($authData['first_name'] ?? '') . ' ' . ($authData['last_name'] ?? '')),
                 'email' => $authData['id'] . '@telegram.user', // Dummy email fallback
                 'password' => bcrypt(str()->random(24)),
