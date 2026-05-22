@@ -20,8 +20,8 @@ class AuthController extends Controller
     {
         $authData = $request->all();
         $existingUser = Users::where('telegram_id', $authData['id'])->first();
-        $token = $existingUser->createToken('auth_token')->plainTextToken;
         if($existingUser) {
+            $token = $existingUser->createToken('auth_token')->plainTextToken;
             return response()->json([
                 'success' => true,
                 'access_token' => $token,
@@ -65,6 +65,9 @@ class AuthController extends Controller
             "end_date" => now()->addMonth()->format('Y-m-d'),
             'created_by' => 1,
             'image' => null,
+        ]);
+        ExchangeRate::create([
+            'profile_id' => Profile::max('id')
         ]);
 
 

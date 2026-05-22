@@ -33,16 +33,17 @@ class ExchangeRateController extends Controller
     public function update(Request $request, $profile_id)
     {
         $exchangeRate = ExchangeRate::find($profile_id);
-
-        if (!$exchangeRate) {
-            return response()->json([
-                'message' => 'Exchange rate not found for this profile.'
-            ], 404);
-        }
-
         $validated = $request->validate([
             'usd_to_khr' => 'required|numeric|min:0'
         ]);
+
+        if (!$exchangeRate) {
+            ExchangeRate::create([
+                'profile_id' => $profile_id,
+                'usd_to_khr' => $validated['usd_to_khr'] ?? 4000,
+            ]);
+        }
+
 
         $exchangeRate->update($validated);
 
