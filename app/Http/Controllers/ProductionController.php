@@ -8,6 +8,7 @@ use App\Models\Items;
 use App\Models\RawMaterial;
 use App\Models\StockDetails;
 use App\Models\ExchangeRate;
+use App\Models\StockMaster;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -182,8 +183,15 @@ class ProductionController extends Controller
                 'status' => 400,
             ]);
         }
-        
-        $productionNo = 'PROD-' . now()->format('Ymd') . '-' . str_pad((Production::max('id') + 1), 5, '0', STR_PAD_LEFT);
+        $now = now();
+
+            $count = Production::join('users as u', 'productions.created_by', '=', 'u.id')
+                ->join('profiles as pr', 'u.profile_id', '=', 'pr.id')
+                ->where('pr.id', $proId)
+                ->whereYear('productions.created_at', $now->year)
+                ->whereMonth('productions.created_at', $now->month)
+                ->count();
+        $productionNo = 'PROD-' . now()->format('Ymd') . '-' . str_pad($count + 1, 5, '0', STR_PAD_LEFT);
 
         DB::beginTransaction();
         try {
@@ -211,44 +219,6 @@ class ProductionController extends Controller
                 ]);
             }
 
-            $stock_date = now()->format('Y-m-d');
-
-            // Generate stock_no safely
-            $maxStockId = DB::table('stock_masters')->max('stock_id');
-            $newStockId = ($maxStockId ?? 0) + 1;
-            $stock_no = now()->format('Ymd') . '-' . str_pad(($maxStockId), 5, '0', STR_PAD_LEFT);
-            // Create stock master
-            DB::table('stock_masters')->insert([
-                'stock_id' => $newStockId,
-                'stock_no' => $stock_no,
-                'stock_type_id' => 2, // 2 = stock in
-                'from_warehouse' => 2, // Default or set as needed
-                'warehouse_id' => 1, // Default or set as needed
-                'stock_date' => $stock_date,
-                'quantity' => $validated['quantity'],
-                'stock_remark' => 'Production Completed',
-                'stock_created_by' => $uid,
-                'exchange_rate' => $exchange_rate->usd_to_khr ?? 4000,
-                'is_deleted' => 0,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
-            $stockMasterId = $newStockId;
-            $item = Items::find($validated['item_id']);
-
-            $exchange_rate = ExchangeRate::find($proId);
-            $stockItems = StockDetails::create([
-                'stock_id' => (int)$stockMasterId,
-                'item_id' => $item->item_id,
-                'quantity' => (int)$validated['quantity'],
-                'item_cost' => $validated['total_cost'],
-                'expire_date' => null, // Set if available
-                'transection_date' => $stock_date,
-                'is_deleted' => 0,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
-
             DB::commit();
 
             return response()->json([
@@ -264,6 +234,67 @@ class ProductionController extends Controller
                 'status' => 500
             ], 500);
         }
+    }
+
+
+    public function confirmStock(string $id){
+        $production = Production::find($id);
+        if (!$production || $production->is_deleted) {
+            return response()->json([
+                'message' => 'Production not found!',
+                'status' => 404
+            ]);
+        }
+        $production->update(['status' => 'confirmed']);
+        $user = Auth::user();
+        $uid = $user->id;
+        $proId = $user->profile_id;
+        $exchange_rate = ExchangeRate::find($proId);
+        $stock_date = now()->format('Y-m-d');
+
+            // Generate stock_no safely
+            $maxStockId = DB::table('stock_masters')->max('stock_id');
+            $newStockId = ($maxStockId ?? 0) + 1;
+            $now = now();
+
+            $count = StockMaster::join('users as u', 'stock_masters.stock_created_by', '=', 'u.id')
+                ->join('profiles as pr', 'u.profile_id', '=', 'pr.id')
+                ->where('pr.id', $proId)
+                ->whereYear('stock_masters.created_at', $now->year)
+                ->whereMonth('stock_masters.created_at', $now->month)
+                ->count();
+            $stock_no = 'IN-' . now()->format('Ymd') . '-' . str_pad($count + 1, 5, '0', STR_PAD_LEFT);
+            // Create stock master
+            DB::table('stock_masters')->insert([
+                'stock_id' => $newStockId,
+                'stock_no' => $stock_no,
+                'stock_type_id' => 2, // 2 = stock in
+                'from_warehouse' => 2, // Default or set as needed
+                'warehouse_id' => 1, // Default or set as needed
+                'stock_date' => $stock_date,
+                'quantity' => $production->quantity,
+                'stock_remark' => 'Production Completed from No: ' . $production->production_no,
+                'stock_created_by' => $uid,
+                'exchange_rate' => $exchange_rate->usd_to_khr ?? 4000,
+                'is_deleted' => 0,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+            $stockMasterId = $newStockId;
+            $item = Items::find($production->item_id);
+
+            $exchange_rate = ExchangeRate::find($proId);
+            $stockItems = StockDetails::create([
+                'stock_id' => (int)$stockMasterId,
+                'item_id' => $item->item_id,
+                'quantity' => (int)$production->quantity,
+                'item_cost' => (float)$production->total_cost / (int)$production->quantity ?? 0,
+                'expire_date' => null, // Set if available
+                'transection_date' => $stock_date,
+                'is_deleted' => 0,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
     }
 
     public function show($id)

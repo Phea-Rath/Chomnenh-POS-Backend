@@ -182,6 +182,7 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::post('/purchase_report_item', [ReportController::class, 'purchaseReportByItem']);
     Route::resource('purchase_details', PurchaseDetailController::class)->only(['index', 'show']);
     Route::resource('profiles', ProfileController::class)->only(['index', 'show', 'destroy']);
+    Route::put('/confirm_production/{id}', [ProductionController::class, 'confirmStock']);
     Route::post('/production_report', [ReportController::class, 'productionReport']);
     Route::post('/production_report_item', [ReportController::class, 'productionReportByItem']);
     Route::post('/production_report_raw', [ReportController::class, 'productionReportByRaw']);

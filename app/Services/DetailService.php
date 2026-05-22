@@ -509,6 +509,7 @@ class DetailService {
 
             $remaining -= $takeRestQty;
         }
+        
 
         $sorted = collect($usedRecords)
         ->sortBy('created_at')

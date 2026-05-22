@@ -653,10 +653,12 @@ class OrderMasterController extends Controller
         $uid = $user->id;
         $orderMasters = DB::table('order_masters as om')
         ->join('customers as cu','om.order_customer_id','=',"customer_id")
+        ->join('users as u', 'u.id', '=', 'om.created_by')
+        ->join('delivers as d', 'd.deliver_id', '=', 'om.deliver_id')
         ->where('order_id', $id)
             ->where('om.is_deleted', 0)
             ->where('om.is_active', 1)
-            ->select('cu.customer_name','cu.customer_email',"om.*")->get();
+            ->select('cu.customer_name', 'u.username as created_by_name', 'd.deliver_name','cu.customer_email',"om.*")->get();
         if ($orderMasters->isEmpty()) {
             return response()->json([
                 'message' => 'Order masters get fail!',

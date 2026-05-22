@@ -419,7 +419,14 @@ class ItemController extends Controller
         $user = Auth::user();
         $uid = $user->id;
         $proId = $user->profile_id;
-        $itemCode = 'PRD-' . str_pad((Items::max('item_id') + 1), 5, '0', STR_PAD_LEFT);
+        $now = now();
+        $count = Items::join('users as u', 'items.created_by', '=', 'u.id')
+            ->join('profiles as pr', 'u.profile_id', '=', 'pr.id')
+            ->where('pr.id', $proId)
+            ->whereYear('items.created_at', $now->year)
+            ->whereMonth('items.created_at', $now->month)
+            ->count();
+        $itemCode = 'PRO-' . now()->format('Ymd') . '-' . str_pad($count + 1, 5, '0', STR_PAD_LEFT);
         $stock_no = now()->format('Ymd') . '-' . str_pad((StockMaster::max('stock_id') + 1), 5, '0', STR_PAD_LEFT);
         $stock_date = now()->format('Y-m-d');
 

@@ -112,9 +112,15 @@ class RawMaterialController extends Controller
     {
         $user = Auth::user();
         $uid = $user->id;
-        $itemCode = 'P-' . str_pad((RawMaterial::max('id') + 1), 5, '0', STR_PAD_LEFT);
-        $stock_no = now()->format('Ymd') . '-' . str_pad((StockMaster::max('stock_id') + 1), 5, '0', STR_PAD_LEFT);
-        $stock_date = now()->format('Y-m-d');
+        $proId = $user->profile_id;
+        $now = now();
+        $count = RawMaterial::join('users as u', 'raw_materials.created_by', '=', 'u.id')
+            ->join('profiles as pr', 'u.profile_id', '=', 'pr.id')
+            ->where('pr.id', $proId)
+            ->whereYear('raw_materials.created_at', $now->year)
+            ->whereMonth('raw_materials.created_at', $now->month)
+            ->count();
+        $itemCode = 'RMT-' . now()->format('Ymd') . '-' . str_pad($count + 1, 5, '0', STR_PAD_LEFT);
          // Generate barcode
         $currentDate = Carbon::now();
         $year = $currentDate->format('y'); // Last two digits of year (e.g., 25 for 2025)
@@ -150,7 +156,7 @@ class RawMaterialController extends Controller
 
 
         $data = RawMaterial::create([
-            'material_code' => $validated['material_code'] ?? $code,
+            'material_code' => $validated['material_code']?? $itemCode ?? $code,
             'material_name' => $validated['material_name'],
             'created_by' => $uid,
             'primary_unit' => $validated['primary_unit'],

@@ -17,7 +17,8 @@ class Production extends Model
         'total_cost',
         'is_deleted',
         'created_by',
-        'exchange_rate'
+        'exchange_rate',
+        'status',
     ];
 
     public function productionDetails()
@@ -27,6 +28,6 @@ class Production extends Model
 
     public function item()
     {
-        return $this->belongsTo(Item::class, 'item_id');
+        return $this->belongsTo(Items::class, 'item_id');
     }
 }

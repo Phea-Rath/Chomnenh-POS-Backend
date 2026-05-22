@@ -18,6 +18,7 @@ use App\Models\StockAttribute;
 use App\Models\Suppliers;
 use App\Services\DetailService;
 use App\Models\ExchangeRate;
+use App\Models\StockMaster;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -574,7 +575,16 @@ class PurchaseController extends Controller
         $balance = round($totalAmount - $totalPaid, 2);
 
         $exchange_rate = ExchangeRate::find($proId);
-        $purchaseNo = 'PO-' . now()->format('Ymd') . '-' . str_pad((Purchase::max('purchase_id') + 1), 5, '0', STR_PAD_LEFT);
+        $now = now();
+
+        $count = Purchase::join('users as u', 'purchases.created_by', '=', 'u.id')
+            ->join('profiles as pr', 'u.profile_id', '=', 'pr.id')
+            ->where('pr.id', $proId)
+            ->whereYear('purchases.created_at', $now->year)
+            ->whereMonth('purchases.created_at', $now->month)
+            ->count();
+        $purchaseNo = 'PO-' . now()->format('Ymd') . '-' . str_pad($count + 1, 5, '0', STR_PAD_LEFT);
+
 
         $purchase = Purchase::create([
             'purchase_no'   => $purchaseNo,
@@ -667,7 +677,15 @@ class PurchaseController extends Controller
         $totalPaid = (float) ($validated['total_paid'] ?? 0);
         $balance = round($totalAmount - $totalPaid, 2);
 
-        $purchaseNo = 'PO-' . now()->format('Ymd') . '-' . str_pad((Purchase::max('purchase_id') + 1), 5, '0', STR_PAD_LEFT);
+        $now = now();
+
+        $count = Purchase::join('users as u', 'purchases.created_by', '=', 'u.id')
+            ->join('profiles as pr', 'u.profile_id', '=', 'pr.id')
+            ->where('pr.id', $proId)
+            ->whereYear('purchases.created_at', $now->year)
+            ->whereMonth('purchases.created_at', $now->month)
+            ->count();
+        $purchaseNo = 'RPO-' . now()->format('Ymd') . '-' . str_pad($count + 1, 5, '0', STR_PAD_LEFT);
 
         $purchase = Purchase::create([
             'purchase_no'   => $purchaseNo,
@@ -774,6 +792,7 @@ class PurchaseController extends Controller
                 'data'    => []
             ]);
         }
+
 
         $details = $this->detailService->purchaseRawDetail($purchase->purchase_id);
         // dd($details);
@@ -1125,7 +1144,15 @@ class PurchaseController extends Controller
             // Generate stock_no safely
             $maxStockId = DB::table('stock_masters')->max('stock_id');
             $newStockId = ($maxStockId ?? 0) + 1;
-            $stock_no = now()->format('Ymd') . '-' . str_pad(($maxStockId), 5, '0', STR_PAD_LEFT);
+            $now = now();
+
+            $count = StockMaster::join('users as u', 'stock_masters.stock_created_by', '=', 'u.id')
+                ->join('profiles as pr', 'u.profile_id', '=', 'pr.id')
+                ->where('pr.id', $proId)
+                ->whereYear('stock_masters.created_at', $now->year)
+                ->whereMonth('stock_masters.created_at', $now->month)
+                ->count();
+            $stock_no = 'IN-' . now()->format('Ymd') . '-' . str_pad($count + 1, 5, '0', STR_PAD_LEFT);
 
             // Create stock master
             DB::table('stock_masters')->insert([
@@ -1222,7 +1249,14 @@ class PurchaseController extends Controller
             // Generate stock_no safely
             $maxStockId = DB::table('stock_masters')->max('stock_id');
             $newStockId = ($maxStockId ?? 0) + 1;
-            $stock_no = now()->format('Ymd') . '-' . str_pad(($maxStockId), 5, '0', STR_PAD_LEFT);
+            $now = now();
+            $count = StockMaster::join('users as u', 'stock_masters.stock_created_by', '=', 'u.id')
+                ->join('profiles as pr', 'u.profile_id', '=', 'pr.id')
+                ->where('pr.id', $proId)
+                ->whereYear('stock_masters.created_at', $now->year)
+                ->whereMonth('stock_masters.created_at', $now->month)
+                ->count();
+            $stock_no = 'RIN-' . now()->format('Ymd') . '-' . str_pad($count + 1, 5, '0', STR_PAD_LEFT);
 
             // Create stock master
             DB::table('stock_masters')->insert([

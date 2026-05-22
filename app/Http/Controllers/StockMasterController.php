@@ -778,8 +778,8 @@ class StockMasterController extends Controller
                 'sm.*'
             )
             ->where('p.id', $proId)
-            ->whereNotIn('sm.from_warehouse', [2, 3, 4])
-            ->whereNotIn('sm.warehouse_id', [2, 3, 4])
+            // ->whereNotIn('sm.from_warehouse', [2, 3, 4])
+            ->whereNotIn('sm.warehouse_id', [1, 2, 3, 4, 5])
             ->where('sm.is_deleted', 0)
             // ->where('sm.stock_created_by', $uid)
 
@@ -1017,7 +1017,6 @@ class StockMasterController extends Controller
         $user = Auth::user();
         $uid = $user->id;
         $proId = $user->profile_id;
-        $stock_no = now()->format('Ymd') . '-' . str_pad((StockMaster::max('stock_id') + 1), 5, '0', STR_PAD_LEFT);
         $stock_date = now()->format('Y-m-d');
         $validated = $request->validate([
             'stock_type_id' => 'required|integer',
@@ -1031,6 +1030,16 @@ class StockMasterController extends Controller
             'items.*.expire_date' => 'required|date',
         ]);
 
+        $now = now();
+        $type = $validated['stock_type_id'] == 1 ? 'RETURN' : ($validated['stock_type_id'] == 2 ? 'IN' : ($validated['stock_type_id'] == 3 ? 'OUT' : ($validated['stock_type_id'] == 4 ? 'WASTE' : 'OTHER')));
+
+        $count = StockMaster::join('users as u', 'stock_masters.stock_created_by', '=', 'u.id')
+            ->join('profiles as pr', 'u.profile_id', '=', 'pr.id')
+            ->where('pr.id', $proId)
+            ->whereYear('stock_masters.created_at', $now->year)
+            ->whereMonth('stock_masters.created_at', $now->month)
+            ->count();
+        $stock_no = $type . '-' . now()->format('Ymd') . '-' . str_pad($count + 1, 5, '0', STR_PAD_LEFT);
 
         // if($validated['from_warehouse'] == 1||$validated['from_warehouse'] == 5){
         //     if($validated['stock_type_id'] != 3){
@@ -1052,7 +1061,7 @@ class StockMasterController extends Controller
         $data = StockMaster::create([
             'stock_no' => $stock_no,
             'stock_type_id' => $validated['stock_type_id'],
-            'from_warehouse' => 2,
+            'from_warehouse' => $validated['from_warehouse'] ?? 2,
             'warehouse_id' => $validated['warehouse_id'],
             'quantity' => array_sum(array_column($validated['items'], 'quantity')),
             'stock_date' => $stock_date,
@@ -1094,7 +1103,6 @@ class StockMasterController extends Controller
         $user = Auth::user();
         $uid = $user->id;
         $proId = $user->profile_id;
-        $stock_no = now()->format('Ymd') . '-' . str_pad((StockMaster::max('stock_id') + 1), 5, '0', STR_PAD_LEFT);
         $stock_date = now()->format('Y-m-d');
         $validated = $request->validate([
             'stock_type_id' => 'required|integer',
@@ -1108,6 +1116,17 @@ class StockMasterController extends Controller
             'items.*.item_cost' => 'required|numeric',
             'items.*.expire_date' => 'required|date',
         ]);
+
+        $now = now();
+        $type = $validated['stock_type_id'] == 1 ? 'RRETURN' : ($validated['stock_type_id'] == 2 ? 'RIN' : ($validated['stock_type_id'] == 3 ? 'ROUT' : ($validated['stock_type_id'] == 4 ? 'RWASTE' : 'ROTHER')));
+
+        $count = StockMaster::join('users as u', 'stock_masters.stock_created_by', '=', 'u.id')
+            ->join('profiles as pr', 'u.profile_id', '=', 'pr.id')
+            ->where('pr.id', $proId)
+            ->whereYear('stock_masters.created_at', $now->year)
+            ->whereMonth('stock_masters.created_at', $now->month)
+            ->count();
+        $stock_no = $type . '-' . now()->format('Ymd') . '-' . str_pad($count + 1, 5, '0', STR_PAD_LEFT);
 
         // if($validated['from_warehouse'] == 1||$validated['from_warehouse'] == 5){
         //     if($validated['stock_type_id'] != 3){
