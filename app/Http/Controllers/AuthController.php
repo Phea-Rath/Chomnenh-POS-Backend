@@ -19,9 +19,11 @@ class AuthController extends Controller
     {
         $authData = $request->all();
         $existingUser = Users::where('telegram_id', $authData['id'])->first();
+        $token = $existingUser->createToken('auth_token')->plainTextToken;
         if($existingUser) {
             return response()->json([
                 'success' => true,
+                'access_token' => $token,
                 'message' => 'User already exists. Please log in with your credentials.',
             ], 200);
             // User already exists, update their information if needed
