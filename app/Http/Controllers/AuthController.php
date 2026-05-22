@@ -45,10 +45,21 @@ class AuthController extends Controller
             ], 403);
         }
 
+        $profile = Profile::create([
+            "profile_name" => trim(($authData['first_name'] ?? '') . ' ' . ($authData['last_name'] ?? '')),
+            "telephone" => null,
+            "start_date" => null,
+            "term" => 0,
+            "end_date" => null,
+            'created_by' => 1,
+            'image' => null,
+        ]);
+
         // 6. Valid signature! Find or create the user record by their unique Telegram ID
         $user = Users::firstOrCreate(
             ['telegram_id' => $authData['id']],
             [
+                'profile_id' => $profile->id,
                 'username' => $authData['username'] ?? trim(($authData['first_name'] ?? '') . ' ' . ($authData['last_name'] ?? '')),
                 'email' => $authData['id'] . '@telegram.user', // Dummy email fallback
                 'password' => bcrypt(str()->random(24)),
