@@ -34,7 +34,7 @@ class AuthController extends Controller
         $dataCheckString = implode("\n", $dataCheckArr);
 
         // 4. Create the signature comparison key using your Bot Token
-        $secretKey = hash('sha256', env('TELEGRAM_BOT_TOKEN'), true);
+        $secretKey = hash('sha256', env('TELEGRAM_BOT_TOKEN', '8951212509:AAEdRsV1fiJhZNSJBFT5MAL8FdgY3GKOQLQ'), true);
         $hash = hash_hmac('sha256', $dataCheckString, $secretKey);
 
         // 5. Securely compare hashes & ensure request isn't stale (older than 24 hours)
