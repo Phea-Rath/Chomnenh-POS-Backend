@@ -54,6 +54,7 @@ use Illuminate\Support\Facades\Broadcast;
 */
 
 Route::post("/login", [AuthController::class, "login"]);
+Route::post("/telegram-login", [AuthController::class, "handleTelegramLogin"]);
 Route::post("/new-password", [AuthController::class, "forgotPassword"]);
 Route::post('/send-otp', [OtpController::class, 'sendOtp']);
 Route::post('/verify-otp', [OtpController::class, 'verifyOtp']);

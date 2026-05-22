@@ -22,6 +22,8 @@ class Users extends Authenticatable
         'username',
         'profile_id',
         'phone_number',
+        'email',
+        'telegram_id',
         'password',
         'role_id',
         'role',

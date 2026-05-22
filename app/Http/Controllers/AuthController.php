@@ -15,6 +15,58 @@ use Illuminate\Support\Facades\Storage;
 
 class AuthController extends Controller
 {
+    public function handleTelegramLogin(Request $request)
+    {
+        $authData = $request->all();
+
+        // 1. Extract the verification signature hash and isolate it from the data fields
+        $checkHash = $authData['hash'] ?? '';
+        unset($authData['hash']);
+
+        // 2. Sort all remaining incoming parameters alphabetically
+        ksort($authData);
+
+        // 3. Map values to a "key=value" string format separated by new-lines
+        $dataCheckArr = [];
+        foreach ($authData as $key => $value) {
+            $dataCheckArr[] = $key . '=' . $value;
+        }
+        $dataCheckString = implode("\n", $dataCheckArr);
+
+        // 4. Create the signature comparison key using your Bot Token
+        $secretKey = hash('sha256', env('TELEGRAM_BOT_TOKEN'), true);
+        $hash = hash_hmac('sha256', $dataCheckString, $secretKey);
+
+        // 5. Securely compare hashes & ensure request isn't stale (older than 24 hours)
+        if (!hash_equals($hash, $checkHash) || (time() - $authData['auth_date'] > 86400)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Security check failed. Data tampering detected or request expired.'
+            ], 403);
+        }
+
+        // 6. Valid signature! Find or create the user record by their unique Telegram ID
+        $user = Users::firstOrCreate(
+            ['telegram_id' => $authData['id']],
+            [
+                'username' => $authData['username'] ?? trim(($authData['first_name'] ?? '') . ' ' . ($authData['last_name'] ?? '')),
+                'email' => $authData['id'] . '@telegram.user', // Dummy email fallback
+                'password' => bcrypt(str()->random(24)),
+            ]
+        );
+
+        // 7. Issue an API authentication token (Sanctum) to pass back to your React app
+        $token = $user->createToken('auth_token')->plainTextToken;
+
+        return response()->json([
+            'success' => true,
+            'access_token' => $token,
+            'token_type' => 'Bearer',
+            'user' => $user
+        ]);
+    }
+
+
     public function login(Request $request)
     {
         $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [

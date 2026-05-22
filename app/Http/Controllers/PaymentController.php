@@ -15,37 +15,44 @@ use App\Services\AbaPayWayService;
 class PaymentController extends Controller
 {
 
-
-
     public function getQrCode(Request $request)
     {
         $user = auth()->user();
         $proId = $user->profile_id;
         $profile = DB::table('profiles')->find($proId);
 
-        $amount = $request->query('amount', '0');
-        $currency = strtoupper($request->query('currency', 'KHR'));
-        $currencyCode = $currency === 'USD' ? KHQRData::CURRENCY_USD : KHQRData::CURRENCY_KHR;
+        $amount =1?? $request->input('amount', 1.00);
+        $currency = $request->input('currency', 'USD') === 'KHR'
+            ? KHQRData::CURRENCY_KHR
+            : KHQRData::CURRENCY_USD;
 
-        if (!is_numeric($amount) || $amount <= 0) {
-            return response()->json(['message' => 'Invalid amount'], 422);
-        }
-
-        $merchant = new IndividualInfo(
-            bakongAccountID: env('ABA_BAKONG_ID', 'tep_phhearat@bkrt'),
-            merchantName: 'TEP PHEARAT',
-            merchantCity: env('ABA_MERCHANT_CITY', 'Phnom Penh'),
-            currency: $currencyCode,
-            // amount: (string) $amount
-            amount: "100"
+        // 2. Build the KHQR individual/merchant details payload
+        $individualInfo = new IndividualInfo(
+            bakongAccountID: 'tep_phhearat@bkrt',
+            merchantName: 'Ratha Yen',
+            merchantCity: 'Phnom Penh',
+            currency: $currency,
+            amount: $amount
         );
 
-        $qrResponse = BakongKHQR::generateIndividual($merchant);
+        // 3. Generate the response string and its MD5 hash
+        $khqrResponse = BakongKHQR::generateIndividual($individualInfo);
+        // dd($khqrResponse);
+        if (($khqrResponse->status['code'] ?? null) === 0) {
+            $qrString = $khqrResponse->data['qr'];
+            $md5Hash = $khqrResponse->data['md5']; // Bakong tracks transaction status via this MD5
 
-        return response()->json([
-            'qr' => $qrResponse->data['qr'] ?? null,
-            'md5' => $qrResponse->data['md5'] ?? null,
-        ]);
+            return response()->json([
+                'success' => true,
+                'qr' => $qrString,
+                'md5' => $md5Hash,
+                'amount' => $amount
+            ]);
+        }
+        // return response()->json([
+        //     'qr' => $qrResponse->data['qr'] ?? null,
+        //     'md5' => $qrResponse->data['md5'] ?? null,
+        // ]);
 
     }
 
