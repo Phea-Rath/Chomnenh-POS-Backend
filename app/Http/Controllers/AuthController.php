@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Deliver;
 use App\Models\ExchangeRate;
+use App\Models\Permission;
 use App\Models\Profile;
 use App\Models\Users;
 use DateTime;
@@ -25,6 +26,7 @@ class AuthController extends Controller
                 'success' => true,
                 'access_token' => $token,
                 'message' => 'User already exists. Please log in with your credentials.',
+                'user' => $existingUser,
             ], 200);
             // User already exists, update their information if needed
         }
@@ -58,12 +60,14 @@ class AuthController extends Controller
         $profile = Profile::create([
             "profile_name" => trim(($authData['first_name'] ?? '') . ' ' . ($authData['last_name'] ?? '')),
             "telephone" => null,
-            "start_date" => null,
-            "term" => 0,
-            "end_date" => null,
+            "start_date" => now()->format('Y-m-d'),
+            "term" => 1,
+            "end_date" => now()->addMonth()->format('Y-m-d'),
             'created_by' => 1,
             'image' => null,
         ]);
+
+
 
         // 6. Valid signature! Find or create the user record by their unique Telegram ID
         $user = Users::firstOrCreate(
@@ -78,6 +82,15 @@ class AuthController extends Controller
                 'password' => bcrypt(str()->random(24)),
             ]
         );
+
+        $menuCount = DB::table('menus')->count();
+        foreach (range(1, $menuCount) as $menuId) {
+            if($menuId == 4) continue; // Skip menu_id 4
+            Permission::create([
+                'user'=>$user->id,
+                'menu_id'=>$menuId
+            ]);
+        }
 
         // 7. Issue an API authentication token (Sanctum) to pass back to your React app
         $token = $user->createToken('auth_token')->plainTextToken;
@@ -232,6 +245,17 @@ class AuthController extends Controller
                     "image" => $filename,
                     "password" => bcrypt($fields["password"])
                 ]);
+
+                if($fields['role_id']==3){
+                    $menuCount = DB::table('menus')->count();
+                    foreach (range(1, $menuCount) as $menuId) {
+                        if($menuId == 4) continue; // Skip menu_id 4
+                        Permission::create([
+                            'user'=>$user->id,
+                            'menu_id'=>$menuId
+                        ]);
+                    }
+                }
 
                 if($fields["role_id"] == 5){
                     $user = Deliver::create([
