@@ -649,7 +649,8 @@ class OrderMasterController extends Controller
             $grandTotal = number_format($order->order_total, 2);
             $customer = Customers::find($validated['order_customer_id']);
             $profile_id = null;
-            if($validated['through']){
+            $through = $validated['through'] ?? null;
+            if($through){
 
                 $profile_id = Users::where('id', $validated['through'])->value('profile_id');
             }else{
