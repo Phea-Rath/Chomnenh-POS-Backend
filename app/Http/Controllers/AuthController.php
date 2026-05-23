@@ -110,8 +110,10 @@ class AuthController extends Controller
         $text = "Hello, " . $user->username . "! Your account has been created successfully using Telegram login.";
             $keyboard = [
                 [
-                    'text' => 'Back to Website',
-                    'url' => 'https://www.chomnenhapp.com'
+                    [
+                        'text' => 'Back to Website',
+                        'url' => 'https://www.chomnenhapp.com'
+                    ]
                 ]
             ];
 

@@ -593,11 +593,53 @@ class OrderMasterController extends Controller
                 'discount' => $discountPercent,
                 'price' => $lineTotal,
                 'quantity' => $item['quantity'],
-            ]);
+                ]);
+                }
+        $profile = DB::table('profiles')->where('id', $proId)->first();
+        if($validated['sale_type'] == 'wholesale') {
+
+            $message = $this->formatMessage($order_masters, $validated, $user);
+            $init_keyboard = [
+                [
+                    [
+                        'text' => '🧾Invoice',
+                        'url'  => 'https://www.chomnenhapp.com/order-list/invoice/' . $order_id
+                    ]
+                ]
+            ];
+            TelegramService::sendMessage($message, $proId, $init_keyboard, $profile->chat_id);
         }
 
 
         if ($online == 1) {
+            $message = $this->formatMessage($order_masters, $validated, $user);
+            $phone = $validated['order_tel'];
+            // Broadcast to Pusher
+            broadcast(new PrivateChannelEvent("New order by " . $phone, (int)$proId))->toOthers();
+            $init_keyboard = [
+                [
+                    [
+                        'text' => '🌐 View Order',
+                        'url'  => 'http://www.chomnenhapp.com/dashboard/order-tracking'
+                    ]
+                ]
+            ];
+            TelegramService::sendMessage($message, $proId, $init_keyboard, $profile->chat_id);
+        }
+        // return $message;
+        // return $this->show($order_masters->order_id);
+        return response()->json([
+            'message' => 'order master created successfully!',
+            'status' => 200,
+            "data" => $order_masters,
+        ]);
+    }
+
+    function formatMessage($order, $validated, $user) {
+            $order_no = $order->order_no;
+            $sale_type = $order->sale_type;
+            $order_date = $order->created_at->format('Y-m-d');
+            $grandTotal = number_format($order->order_total, 2);
             $customer = Customers::find($validated['order_customer_id']);
             $profile_id = Users::where('id', $validated['through'])->value('profile_id');
             $profile = DB::table('profiles')->where('id', $profile_id)->first();
@@ -626,29 +668,24 @@ class OrderMasterController extends Controller
                 if ($customer->customer_provinces) $message .= "🌆 <b>Province:</b> {$customer->customer_provinces}\n";
             }
 
+            if($sale_type == 'wholesale') {
+
+                $due_date = $order->due_date ? $order->due_date->format('Y-m-d') : 'N/A';
+                $total_paid = number_format($order->payment, 2);
+                $payment_status = $order->order_payment_status ? ucfirst($order->order_payment_status) : 'N/A';
+                $payment_method = $order->order_payment_method ? ucfirst($order->order_payment_method) : 'N/A';
+                $message = "📢 <b>New Wholesale Order Received</b>\n\n" .
+                    "📅 <b>Due Date:</b> {$due_date}\n" .
+                    "💰 <b>Total Paid:</b> 💵 <b>\${$total_paid}</b>\n" .
+                    "💳 <b>Payment Status:</b> {$payment_status}\n" .
+                    "💳 <b>Payment Method:</b> {$payment_method}";
+            }
+
             $message .= "\n📅 <b>Date:</b> {$order_date}\n\n" .
                 "📦 <b>Items List:</b>\n{$itemsList}\n" .
                 "💰 <b>Total:</b> 💵 <b>\${$grandTotal}</b>";
 
-            // Broadcast to Pusher
-            broadcast(new PrivateChannelEvent("New order by " . $phone, (int)$profile_id))->toOthers();
-            $init_keyboard = [
-                [
-                    [
-                        'text' => '🌐 View Order',
-                        'url'  => 'http://www.chomnenhapp.com/dashboard/order-tracking'
-                    ]
-                ]
-            ];
-            TelegramService::sendMessage($message, $profile_id, $init_keyboard, $profile->chat_id);
-        }
-        // return $message;
-        // return $this->show($order_masters->order_id);
-        return response()->json([
-            'message' => 'order master created successfully!',
-            'status' => 200,
-            "data" => $order_masters,
-        ]);
+            return $message;
     }
 
 
