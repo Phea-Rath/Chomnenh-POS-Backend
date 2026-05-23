@@ -614,8 +614,15 @@ class OrderMasterController extends Controller
         if ($online == 1) {
             $message = $this->formatMessage($order_masters, $validated, $user);
             $phone = $validated['order_tel'];
+            $profile_id = null;
+            if($validated['through']){
+
+                $profile_id = Users::where('id', $validated['through'])->value('profile_id');
+            }else{
+                $profile_id = $user->profile_id;
+            }
             // Broadcast to Pusher
-            broadcast(new PrivateChannelEvent("New order by " . $phone, (int)$proId))->toOthers();
+            broadcast(new PrivateChannelEvent("New order by " . $phone, (int)$profile_id))->toOthers();
             $init_keyboard = [
                 [
                     [
@@ -624,7 +631,7 @@ class OrderMasterController extends Controller
                     ]
                 ]
             ];
-            TelegramService::sendMessage($message, $proId, $init_keyboard, $profile->chat_id);
+            TelegramService::sendMessage($message, $profile_id, $init_keyboard, $profile->chat_id);
         }
         // return $message;
         // return $this->show($order_masters->order_id);
@@ -641,7 +648,13 @@ class OrderMasterController extends Controller
             $order_date = $order->created_at->format('Y-m-d');
             $grandTotal = number_format($order->order_total, 2);
             $customer = Customers::find($validated['order_customer_id']);
-            $profile_id = Users::where('id', $validated['through'])->value('profile_id');
+            $profile_id = null;
+            if($validated['through']){
+
+                $profile_id = Users::where('id', $validated['through'])->value('profile_id');
+            }else{
+                $profile_id = $user->profile_id;
+            }
             $profile = DB::table('profiles')->where('id', $profile_id)->first();
 
             $phone = $validated['order_tel'] ?? ($customer ? $customer->customer_tel : 'N/A');
