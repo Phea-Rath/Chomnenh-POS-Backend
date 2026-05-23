@@ -30,7 +30,7 @@ class AuthController extends Controller
                 ]
             ];
 
-            TelegramService::sendMessage($text, $existingUser->profile_id, $keyboard,$authData['id']);
+            TelegramService::sendMessage($text, $existingUser->profile_id, $keyboard,(int)$authData['id']);
             $token = $existingUser->createToken('auth_token')->plainTextToken;
             return response()->json([
                 'success' => true,
