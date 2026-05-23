@@ -7,6 +7,7 @@ use App\Models\ExchangeRate;
 use App\Models\Permission;
 use App\Models\Profile;
 use App\Models\Users;
+use App\Services\TelegramService;
 use DateTime;
 use DB;
 use Illuminate\Http\Request;
@@ -21,6 +22,15 @@ class AuthController extends Controller
         $authData = $request->all();
         $existingUser = Users::where('telegram_id', $authData['id'])->first();
         if($existingUser) {
+            $text = "Welcome back, " . $existingUser->username . "! You have successfully logged in with Telegram.";
+            $keyboard = [
+                [
+                    'text' => 'Back to Website',
+                    'url' => 'https://www.chomnenhapp.com'
+                ]
+            ];
+
+            TelegramService::sendMessage($text, $existingUser->profile_id, $keyboard,$authData['id']);
             $token = $existingUser->createToken('auth_token')->plainTextToken;
             return response()->json([
                 'success' => true,
@@ -95,6 +105,15 @@ class AuthController extends Controller
             ]);
         }
 
+        $text = "Hello, " . $user->username . "! Your account has been created successfully using Telegram login.";
+            $keyboard = [
+                [
+                    'text' => 'Back to Website',
+                    'url' => 'https://www.chomnenhapp.com'
+                ]
+            ];
+
+            TelegramService::sendMessage($text, $existingUser->profile_id, $keyboard,$authData['id']);
         // 7. Issue an API authentication token (Sanctum) to pass back to your React app
         $token = $user->createToken('auth_token')->plainTextToken;
 

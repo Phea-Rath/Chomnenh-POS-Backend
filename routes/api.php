@@ -38,6 +38,7 @@ use App\Http\Controllers\QuotationController;
 use App\Http\Controllers\DeliverController;
 use App\Http\Controllers\ProductionController;
 use App\Http\Controllers\PaymentController;
+use App\Services\TelegramService;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Broadcast;
 
@@ -62,6 +63,7 @@ Route::get('/get-all-profiles', [ProfileController::class, 'getAll']);
 Route::get('sale-item-marketplace', [orderPageController::class, 'saleItemMarketPlace']);
 Route::get('item-marketplace/{id}', [ItemController::class, 'show']);
 Route::get('/profile-by-id/{id}', [ProfileController::class, 'show']);
+Route::get('/test-telegram', [TelegramService::class, 'testTelegram']);
 
 
 Broadcast::routes(['middleware' => ['auth:sanctum']]);

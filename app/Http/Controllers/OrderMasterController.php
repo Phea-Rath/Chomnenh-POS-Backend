@@ -632,7 +632,15 @@ class OrderMasterController extends Controller
 
             // Broadcast to Pusher
             broadcast(new PrivateChannelEvent("New order by " . $phone, (int)$profile_id))->toOthers();
-            TelegramService::sendMessage($message, $profile_id);
+            $init_keyboard = [
+                [
+                    [
+                        'text' => '🌐 View Order',
+                        'url'  => 'http://www.chomnenhapp.com/dashboard/order-tracking'
+                    ]
+                ]
+            ];
+            TelegramService::sendMessage($message, $profile_id, $init_keyboard, $profile->chat_id);
         }
         // return $message;
         // return $this->show($order_masters->order_id);

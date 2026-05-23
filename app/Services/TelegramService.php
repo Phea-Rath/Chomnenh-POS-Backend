@@ -8,14 +8,30 @@ use App\Models\Profile;
 
 class TelegramService
 {
-    public static function sendMessage($message, $pro_id)
+
+    public function testTelegram(){
+        $message = "Hello, this is a test message from TelegramService.";
+        $keyboard = [
+            [
+                [
+                    'text' => 'Visit Website',
+                    'url' => 'https://www.chomnenhapp.com'
+                ]
+            ]
+        ];
+        $chat_id = '1531201806'; // Replace with your chat
+        // dd(env('TELEGRAM_BOT_TOKEN'));
+        return self::sendMessage($message, 1, $keyboard, $chat_id);
+    }
+
+    public static function sendMessage($message, $pro_id, $keyboard, $chat_id)
     {
 
         $profile = Profile::find($pro_id);
 
         // return $profile;
-        $token = $profile->bot_token;
-        $chatId = $profile->chat_id;
+        $token = env('TELEGRAM_BOT_TOKEN')??$profile->bot_token;
+        $chatId = $chat_id ?? $profile->chat_id;
 
         if(!$token||!$chatId){return "Error";}
 
@@ -26,14 +42,7 @@ class TelegramService
             'text' => $message,
             'parse_mode' => 'HTML',
             'reply_markup' => json_encode([
-            'inline_keyboard' => [
-                [
-                    [
-                        'text' => '🌐 View Order',
-                        'url'  => 'http://www.chomnenhapp.com/dashboard/order-tracking'
-                    ]
-                ]
-            ]
+            'inline_keyboard' => $keyboard
         ])
         ]);
     }
