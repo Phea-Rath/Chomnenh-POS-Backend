@@ -684,7 +684,7 @@ class OrderMasterController extends Controller
 
             if($sale_type == 'wholesale') {
 
-                $due_date = $order->due_date ? $order->due_date->format('Y-m-d') : 'N/A';
+                $due_date = $order->due_date ? $order->due_date : 'N/A';
                 $total_paid = number_format($order->payment, 2);
                 $payment_status = $order->order_payment_status ? ucfirst($order->order_payment_status) : 'N/A';
                 $payment_method = $order->order_payment_method ? ucfirst($order->order_payment_method) : 'N/A';
