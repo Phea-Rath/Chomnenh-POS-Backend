@@ -321,7 +321,7 @@ class ProfileController extends Controller
     {
         $profile = Profile::find($id);
         $validate = $request->validate([
-            'bot_token' => 'required|string|max:200',
+            'bot_token' => 'nullable|string|max:200',
             'chat_id' => 'required|string|max:200'
         ]);
 
@@ -332,7 +332,7 @@ class ProfileController extends Controller
             ]);
         }
 
-        $profile->bot_token = $validate['bot_token'];
+        $profile->bot_token = $validate['bot_token'] ?? null;
         $profile->chat_id = $validate['chat_id'];
         $profile->save();
         return response()->json([

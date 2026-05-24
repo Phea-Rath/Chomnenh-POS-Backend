@@ -32,6 +32,7 @@ return new class extends Migration
             $table->double("order_tax")->default(0);
             $table->double("exchange_rate")->default(4000);
             $table->double("balance");
+            $table->double("term")->default(0);
             $table->double("payment");
             $table->unsignedBigInteger("created_by");
             $table->integer("status")->default(1);

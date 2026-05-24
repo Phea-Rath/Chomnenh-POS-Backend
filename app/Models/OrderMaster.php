@@ -32,5 +32,6 @@ class OrderMaster extends Model
         'exchange_rate',
         'reference_no',
         'due_date',
+        'term'
     ];
 }

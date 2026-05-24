@@ -19,7 +19,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use App\Services\ItemService;
 use App\Services\TelegramService;
-
+use Carbon\Carbon;
 
 class OrderMasterController extends Controller
 {
@@ -346,7 +346,7 @@ class OrderMasterController extends Controller
             ->where('om.is_deleted', 0)
             ->where('om.is_active', 1)
             ->where('p.id', $proId)
-            ->whereNotNull('om.reference_no')
+            ->where('om.sale_type', 'wholesale') // Only fetch orders with sale_type = 'sale'
             ->when($created_by, function ($query) use ($created_by) {
                 $query->where('om.created_by', $created_by);
             })
@@ -514,10 +514,10 @@ class OrderMasterController extends Controller
             'order_customer_id' => 'nullable|integer',
             'deliver_id' => 'nullable|integer',
             'through' => 'nullable|integer',
+            'term' => 'nullable|string|max:255',
             'created_by' => 'nullable|integer',
             'reference_no' => 'nullable|string|max:255',
             'sale_type' => 'nullable|string|max:255',
-            'due_date' => 'nullable|date',
             'delivery_fee' => 'nullable|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
             'order_tax' => 'nullable|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
             'payment' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
@@ -547,6 +547,10 @@ class OrderMasterController extends Controller
         $online = $validated['online'] ?? 0;
         $created_by = $validated['created_by'] ?? $uid;
 
+        $due_date = null;
+        if($validated['term']) {
+            $due_date = $validated['order_date'] ? Carbon::parse($validated['order_date'])->addDays((int)$validated['term']) : Carbon::now()->addDays((int)$validated['term']);
+        }
         // Create the order master
         $order_masters = OrderMaster::create([
             'order_no' => $order_no,
@@ -556,7 +560,7 @@ class OrderMasterController extends Controller
             'status' => $validated['delivery_fee'] > 0 ? 1 : $validated['status'],
             'order_tel' => $validated['order_tel']??null,
             'reference_no' => $validated['reference_no'] ?? null,
-            'due_date' => $validated['due_date'] ?? null,
+            'due_date' => $due_date,
             'deliver_id' => $validated['deliver_id']??1,
             'order_address' => $validated['order_address']??null,
             'order_date' => $order_date,
@@ -565,6 +569,7 @@ class OrderMasterController extends Controller
             'order_payment_status' => $balance <= 0 ? 'paid' : $validated['order_payment_status'],
             'order_payment_method' => $validated['order_payment_method'],
             'balance' => $balance,
+            'term' => $validated['term'] ?? 0,
             'payment' => $payment,
             'order_subtotal' => $subTotal,
             'order_discount' => $discountAmount,
@@ -682,7 +687,7 @@ class OrderMasterController extends Controller
                 if ($customer->customer_provinces) $message .= "🌆 <b>Province:</b> {$customer->customer_provinces}\n";
             }
 
-            if($sale_type == 'wholesale') {
+            if($sale_type != 'sale') {
 
                 $due_date = $order->due_date ? $order->due_date : 'N/A';
                 $total_paid = number_format($order->payment, 2);
@@ -765,7 +770,7 @@ class OrderMasterController extends Controller
             'delivery_fee' => 'numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
             'order_tax' => 'nullable|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
             'payment' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
-            'due_date' => 'nullable|date',
+            'term' => 'nullable|integer|max:255',
             'items' => 'required|array|min:1',
             'items.*.item_id' => 'required|integer|exists:items,item_id',
             'items.*.item_name' => 'required|string|max:255',
@@ -789,6 +794,11 @@ class OrderMasterController extends Controller
         $balance = round($grandTotal - $payment, 2);
 
         $created_by = $validated['created_by'] ?? $uid;
+        $due_date = null;
+        $term = $validated['term'] ?? 0;
+        if($term) {
+            $due_date = $validated['order_date'] ? Carbon::parse($validated['order_date'])->addDays((int)$validated['term']) : Carbon::now()->addDays((int)$validated['term']);
+        }
         // Create the order master
         $order_masters->update([
             'order_tel' => $validated['order_tel'],
@@ -805,7 +815,8 @@ class OrderMasterController extends Controller
             'order_discount' => $discountAmount,
             'order_tax' => $taxAmount,
             'order_total' => $grandTotal,
-            'due_date' => $validated['due_date'] ?? null,
+            'due_date' => $due_date,
+            'term' => $validated['term'] ?? 0,
         ]);
 
         $order_items = [];
