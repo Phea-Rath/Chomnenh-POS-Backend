@@ -636,7 +636,7 @@ class OrderMasterController extends Controller
                     ],
                     [
                         'text' => '🧾Invoice',
-                        'url'  => 'http://www.chomnenhapp.com/invoice/' . $order_id
+                        'url'  => 'http://www.chomnenhapp.com/receipt/' . $order_id
                     ]
                 ]
             ];
