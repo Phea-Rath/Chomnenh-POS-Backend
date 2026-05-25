@@ -713,8 +713,8 @@ class OrderMasterController extends Controller
      */
     public function show(string $id)
     {
-        $user = Auth::user();
-        $uid = $user->id;
+        // $user = Auth::user();
+        // $uid = $user->id;
         $orderMasters = DB::table('order_masters as om')
         ->join('customers as cu','om.order_customer_id','=',"customer_id")
         ->join('users as u', 'u.id', '=', 'om.created_by')

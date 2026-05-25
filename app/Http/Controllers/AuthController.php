@@ -210,14 +210,17 @@ class AuthController extends Controller
             "role" => "required|string",
             "status" => "required|integer",
             "password" => "required|string",
-            "start_date" => "date|nullable",
-            "term" => "integer|nullable",
-            'image' => 'nullable|file|mimes:jpeg,png,jpg,svg|max:2048',
+            "start_date" => "nullable|date",
+            "term" => "nullable|integer",
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,svg|max:2048',
         ]);
 
 
 
-        if ($request->hasFile('image')) {
+        try{
+
+            DB::beginTransaction();
+            if ($request->hasFile('image')) {
             // Process the uploaded file
             $file = $request->file('image');
 
@@ -277,7 +280,7 @@ class AuthController extends Controller
                     foreach (range(1, $menuCount) as $menuId) {
                         if($menuId == 4) continue; // Skip menu_id 4
                         Permission::create([
-                            'user'=>$user->id,
+                            'user_id'=>$user->id,
                             'menu_id'=>$menuId
                         ]);
                     }
@@ -334,7 +337,7 @@ class AuthController extends Controller
             }
         }
 
-
+        DB::commit();
 
         return response()->json([
             'message' => 'Profile created successfully!',
@@ -342,6 +345,13 @@ class AuthController extends Controller
             'profile' => $data ?? [],
             'users' => $user
         ], 201);
+        }catch(\Exception $e){
+            DB::rollBack();
+            return response()->json([
+                'message' => 'An error occurred while creating the profile.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 
     public function guest(string $phone_number)

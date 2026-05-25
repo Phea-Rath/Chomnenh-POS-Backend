@@ -1184,9 +1184,9 @@ class StockMasterController extends Controller
      */
     public function show($id)
     {
-        $user = Auth::user();
-        $uid = $user->id;
-        $proId = $user->profile_id;
+        // $user = Auth::user();
+        // $uid = $user->id;
+        // $proId = $user->profile_id;
 
         // FETCH SINGLE STOCK MASTER
         $master = DB::table('stock_masters as sm')
@@ -1204,7 +1204,7 @@ class StockMasterController extends Controller
             )
             ->where('sm.stock_id', $id)
             ->where('sm.is_deleted', 0)
-            ->where('p.id', $proId)
+            // ->where('p.id', $proId)
             ->first();
 
         if (!$master) {
@@ -1226,9 +1226,9 @@ class StockMasterController extends Controller
     }
     public function showRaw($id)
     {
-        $user = Auth::user();
-        $uid = $user->id;
-        $proId = $user->profile_id;
+        // $user = Auth::user();
+        // $uid = $user->id;
+        // $proId = $user->profile_id;
 
         // FETCH SINGLE STOCK MASTER
         $master = DB::table('stock_masters as sm')
@@ -1246,7 +1246,7 @@ class StockMasterController extends Controller
             )
             ->where('sm.stock_id', $id)
             ->where('sm.is_deleted', 0)
-            ->where('p.id', $proId)
+            // ->where('p.id', $proId)
             ->first();
 
         if (!$master) {

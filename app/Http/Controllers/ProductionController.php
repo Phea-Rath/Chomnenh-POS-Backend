@@ -299,9 +299,9 @@ class ProductionController extends Controller
 
     public function show($id)
     {
-        $user = Auth::user();
-        $uid = $user->id;
-        $proId = $user->profile_id;
+        // $user = Auth::user();
+        // $uid = $user->id;
+        // $proId = $user->profile_id;
 
         $production = DB::table('productions as prod')
             ->join('users as u', 'prod.created_by', '=', 'u.id')
@@ -316,7 +316,7 @@ class ProductionController extends Controller
             ->where('prod.id', $id)
             ->where('prod.is_deleted', 0)
             // ->where('u.id', $uid)
-            ->where('pr.id', $proId)
+            // ->where('pr.id', $proId)
             ->first();
 
         if (!$production) {
