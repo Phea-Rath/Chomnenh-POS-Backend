@@ -69,6 +69,7 @@ Route::get('stock_masters/{id}', [StockMasterController::class, 'show']);
 Route::get('order_masters/{id}', [OrderMasterController::class, 'show']);
 Route::get('purchase/{id}', [PurchaseController::class, 'show']);
 Route::get('production/{id}', [ProductionController::class, 'show']);
+Route::get('profile-by-user/{id}', [ProfileController::class, 'getByUser']);
 
 Broadcast::routes(['middleware' => ['auth:sanctum']]);
 Route::group(['middleware' => ['auth:sanctum']], function () {

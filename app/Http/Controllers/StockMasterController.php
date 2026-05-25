@@ -952,7 +952,7 @@ class StockMasterController extends Controller
                 'i.brand_id',
                 'b.brand_name',
                 'i.is_deleted',
-                DB::raw('0 as images'),
+                // DB::raw('0 as images'),
                 DB::raw('0 as image'),
                 DB::raw('0 as stock'),
                 // 'sm.created_at'
@@ -980,7 +980,7 @@ class StockMasterController extends Controller
         foreach ($stock_masters as $stock_master) {
             $imagelist = $this->itemService->getImage($stock_master->item_id);
             $stock_master->stock = $this->detailService->quanItems($stock_master->item_id)[0];
-            $stock_master->images = !empty($imagelist) ? $imagelist : null;
+            // $stock_master->images = !empty($imagelist) ? $imagelist : null;
             $stock_master->image = !empty($imagelist) ? $imagelist[0]['image'] : null;
         }
 

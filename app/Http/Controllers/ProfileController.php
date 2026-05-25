@@ -153,6 +153,36 @@ class ProfileController extends Controller
         ]);
     }
 
+    public function getByUser(string $id)
+    {
+
+        $profile = Profile::join('users', 'profiles.id', '=', 'users.profile_id')
+            ->where('users.id', $id)
+            ->where('profiles.is_deleted', 0)
+            // ->where('created_by', $proId)
+            ->first();
+
+        if (!$profile) {
+            return response()->json([
+                'message' => 'Profile not found!',
+                'status'  => 404,
+            ]);
+        }
+
+        if ($profile->image) {
+            $profile->image = url('storage/images/' . basename($profile->image));
+        }
+        if ($profile->qr_code) {
+            $profile->qr_code = url('storage/images/' . basename($profile->qr_code));
+        }
+
+        return response()->json([
+            'message' => 'Profile retrieved successfully!',
+            'status'  => 200,
+            'data'    => $profile,
+        ]);
+    }
+
     public function updateImage(Request $request, string $id)
     {
         $profile = Profile::find($id);
