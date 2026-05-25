@@ -608,7 +608,7 @@ class OrderMasterController extends Controller
                 [
                     [
                         'text' => '🧾Invoice',
-                        'url'  => 'https://www.chomnenhapp.com/order-list/invoice/' . $order_id
+                        'url'  => 'https://www.chomnenhapp.com/invoice/' . $order_id
                     ]
                 ]
             ];
@@ -631,8 +631,12 @@ class OrderMasterController extends Controller
             $init_keyboard = [
                 [
                     [
-                        'text' => '🌐 View Order',
+                        'text' => '🌐View Order',
                         'url'  => 'http://www.chomnenhapp.com/dashboard/order-tracking'
+                    ],
+                    [
+                        'text' => '🧾Invoice',
+                        'url'  => 'http://www.chomnenhapp.com/invoice/' . $order_id
                     ]
                 ]
             ];
