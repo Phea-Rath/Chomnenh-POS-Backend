@@ -242,7 +242,7 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
 
     // Route::get("/users",[AuthController::class, "index"]);
     Route::resource('scales', ScaleController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
-    Route::resource('sizes', SizeController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
+    // Route::resource('sizes', SizeController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
     Route::resource('stock_types', StockTypeController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
     Route::resource('stock_masters', StockMasterController::class)->only(['index', 'store', 'update', 'destroy']);
     Route::post('/stock_masters_raw', [StockMasterController::class, 'storeRaw']);
