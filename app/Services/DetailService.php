@@ -15,8 +15,8 @@ class DetailService {
     }
 
     public function stockDetail($id) {
-        $user = Auth::user();
-        $uid = $user->id;
+        // $user = Auth::user();
+        // $uid = $user->id;
 
         $stock_detail = DB::table('stock_details')
             ->join('stock_masters', 'stock_details.stock_id', '=', 'stock_masters.stock_id')
@@ -80,8 +80,8 @@ class DetailService {
         return $stock_detail;
     }
     public function stockRawDetail($id) {
-        $user = Auth::user();
-        $uid = $user->id;
+        // $user = Auth::user();
+        // $uid = $user->id;
 
         $stock_detail = DB::table('stock_raw_details')
             ->join('stock_masters', 'stock_raw_details.stock_id', '=', 'stock_masters.stock_id')
@@ -117,8 +117,8 @@ class DetailService {
     }
 
     public function purchaseDetail($id) {
-        $user = Auth::user();
-        $uid = $user->id;
+        // $user = Auth::user();
+        // $uid = $user->id;
 
         $purchase_detail = DB::table('purchase_details')
             ->join('purchases', 'purchase_details.purchase_id', '=', 'purchases.purchase_id')
@@ -183,8 +183,8 @@ class DetailService {
 
 
     public function purchaseRawDetail($id) {
-        $user = Auth::user();
-        $uid = $user->id;
+        // $user = Auth::user();
+        // $uid = $user->id;
 
         $purchase_detail = DB::table('purchase_raw_details')
             ->join('purchases', 'purchase_raw_details.purchase_id', '=', 'purchases.purchase_id')
@@ -217,8 +217,8 @@ class DetailService {
     }
 
     public function purchaseDetailById($id) {
-        $user = Auth::user();
-        $uid = $user->id;
+        // $user = Auth::user();
+        // $uid = $user->id;
 
         $purchase_detail = DB::table('purchase_details')
             ->join('purchases', 'purchase_details.purchase_id', '=', 'purchases.purchase_id')
@@ -292,8 +292,8 @@ class DetailService {
     }
 
     public function orderDetailById($id) {
-        $user = Auth::user();
-        $uid = $user->id;
+        // $user = Auth::user();
+        // $uid = $user->id;
 
         $order_item = DB::table('order_items')
             ->join('order_masters', 'order_items.order_id', '=', 'order_masters.order_id')
@@ -509,7 +509,7 @@ class DetailService {
 
             $remaining -= $takeRestQty;
         }
-        
+
 
         $sorted = collect($usedRecords)
         ->sortBy('created_at')
