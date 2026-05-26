@@ -47,6 +47,8 @@ class ItemController extends Controller
         $limit = (int) $request->input('limit', 10);
         $page = (int) $request->input('page', 1);
         $search = $request->input('search');
+        $categoryId = $request->input('category_id', 0);
+        $brandId = $request->input('brand_id', 0);
 
         $query = DB::table('items')
             ->leftJoin('users', 'users.id', '=', 'items.created_by')
@@ -61,6 +63,12 @@ class ItemController extends Controller
                     ->orWhere('items.item_code', 'LIKE', "%{$search}%")
                     ->orWhere('items.barcode', 'LIKE', "%{$search}%");
             });
+        }
+        if($categoryId != 0 && $categoryId != "" && $categoryId != null) {
+            $query->where('items.category_id', $categoryId);
+        }
+        if($brandId != 0 && $brandId != "" && $brandId != null) {
+            $query->where('items.brand_id', $brandId);
         }
 
         $rawItems = $query->select('items.item_id')

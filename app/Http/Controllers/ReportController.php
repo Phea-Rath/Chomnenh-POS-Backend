@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Production;
 use App\Models\StockMaster;
 use App\Models\ExchangeRate;
+use App\Models\OrderMaster;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -1665,4 +1666,25 @@ class ReportController extends Controller
             ]
         ], 200);
     }
+
+
+    // public function incomeStatement(Request $request){
+    //     $validated = $request->validate([
+    //         'start_date'=> 'nullable|date',
+    //         'end_date'=> 'nullable|date'
+    //     ]);
+    //     $user = Auth::user();
+    //     $proId = $user->profile_id;
+
+    //     $revenueQuery = DB::table('order_masters as om')
+    //         ->join('users as u', 'u.id','=','om.created_by')
+    //         ->join('profiles as p', 'p.id', '=', 'u.profile_id')
+    //         ->where('om.is_deleted', 0);
+    //     if($validated['start_date']){
+    //         $revenueQuery->
+    //     }
+    // }
 }
+
+
+
