@@ -1116,7 +1116,7 @@ class StockMasterController extends Controller
         $stock_no = $type . '-' . now()->format('Ymd') . '-' . str_pad($count + 1, 5, '0', STR_PAD_LEFT);
 
 
-        if ($validated['warehouse_id'] == 1 || $validated['warehouse_id'] == 5) {
+        if ($validated['warehouse_id'] == 2 || $validated['warehouse_id'] == 5) {
                 return response()->json([
                     'message' => 'This warehouse is not allowed for stock in transaction',
                 ], 200);
@@ -1128,7 +1128,7 @@ class StockMasterController extends Controller
         $data = StockMaster::create([
             'stock_no' => $stock_no,
             'stock_type_id' => 2,
-            'from_warehouse' => $validated['from_warehouse'],
+            'from_warehouse' => 2,
             'warehouse_id' => $validated['warehouse_id'],
             'quantity' => array_sum(array_column($validated['items'], 'quantity')),
             'stock_date' => $stock_date,
@@ -1278,12 +1278,11 @@ class StockMasterController extends Controller
         //         ],200);
         //     }
         // }
-        if ($validated['warehouse_id'] == 1 || $validated['warehouse_id'] == 5) {
-            if ($validated['stock_type_id'] != 2 && $validated['stock_type_id'] != 1) {
+        if ($validated['warehouse_id'] == 2 || $validated['warehouse_id'] == 1) {
                 return response()->json([
                     'message' => 'Raw Material Warehouse can to use stock  only "stock in"',
                 ], 200);
-            }
+
         }
 
 
@@ -1464,6 +1463,73 @@ class StockMasterController extends Controller
 
         $validated = $request->validate([
             'stock_type_id' => 'required|integer',
+            'warehouse_id' => 'required|integer|exists:warehouses,warehouse_id',
+            'stock_date' => 'required|date',
+            'stock_remark' => 'nullable|string|max:255',
+            'items' => 'array||min:1',
+            'items.*.item_id' => 'required|integer|exists:items,item_id',
+            'items.*.quantity' => 'required|integer',
+            'items.*.expire_date' => 'required|date',
+            'items.*.item_cost' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
+        ]);
+
+        if ($validated['warehouse_id'] == 2 || $validated['warehouse_id'] == 5) {
+                return response()->json([
+                    'message' => 'This warehouse is not allowed for stock in transaction',
+                ], 200);
+
+        }
+
+        $stock_masters->update([
+            'stock_type_id' => $validated['stock_type_id'],
+            // 'from_warehouse' => $validated['from_warehouse'],
+            'warehouse_id' => $validated['warehouse_id'],
+            'stock_date' => $validated['stock_date'],
+            'quantity' => array_sum(array_column($validated['items'], 'quantity')),
+            'stock_remark' => $validated['stock_remark'],
+            // 'stock_created_by'=> $validated['stock_created_by'],
+        ]);
+
+
+        $exchange_rate = ExchangeRate::find($proId);
+
+        // ✅ Update the master record using the object, not query builder
+
+        if ($stock_masters) {
+            StockDetails::where('stock_id', $id)->delete();
+        }
+        $items = [];
+        foreach ($validated['items'] as $item) {
+            $items[] = StockDetails::create([
+                'stock_id' => $id,
+                'item_id' => $item['item_id'],
+                'quantity' => $item['quantity'],
+                'item_cost' => $item['item_cost'],
+                'expire_date' => $item['expire_date'],
+                'transection_date' => $stock_date,
+            ]);
+        }
+        return response()->json([
+            "message" => "StockMaster updated successfully",
+            "status" => 200,
+        ], 200);
+    }
+
+    public function updateTransfer(Request $request, string $id)
+    {
+        $user = Auth::user();
+        $proId = $user->profile_id;
+        $stock_masters = StockMaster::find($id);
+        $stock_date = now()->format('Y-m-d');
+
+        if (!$stock_masters) {
+            return response()->json([
+                "message" => "This stock masters not found!",
+            ], 404);
+        }
+
+        $validated = $request->validate([
+            'stock_type_id' => 'required|integer',
             'from_warehouse' => 'required|integer',
             'warehouse_id' => 'required|integer|exists:warehouses,warehouse_id',
             'stock_date' => 'required|date',
@@ -1475,19 +1541,10 @@ class StockMasterController extends Controller
             'items.*.item_cost' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
         ]);
 
-        if ($validated['from_warehouse'] == 1 || $validated['from_warehouse'] == 5) {
-            if ($validated['stock_type_id'] != 3) {
-                return response()->json([
-                    'message' => 'Raw Material Warehouse can to use stock  only "stock out"',
-                ], 200);
-            }
-        }
-        if ($validated['warehouse_id'] == 1 || $validated['warehouse_id'] == 5) {
-            if ($validated['stock_type_id'] != 2 && $validated['stock_type_id'] != 1) {
-                return response()->json([
-                    'message' => 'Raw Material Warehouse can to use stock  only "stock in"',
-                ], 200);
-            }
+        if($validated['from_warehouse'] == 1 && $validated['warehouse_id'] == 5 || $validated['from_warehouse'] == 5 && $validated['warehouse_id'] == 1 || $validated['from_warehouse'] == 2 || $validated['warehouse_id'] == 2){
+            return response()->json([
+                'message'=>'Transfer between this warehouse is not allowed',
+            ],200);
         }
 
         $stock_masters->update([
@@ -1554,19 +1611,11 @@ class StockMasterController extends Controller
             'items.*.item_cost' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
         ]);
 
-        if ($validated['from_warehouse'] == 1 || $validated['from_warehouse'] == 5) {
-            if ($validated['stock_type_id'] != 3) {
+        if ($validated['warehouse_id'] == 1 || $validated['warehouse_id'] == 2) {
                 return response()->json([
-                    'message' => 'Raw Material Warehouse can to use stock  only "stock out"',
+                    'message' => 'This warehouse is not allowed for stock in transaction',
                 ], 200);
-            }
-        }
-        if ($validated['warehouse_id'] == 1 || $validated['warehouse_id'] == 5) {
-            if ($validated['stock_type_id'] != 2 && $validated['stock_type_id'] != 1) {
-                return response()->json([
-                    'message' => 'Raw Material Warehouse can to use stock  only "stock in"',
-                ], 200);
-            }
+
         }
 
 

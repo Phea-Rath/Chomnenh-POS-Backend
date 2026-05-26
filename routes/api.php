@@ -217,6 +217,7 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::resource('sale-items', orderPageController::class)->only(['index']);
     Route::get('/stock/{id}', [StockMasterController::class, 'getStockByOrderNo']);
     Route::post('/stock-transfer', [StockMasterController::class, 'storeTransfer']);
+    Route::put('/stock-transfer/{id}', [StockMasterController::class, 'updateTransfer']);
     Route::get('/stock_transection', [StockMasterController::class, 'stockTransection']);
     Route::get('/stock_transfer', [StockMasterController::class, 'stockTransfer']);
     Route::get('/stock_transfer_list', [StockMasterController::class, 'stockTransferMobile']);
