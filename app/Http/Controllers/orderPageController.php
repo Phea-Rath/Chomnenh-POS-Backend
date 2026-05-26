@@ -148,6 +148,14 @@ class orderPageController extends Controller
             $query->where('sd.item_id', $itemFilter);
         }
 
+        if ($request->filled('category_id')) {
+            $query->where('i.category_id', $request->category_id);
+        }
+
+        if ($request->filled('brand_id')) {
+            $query->where('i.brand_id', $request->brand_id);
+        }
+
         if (!empty($search)) {
             $query->where(function ($q) use ($search) {
                 $q->where('i.item_name', 'like', '%' . $search . '%')

@@ -54,6 +54,19 @@ class StockMasterController extends Controller
             });
         }
 
+        if ($request->filled('from_warehouse_id')) {
+            $query->where('sm.from_warehouse', $request->from_warehouse_id);
+        }
+        if ($request->filled('to_warehouse_id')) {
+            $query->where('sm.warehouse_id', $request->to_warehouse_id);
+        }
+        if ($request->filled('start_date')) {
+            $query->whereDate('sm.stock_date', '>=', $request->start_date);
+        }
+        if ($request->filled('end_date')) {
+            $query->whereDate('sm.stock_date', '<=', $request->end_date);
+        }
+
         $rawStocks = $query->select('sm.stock_id')
             ->orderBy('sm.stock_id', 'DESC')
             ->paginate($limit, ['*'], 'page', $page);
@@ -261,6 +274,18 @@ class StockMasterController extends Controller
                         ->orWhere('s.username', 'like', "%{$search}%");
                 });
             })
+            ->when($request->input('from_warehouse_id'), function ($query, $from_warehouse_id) {
+                $query->where('sm.from_warehouse', $from_warehouse_id);
+            })
+            ->when($request->input('to_warehouse_id'), function ($query, $to_warehouse_id) {
+                $query->where('sm.warehouse_id', $to_warehouse_id);
+            })
+            ->when($request->input('start_date'), function ($query, $start_date) {
+                $query->whereDate('sm.stock_date', '>=', $start_date);
+            })
+            ->when($request->input('end_date'), function ($query, $end_date) {
+                $query->whereDate('sm.stock_date', '<=', $end_date);
+            })
             ->orderBy('sm.stock_id', 'desc')
             ->paginate($limit, ['*'], 'page', $page);
 
@@ -319,6 +344,18 @@ class StockMasterController extends Controller
                         ->orWhere('st.stock_type_name', 'like', "%{$search}%")
                         ->orWhere('s.username', 'like', "%{$search}%");
                 });
+            })
+            ->when($request->input('from_warehouse_id'), function ($query, $from_warehouse_id) {
+                $query->where('sm.from_warehouse', $from_warehouse_id);
+            })
+            ->when($request->input('to_warehouse_id'), function ($query, $to_warehouse_id) {
+                $query->where('sm.warehouse_id', $to_warehouse_id);
+            })
+            ->when($request->input('start_date'), function ($query, $start_date) {
+                $query->whereDate('sm.stock_date', '>=', $start_date);
+            })
+            ->when($request->input('end_date'), function ($query, $end_date) {
+                $query->whereDate('sm.stock_date', '<=', $end_date);
             })
             ->orderBy('sm.stock_id', 'desc')
             ->paginate($limit, ['*'], 'page', $page);
@@ -448,6 +485,18 @@ class StockMasterController extends Controller
                         ->orWhere('st.stock_type_name', 'like', "%{$search}%")
                         ->orWhere('s.username', 'like', "%{$search}%");
                 });
+            })
+            ->when($request->input('from_warehouse_id'), function ($query, $from_warehouse_id) {
+                $query->where('sm.from_warehouse', $from_warehouse_id);
+            })
+            ->when($request->input('to_warehouse_id'), function ($query, $to_warehouse_id) {
+                $query->where('sm.warehouse_id', $to_warehouse_id);
+            })
+            ->when($request->input('start_date'), function ($query, $start_date) {
+                $query->whereDate('sm.stock_date', '>=', $start_date);
+            })
+            ->when($request->input('end_date'), function ($query, $end_date) {
+                $query->whereDate('sm.stock_date', '<=', $end_date);
             })
 
             ->orderBy('sm.stock_id', 'desc')
@@ -622,6 +671,19 @@ class StockMasterController extends Controller
             });
         }
 
+        if ($request->filled('from_warehouse_id')) {
+            $query->where('sm.from_warehouse', $request->from_warehouse_id);
+        }
+        if ($request->filled('to_warehouse_id')) {
+            $query->where('sm.warehouse_id', $request->to_warehouse_id);
+        }
+        if ($request->filled('start_date')) {
+            $query->whereDate('sm.stock_date', '>=', $request->start_date);
+        }
+        if ($request->filled('end_date')) {
+            $query->whereDate('sm.stock_date', '<=', $request->end_date);
+        }
+
         $rawStocks = $query->select('sm.stock_id')
             ->orderBy('sm.stock_id', 'DESC')
             ->paginate($limit, ['*'], 'page', $page);
@@ -792,6 +854,18 @@ class StockMasterController extends Controller
                         ->orWhere('st.stock_type_name', 'like', "%{$search}%")
                         ->orWhere('s.username', 'like', "%{$search}%");
                 });
+            })
+            ->when($request->input('from_warehouse_id'), function ($query, $from_warehouse_id) {
+                $query->where('sm.from_warehouse', $from_warehouse_id);
+            })
+            ->when($request->input('to_warehouse_id'), function ($query, $to_warehouse_id) {
+                $query->where('sm.warehouse_id', $to_warehouse_id);
+            })
+            ->when($request->input('start_date'), function ($query, $start_date) {
+                $query->whereDate('sm.stock_date', '>=', $start_date);
+            })
+            ->when($request->input('end_date'), function ($query, $end_date) {
+                $query->whereDate('sm.stock_date', '<=', $end_date);
             })
 
             ->orderBy('sm.stock_id', 'desc')
@@ -1119,7 +1193,7 @@ class StockMasterController extends Controller
             ->count();
         $stock_no = $type . '-' . now()->format('Ymd') . '-' . str_pad($count + 1, 5, '0', STR_PAD_LEFT);
 
-        if($validated['from_warehouse'] == 1 && $validated['warehouse_id'] == 5 || $validated['from_warehouse'] == 5 && $validated['warehouse_id'] == 1 || $validated['from_warehouse'] == 1 || $validated['warehouse_id'] == 1){
+        if($validated['from_warehouse'] == 1 && $validated['warehouse_id'] == 5 || $validated['from_warehouse'] == 5 && $validated['warehouse_id'] == 1 || $validated['from_warehouse'] == 2 || $validated['warehouse_id'] == 2){
             return response()->json([
                 'message'=>'Transfer between this warehouse is not allowed',
             ],200);

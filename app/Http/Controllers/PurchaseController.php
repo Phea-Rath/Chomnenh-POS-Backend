@@ -56,6 +56,16 @@ class PurchaseController extends Controller
             });
         }
 
+        if ($request->filled('supplier_id')) {
+            $query->where('p.supplier_id', $request->supplier_id);
+        }
+        if ($request->filled('start_date')) {
+            $query->whereDate('p.purchase_date', '>=', $request->start_date);
+        }
+        if ($request->filled('end_date')) {
+            $query->whereDate('p.purchase_date', '<=', $request->end_date);
+        }
+
         $rawPurchases = $query->select('p.purchase_id')
             ->orderBy('p.purchase_id', 'DESC')
             ->paginate($limit, ['*'], 'page', $page);
@@ -223,6 +233,16 @@ class PurchaseController extends Controller
                     ->orWhere('s.supplier_name', 'LIKE', "%{$search}%")
                     ->orWhere('u.username', 'LIKE', "%{$search}%");
             });
+        }
+
+        if ($request->filled('supplier_id')) {
+            $query->where('p.supplier_id', $request->supplier_id);
+        }
+        if ($request->filled('start_date')) {
+            $query->whereDate('p.purchase_date', '>=', $request->start_date);
+        }
+        if ($request->filled('end_date')) {
+            $query->whereDate('p.purchase_date', '<=', $request->end_date);
         }
 
         $rawPurchases = $query->whereExists(function ($q) {
@@ -419,6 +439,15 @@ class PurchaseController extends Controller
                     ->orWhere('p.note', 'like', "%{$search}%");
                 });
             })
+            ->when($request->input('supplier_id'), function ($query, $supplier_id) {
+                $query->where('p.supplier_id', $supplier_id);
+            })
+            ->when($request->input('start_date'), function ($query, $start_date) {
+                $query->whereDate('p.purchase_date', '>=', $start_date);
+            })
+            ->when($request->input('end_date'), function ($query, $end_date) {
+                $query->whereDate('p.purchase_date', '<=', $end_date);
+            })
 
             ->orderBy('p.purchase_id', 'desc')
             ->paginate($limit, ['*'], 'page', $page);
@@ -496,6 +525,15 @@ class PurchaseController extends Controller
                     ->orWhere('s.supplier_name', 'like', "%{$search}%")
                     ->orWhere('u.username', 'like', "%{$search}%");
                 });
+            })
+            ->when($request->input('supplier_id'), function ($query, $supplier_id) {
+                $query->where('p.supplier_id', $supplier_id);
+            })
+            ->when($request->input('start_date'), function ($query, $start_date) {
+                $query->whereDate('p.purchase_date', '>=', $start_date);
+            })
+            ->when($request->input('end_date'), function ($query, $end_date) {
+                $query->whereDate('p.purchase_date', '<=', $end_date);
             })
 
             ->orderBy('p.purchase_id', 'desc')

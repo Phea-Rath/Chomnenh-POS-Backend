@@ -44,6 +44,23 @@ class QuotationController extends Controller
                     ->orWhere('q.status', 'like', "%{$search}%");
             });
         }
+
+        if ($request->filled('customer_id')) {
+            $quotationRows->where('q.customer_id', $request->customer_id);
+        }
+        if ($request->filled('user_id')) {
+            $quotationRows->where('q.created_by', $request->user_id);
+        }
+        if ($request->filled('status')) {
+            $quotationRows->where('q.status', $request->status);
+        }
+        if ($request->filled('start_date')) {
+            $quotationRows->whereDate('q.date', '>=', $request->start_date);
+        }
+        if ($request->filled('end_date')) {
+            $quotationRows->whereDate('q.date', '<=', $request->end_date);
+        }
+
         $quotationRows = $quotationRows->paginate($limit, ['*'], 'page', $page);
 
         $quotationIds = $quotationRows->pluck('quotation_id')->toArray();
@@ -416,7 +433,7 @@ class QuotationController extends Controller
                 ->where('item_id', $item->item_id)
                 ->first();
 
-            if ($requiredQty > $inStock) {
+            if ($requiredQty > $inStock) { 
                 $outOfStockItems[] = [
                     'item_id' => $item->item_id,
                     'item_name' => $itemData->item_name,

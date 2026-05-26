@@ -61,6 +61,13 @@ class ProductionController extends Controller
             });
         }
 
+        if ($request->filled('start_date')) {
+            $query->whereDate('prod.production_date', '>=', $request->start_date);
+        }
+        if ($request->filled('end_date')) {
+            $query->whereDate('prod.production_date', '<=', $request->end_date);
+        }
+
         $productions = $query->orderBy('prod.id', 'DESC')
             ->paginate($limit, ['*'], 'page', $page);
         foreach($productions as $pro){

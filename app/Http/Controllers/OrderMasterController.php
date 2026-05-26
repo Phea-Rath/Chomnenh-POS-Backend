@@ -42,7 +42,7 @@ class OrderMasterController extends Controller
     {
         $user = Auth::user();
         $proId = $user->profile_id;
-        $limit = (int) $request->input('limit', 10);
+        $limit = (int) $request->input('limit', 10); 
         $page = (int) $request->input('page', 1);
         $search = $request->input('search');
 
@@ -63,6 +63,25 @@ class OrderMasterController extends Controller
                     ->orWhere('cu.customer_tel', 'LIKE', "%{$search}%")
                     ->orWhere('dl.deliver_name', 'LIKE', "%{$search}%");
             });
+        }
+
+        if ($request->filled('customer_id')) {
+            $query->where('om.order_customer_id', $request->customer_id);
+        }
+        if ($request->filled('deliver_id')) {
+            $query->where('om.deliver_id', $request->deliver_id);
+        }
+        if ($request->filled('user_id')) {
+            $query->where('om.created_by', $request->user_id);
+        }
+        if ($request->filled('status')) {
+            $query->where('om.status', $request->status);
+        }
+        if ($request->filled('start_date')) {
+            $query->whereDate('om.order_date', '>=', $request->start_date);
+        }
+        if ($request->filled('end_date')) {
+            $query->whereDate('om.order_date', '<=', $request->end_date);
         }
 
         $rawOrders = $query->select('om.order_id')
@@ -276,6 +295,24 @@ class OrderMasterController extends Controller
                   ->orWhere('cu.customer_email', 'like', "%{$search}%")
                   ->orWhere('dl.deliver_name', 'like', "%{$search}%");
             });
+        })
+        ->when($request->input('customer_id'), function ($query, $customer_id) {
+            $query->where('om.order_customer_id', $customer_id);
+        })
+        ->when($request->input('deliver_id'), function ($query, $deliver_id) {
+            $query->where('om.deliver_id', $deliver_id);
+        })
+        ->when($request->input('user_id'), function ($query, $user_id) {
+            $query->where('om.created_by', $user_id);
+        })
+        ->when($request->input('status'), function ($query, $status) {
+            $query->where('om.status', $status);
+        })
+        ->when($request->input('start_date'), function ($query, $start_date) {
+            $query->whereDate('om.order_date', '>=', $start_date);
+        })
+        ->when($request->input('end_date'), function ($query, $end_date) {
+            $query->whereDate('om.order_date', '<=', $end_date);
         })
 
         ->select(
