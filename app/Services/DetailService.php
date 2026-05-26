@@ -476,66 +476,100 @@ class DetailService {
 
 
         // dd($totalQuan);
-    function calculateTotalCost($table, $item_label, $item_id, $requiredQuantity)
+    public function calculateTotalCost($table, $item_label, $item_id, $requiredQuantity)
     {
-        $resQuantity = (int)$this->quanRaws($item_id)[0]->in_stock ?? 0;
+        // FIFO -> oldest stock first
         $records = DB::table($table)
+            ->join('purchases as p', 'p.purchase_id', '=', $table.'.purchase_id')
             ->where($item_label, $item_id)
-            ->where('is_deleted', 0)
-            ->orderBy('created_at', 'desc') // rest stock first (FIFO)
+            ->where('p.is_deleted', 0)
+            ->where($table.'.quantity', '>', 0)
+            ->orderBy('p.created_at', 'asc')
             ->get();
 
-        $remaining = $resQuantity;
-        $restTotalCost = 0;
+        $remainingQty = $requiredQuantity;
+
+        $totalCost = 0;
+
+        $totalRestStock = 0;
+
+        $totalRestCost = 0;
+
         $usedRecords = [];
 
         foreach ($records as $record) {
-            if ($remaining <= 0) break;
 
-            $takeRestQty = min($record->quantity, $remaining); // only take what we need
+            $availableQty = (float)$record->quantity;
 
-            $restTotalCost += $takeRestQty * $record->item_cost;
+            // FIFO consume quantity
+            $usedQty = 0;
 
-            // Save only the quantity we actually used
+            if ($remainingQty > 0) {
+                $usedQty = min($availableQty, $remainingQty);
+            }
+
+            // Remaining stock after usage
+            $restQty = $availableQty - $usedQty;
+
+            $itemCost = (float)$record->item_cost;
+
+            // Used cost
+            $lineCost = $usedQty * $itemCost;
+
+            // Remaining cost
+            $restCost = $restQty * $itemCost;
+
+            $totalCost += $lineCost;
+
+            $totalRestStock += $restQty;
+
+            $totalRestCost += $restCost;
+
             $usedRecords[] = [
-                'detail_id' => $record->id,
-                'stock_id' => $record->stock_id,
-                'item_id' => $record->raw_material_id,
+                'detail_id' => $record->id ?? $record->detail_id,
+
+                'stock_id' => $record->stock_id ?? null,
+
+                'item_id' => $record->raw_material_id ?? $record->item_id,
+
+                'item_cost' => $itemCost,
+
+                'available_quantity' => $availableQty,
+
+                'used_quantity' => $usedQty,
+
+                'rest_quantity' => $restQty,
+
+                'line_cost' => $lineCost,
+
+                'rest_cost' => $restCost,
+
                 'created_at' => $record->created_at,
-                'item_cost' => $record->item_cost,
-                'used_quantity' => $takeRestQty,
-                'remaining_quantity' => $record->quantity - $takeRestQty,
             ];
 
-            $remaining -= $takeRestQty;
-        }
-
-
-        $sorted = collect($usedRecords)
-        ->sortBy('created_at')
-        ->values();
-
-        $remaining = $requiredQuantity;
-        $totalCost = 0;
-
-        foreach ($sorted as $row) {
-            if ($remaining <= 0) break;
-
-            $takeQty = min($row['used_quantity'], $remaining);
-            $totalCost += $takeQty * (float)$row['item_cost'];
-            $remaining -= $takeQty;
+            // Reduce remaining required quantity
+            $remainingQty -= $usedQty;
         }
 
         return [
-            'usedCount' => count($usedRecords),
-            // 'records' => $usedRecords,
-            // 'remainingQuantity' => $remaining // how much we couldn’t fulfill
             'requiredQty' => $requiredQuantity,
-            'restQuantiy' => $resQuantity,
-            'resTotalCost' => $restTotalCost,
+
+            'fulfilledQty' => $requiredQuantity - max($remainingQty, 0),
+
+            'notFulfilledQty' => max($remainingQty, 0),
+
+            // Used stock cost
             'totalCost' => $totalCost,
-            'fulfilledQty' => $requiredQuantity - $remaining,
-            'notFulfilledQty' => $remaining
+
+            // Remaining stock quantity
+            'restStock' => $totalRestStock,
+
+            // Remaining stock value
+            'restCost' => $totalRestCost,
+
+            'usedCount' => count($usedRecords),
+
+            'records' => $usedRecords,
         ];
     }
 }

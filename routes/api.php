@@ -236,6 +236,7 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::post('/sale_report', [ReportController::class, 'saleReport']);
     Route::post('/sale_report_item', [ReportController::class, 'saleReportByItem']);
     Route::post('/dashboard_filter', [DashboardController::class, 'filterDashboard']);
+    Route::get('/income-statement', [ReportController::class, 'incomeStatement']);
 
     //Q
     Route::put('/quotation_approved/{id}',[QuotationController::class, 'approved']);

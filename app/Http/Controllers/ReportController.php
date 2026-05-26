@@ -11,18 +11,21 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use App\Services\ItemService;
 use App\Services\AttributeService;
+use App\Services\DetailService;
 
 
 class ReportController extends Controller
 {
     protected $attributeService;
     protected $itemService;
+    protected $detailService;
 
 
-    public function __construct(AttributeService $attributeService, ItemService $itemService)
+    public function __construct(AttributeService $attributeService, ItemService $itemService,DetailService $detailService)
     {
         $this->attributeService = $attributeService;
         $this->itemService = $itemService;
+        $this->detailService = $detailService;
     }
 
     public function saleReport(Request $request)
@@ -1668,22 +1671,113 @@ class ReportController extends Controller
     }
 
 
-    // public function incomeStatement(Request $request){
-    //     $validated = $request->validate([
-    //         'start_date'=> 'nullable|date',
-    //         'end_date'=> 'nullable|date'
-    //     ]);
-    //     $user = Auth::user();
-    //     $proId = $user->profile_id;
+    public function incomeStatement(Request $request){
 
-    //     $revenueQuery = DB::table('order_masters as om')
-    //         ->join('users as u', 'u.id','=','om.created_by')
-    //         ->join('profiles as p', 'p.id', '=', 'u.profile_id')
-    //         ->where('om.is_deleted', 0);
-    //     if($validated['start_date']){
-    //         $revenueQuery->
-    //     }
-    // }
+        $start_date = $request->input('start_date');
+        $end_date = $request->input('end_date');
+        $user = Auth::user();
+        $proId = $user->profile_id;
+
+        $revenueQuery = DB::table('order_masters as om')
+            ->join('users as u', 'u.id','=','om.created_by')
+            ->join('profiles as p', 'p.id', '=', 'u.profile_id')
+            ->where('p.id', $proId)
+            ->where('om.is_deleted', 0)
+            ->when($start_date, function ($revenueQuery) use ($start_date) {
+                    $revenueQuery->whereDate('om.order_date', '>=', $start_date);
+            })
+            ->when($end_date, function ($revenueQuery) use ($end_date) {
+                $revenueQuery->whereDate('om.order_date', '<=', $end_date);
+            })->select(
+                DB::raw('SUM(om.order_total) as revenue')
+            )->get();
+
+        $quantityRevenue = DB::table('order_items as oi')
+            ->join('order_masters as om', 'om.order_id', '=', 'oi.order_id')
+            ->join('users as u', 'u.id','=','om.created_by')
+            ->join('profiles as p', 'p.id', '=', 'u.profile_id')
+            ->where('p.id', $proId)
+            ->where('om.is_deleted', 0)
+            ->when($start_date, function ($revenueQuery) use ($start_date) {
+                    $revenueQuery->whereDate('om.order_date', '>=', $start_date);
+            })
+            ->when($end_date, function ($revenueQuery) use ($end_date) {
+                $revenueQuery->whereDate('om.order_date', '<=', $end_date);
+            })->select(
+                'oi.item_id',
+                DB::raw('SUM(oi.quantity) as quantity')
+            )
+            ->groupBy('oi.item_id')
+            ->get();
+
+
+        $stockWaste = DB::table('stock_details as sd')
+            ->join('stock_masters as sm', 'sm.stock_id', '=', 'sd.stock_id')
+            ->join('users as u', 'u.id','=','sm.stock_created_by')
+            ->join('profiles as p', 'p.id', '=', 'u.profile_id')
+            ->where('p.id', $proId)
+            ->where('sm.stock_type_id', 4)
+            ->when($start_date, function ($stockWaste) use ($start_date) {
+                    $stockWaste->whereDate('sm.stock_date', '>=', $start_date);
+            })
+            ->when($end_date, function ($stockWaste) use ($end_date) {
+                $stockWaste->whereDate('sm.stock_date', '<=', $end_date);
+            })->select(
+                'sd.item_id',
+                DB::raw('SUM(sd.quantity) as quantity')
+            )
+            ->groupBy('sd.item_id')
+            ->get();
+
+
+        $expense = DB::table('expense_masters as em')
+            ->join('users as u', 'u.id','=','em.created_by')
+            ->join('profiles as p', 'p.id', '=', 'u.profile_id')
+            ->where('p.id', $proId)
+            ->when($start_date, function ($stockWaste) use ($start_date) {
+                    $stockWaste->whereDate('em.expense_date', '>=', $start_date);
+            })
+            ->when($end_date, function ($stockWaste) use ($end_date) {
+                $stockWaste->whereDate('em.expense_date', '<=', $end_date);
+            })->select(
+                DB::raw('SUM(em.amount) as amount')
+            )
+            ->get();
+
+        $cost = 0;
+        $waste = 0;
+        $rest_cost=0;
+        foreach($quantityRevenue as $item){
+            $cost += $this->detailService->calculateTotalCost('purchase_details', 'item_id', $item->item_id, $item->quantity)['totalCost'];
+            $rest_cost += $this->detailService->calculateTotalCost('purchase_details', 'item_id', $item->item_id, $item->quantity)['restCost'];
+        }
+        foreach($stockWaste as $item){
+            $waste += $this->detailService->calculateTotalCost('purchase_details', 'item_id', $item->item_id, $item->quantity)['totalCost'];
+        }
+
+
+        $revenue = (float)number_format($revenueQuery[0]->revenue, 2, '.','');
+        $total_cost = (float)number_format($cost-$waste, 2, '.','');
+        $cross_profit = (float)number_format($revenue-$total_cost, 2, '.','');
+        $expense_cost = (float)number_format($expense[0]->amount, 2, '.','');
+        $net_profit = (float)number_format($cross_profit-$expense_cost, 2, '.','');
+
+        return response()->json([
+            'message'=> 'Income statement get successfully',
+            'status'=>200,
+            'data'=>[
+                'revenue'=> $revenue,
+            // 'revenue_quantity'=> $quantityRevenue,
+            'total_cogs'=> (float)number_format($cost, 2, '.',''),
+            'total_wc' => (float)number_format($waste, 2, '.',''),
+            'total_cost'=> $total_cost,
+            'cross_profit'=> $cross_profit,
+            'total_rsc'=> (float)number_format($rest_cost, 2, '.',''),
+            'expense_cost'=> $expense_cost,
+            'net_profit'=>$net_profit
+            ]
+        ],200);
+    }
 }
 
 
