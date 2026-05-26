@@ -514,7 +514,7 @@ class OrderMasterController extends Controller
             'order_customer_id' => 'nullable|integer',
             'deliver_id' => 'nullable|integer',
             'through' => 'nullable|integer',
-            'term' => 'nullable|string|max:255',
+            'term' => 'nullable|integer|max:255',
             'created_by' => 'nullable|integer',
             'reference_no' => 'nullable|string|max:255',
             'sale_type' => 'nullable|string|max:255',

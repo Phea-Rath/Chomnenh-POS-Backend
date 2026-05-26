@@ -363,9 +363,11 @@ class ItemController extends Controller
 
         // Create attribute if not exists
         if (!$attributeId) {
+            $checkType = strpos($attr['value'], ',') !== false ? 'select' : 'text';
+            $attrName = $attr['name']=='color'?'colors':$attr['name'];
             $attribute = Attribute::create([
-                'name' => $attr['name'],
-                'type' => $attr['type'] ?? null,
+                'name' => $attrName,
+                'type' => $attr['name'] =='colors' ? 'select': $checkType,
                 'category_id' => $category_id,
                 'created_by' => $user->id,
             ]);
