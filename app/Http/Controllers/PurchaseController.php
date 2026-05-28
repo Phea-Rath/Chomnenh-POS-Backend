@@ -173,7 +173,7 @@ class PurchaseController extends Controller
             $price = (float) ($item->unit_price > 0 ? $item->unit_price : $item->item_cost);
 
             return [
-                'item_id' => (int) $item->id,
+                'item_id' => (int) $item->item_id,
                 'item_name' => $item->item_name,
                 'price' => $price,
                 'quantity' => (int) $item->quantity,
