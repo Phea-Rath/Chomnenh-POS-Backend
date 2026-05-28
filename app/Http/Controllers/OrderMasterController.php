@@ -308,6 +308,26 @@ class OrderMasterController extends Controller
         ->when($request->input('status'), function ($query, $status) {
             $query->where('om.status', $status);
         })
+        ->when($request->input('category_id'), function ($query, $category_id) {
+            $query->whereExists(function ($subQuery) use ($category_id) {
+                $subQuery->select(DB::raw(1))
+                    ->from('order_items as oi')
+                    ->join('items as i', 'oi.item_id', '=', 'i.item_id')
+                    ->whereColumn('oi.order_id', 'om.order_id')
+                    ->where('i.category_id', $category_id)
+                    ->where('oi.is_deleted', 0);
+            });
+        })
+        ->when($request->input('brand_id'), function ($query, $brand_id) {
+            $query->whereExists(function ($subQuery) use ($brand_id) {
+                $subQuery->select(DB::raw(1))
+                    ->from('order_items as oi')
+                    ->join('items as i', 'oi.item_id', '=', 'i.item_id')
+                    ->whereColumn('oi.order_id', 'om.order_id')
+                    ->where('i.brand_id', $brand_id)
+                    ->where('oi.is_deleted', 0);
+            });
+        })
         ->when($request->input('start_date'), function ($query, $start_date) {
             $query->whereDate('om.order_date', '>=', $start_date);
         })

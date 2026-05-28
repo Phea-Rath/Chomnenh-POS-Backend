@@ -1138,7 +1138,7 @@ class StockMasterController extends Controller
         ]);
         $items = [];
         foreach ($validated['items'] as $item) {
-            $attr = json_encode($item['attributes']);
+            // $attr = json_encode($item['attributes']);
 
 
             $items[] = StockDetails::create([
@@ -1214,7 +1214,7 @@ class StockMasterController extends Controller
         ]);
         $items = [];
         foreach ($validated['items'] as $item) {
-            $attr = json_encode($item['attributes']);
+            // $attr = json_encode($item['attributes']);
 
 
             $items[] = StockDetails::create([
@@ -1254,7 +1254,7 @@ class StockMasterController extends Controller
             'stock_remark' => 'nullable|string|max:255',
             'exchange_rate' => 'nullable|numeric',
             'items' => 'array||min:1',
-            'items.*.raw_material_id' => 'required|integer',
+            'items.*.raw_material_id' => 'required|integer|exists:raw_materials,id',
             'items.*.quantity' => 'required|integer',
             'items.*.item_cost' => 'required|numeric',
             'items.*.expire_date' => 'required|date',
