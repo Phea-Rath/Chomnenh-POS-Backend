@@ -17,7 +17,7 @@ return new class extends Migration
             $table->unsignedBigInteger('raw_material_id');
             $table->decimal('item_cost', 12, 2)->default(0);
             $table->decimal('quantity', 12, 2)->default(0);
-            $table->date('expire_date')->nullable();
+            $table->datetime('expire_date')->nullable();
             $table->dateTime('transection_date')->nullable();
             $table->boolean('is_waste')->default(false);
             $table->boolean('is_deleted')->default(false);

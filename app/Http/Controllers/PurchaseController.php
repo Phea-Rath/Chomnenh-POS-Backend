@@ -18,6 +18,9 @@ use App\Models\StockAttribute;
 use App\Models\Suppliers;
 use App\Services\DetailService;
 use App\Models\ExchangeRate;
+use App\Models\Payment;
+use App\Models\PurchaseStatus;
+use App\Models\Sipping;
 use App\Models\StockMaster;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -462,16 +465,14 @@ class PurchaseController extends Controller
         // Enrich ONLY current page purchases
         $data = collect($purchases->items())->map(function ($purchase) {
             $details = $this->detailService->purchaseDetail($purchase->purchase_id);
-
-            $payments = DB::table('purchase_payments')
-                ->where('purchase_id', $purchase->purchase_id)
-                ->where('is_deleted', 0)
-                ->get();
+            $payments = $this->detailService->purchasePayment($purchase->purchase_id);
+            $shippings = $this->detailService->purchaseShipping($purchase->purchase_id);
 
             return [
                 ...((array) $purchase),
                 'details'  => $details,
-                'payments' => $payments
+                'payments' => $payments,
+                'shippings' => $shippings
             ];
         });
 
@@ -549,15 +550,14 @@ class PurchaseController extends Controller
         // Enrich ONLY current page purchases
         $data = collect($purchases->items())->map(function ($purchase) {
             $details = $this->detailService->purchaseRawDetail($purchase->purchase_id);
-            $payments = DB::table('purchase_payments')
-                ->where('purchase_id', $purchase->purchase_id)
-                ->where('is_deleted', 0)
-                ->get();
+            $payments = $this->detailService->purchasePayment($purchase->purchase_id);
+            $shippings = $this->detailService->purchaseShipping($purchase->purchase_id);
 
             return [
                 ...((array) $purchase),
                 'details'  => $details,
-                'payments' => $payments
+                'payments' => $payments,
+                'shippings' => $shippings
             ];
         });
 
@@ -597,7 +597,19 @@ class PurchaseController extends Controller
             'items.*.item_cost'  => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
             'payments'           => 'array',
             'payments.*.amount'  => 'numeric|min:0',
-            'payments.*.paid_at' => 'date'
+            'payments.*.paid_at' => 'date',
+            'payments.*.payment_method' => 'nullable|string',
+            'payments.*.transection_id' => 'nullable|string',
+            'payments.*.remark' => 'nullable|string',
+            'shippings'  => 'nullable|array',
+            'shippings.*.fee' => 'nullable|numeric',
+            'shippings.*.carrier' => 'nullable|string',
+            'shippings.*.vai' => 'nullable|in:truck,air,sea',
+            'shippings.*.tracking_number' => 'nullable|string',
+            'shippings.*.remark' => 'nullable|string',
+            'shippings.*.term' => 'nullable|integer',
+            'shippings.*.date' => 'nullable|date',
+            'payment_status' => 'nullable|string',
         ]);
 
 
@@ -607,7 +619,8 @@ class PurchaseController extends Controller
         });
         $taxRate = (float) ($validated['tax_rate'] ?? 0);
         $taxAmount = round($subTotal * $taxRate / 100, 2);
-        $shippingFee = (float) ($validated['shipping_fee'] ?? 0);
+        $shippings = $validated['shippings'] ?? 0;
+        $shippingFee = (float) ($shippings ? collect($shippings)->sum('fee') : 0);
         $totalAmount = round($subTotal + $taxAmount + $shippingFee, 2);
         $totalPaid = (float) ($validated['total_paid'] ?? 0);
         $balance = round($totalAmount - $totalPaid, 2);
@@ -640,6 +653,7 @@ class PurchaseController extends Controller
             'invoice_number' => $validated['invoice_number'] ?? '',
             'status'        => $validated['status'],
             'created_by'    => $uid,
+            'payment_status' => $validated['payment_status'] ?? null,
         ]);
 
         $details = [];
@@ -656,11 +670,40 @@ class PurchaseController extends Controller
         $payments = [];
         if (!empty($validated['payments'])) {
             foreach ($validated['payments'] as $payment) {
-                $payments[] = PurchasePayment::create([
+                $amount = $payment['amount'] ?? 0;
+                $payment_method = $payment['payment_method'] ?? null;
+                if($amount > 0){
+                    $paymented = Payment::create([
+                        'payment_method'=>$payment_method ?? 'cash',
+                        'transection_id'=> $payment_method!='cash'?$payment['transection_id'] ?? null : null,
+                        'amount'=> (float)$amount,
+                        'remark' => $payment['remark'] ?? null,
+                        'paid_at' => $payment['paid_at'] ?? now(),
+                        'created_by'=> $uid
+                    ]);
+                    if(!empty($paymented)){
+                        $payments[] = PurchasePayment::create([
+                            'purchase_id' => $purchase->purchase_id,
+                            'payment_id'      => $paymented->payment_id,
+                            'created_by'  => $uid,
+                        ]);
+                    }
+                }
+            }
+        }
+
+        if (!empty($shippings)) {
+            foreach ($shippings as $shipping) {
+                Sipping::create([
                     'purchase_id' => $purchase->purchase_id,
-                    'amount'      => $payment['amount'],
-                    'paid_at'     => $payment['paid_at'],
-                    'created_by'  => $uid,
+                    'fee' => $shipping['fee'] ?? 0,
+                    'carrier' => $shipping['carrier'] ?? null,
+                    'vai' => $shipping['vai'] ?? null,
+                    'tracking_number' => $shipping['tracking_number'] ?? null,
+                    'remark' => $shipping['remark'] ?? null,
+                    'term' => $shipping['term'] ?? null,
+                    'date' => $shipping['date'] ?? null,
+                    'created_by' => $uid
                 ]);
             }
         }
@@ -701,6 +744,19 @@ class PurchaseController extends Controller
             'payments'           => 'array',
             'payments.*.amount'  => 'numeric|min:0',
             'payments.*.paid_at' => 'date',
+            'payments.*.payment_method' => 'nullable|string',
+            'payments.*.transection_id' => 'nullable|string',
+            'payments.*.remark' => 'nullable|string',
+            'shippings'  => 'nullable|array',
+            'shippings.*.fee' => 'nullable|numeric',
+            'shippings.*.carrier' => 'nullable|string',
+            'shippings.*.vai' => 'nullable|in:truck,air,sea',
+            'shippings.*.tracking_number' => 'nullable|string',
+            'shippings.*.remark' => 'nullable|string',
+            'shippings.*.term' => 'nullable|integer',
+            'shippings.*.date' => 'nullable|date',
+            'payment_status' => 'nullable|string',
+
         ]);
 
 
@@ -710,7 +766,8 @@ class PurchaseController extends Controller
         });
         $taxRate = (float) ($validated['tax_rate'] ?? 0);
         $taxAmount = round($subTotal * $taxRate / 100, 2);
-        $shippingFee = (float) ($validated['shipping_fee'] ?? 0);
+        $shippings = $validated['shippings'] ?? 0;
+        $shippingFee = (float) (($shippings ? collect($shippings)->sum('fee') : 0));
         $totalAmount = round($subTotal + $taxAmount + $shippingFee, 2);
         $totalPaid = (float) ($validated['total_paid'] ?? 0);
         $balance = round($totalAmount - $totalPaid, 2);
@@ -741,6 +798,7 @@ class PurchaseController extends Controller
             'invoice_number' => $validated['invoice_number'] ?? '',
             'status'        => $validated['status'],
             'created_by'    => $uid,
+            'payment_status' => $validated['payment_status'] ?? null,
         ]);
 
         $details = [];
@@ -757,11 +815,39 @@ class PurchaseController extends Controller
         $payments = [];
         if (!empty($validated['payments'])) {
             foreach ($validated['payments'] as $payment) {
-                $payments[] = PurchasePayment::create([
+                $amount = $payment['amount'] ?? 0;
+                $payment_method = $payment['payment_method'] ?? null;
+                if($amount > 0){
+                    $paymented = Payment::create([
+                        'payment_method'=>$payment_method??'cash',
+                        'transection_id'=> $payment_method!='cash'?$payment['transection_id']??null:null,
+                        'amount'=> (float)$amount,
+                        'remark' => $payment['remark']??null,
+                        'paid_at' => $payment['paid_at']??now(),
+                        'created_by'=> $uid
+                    ]);
+                    if(!empty($paymented)){
+                        $payments[] = PurchasePayment::create([
+                            'purchase_id' => $purchase->purchase_id,
+                            'payment_id'      => $paymented->payment_id,
+                            'created_by'  => $uid,
+                        ]);
+                    }
+                }
+            }
+        }
+        if (!empty($shippings)) {
+            foreach ($shippings as $shipping) {
+                Sipping::create([
                     'purchase_id' => $purchase->purchase_id,
-                    'amount'      => $payment['amount'],
-                    'paid_at'     => $payment['paid_at'],
-                    'created_by'  => $uid,
+                    'fee' => $shipping['fee'] ?? 0,
+                    'carrier' => $shipping['carrier'] ?? null,
+                    'vai' => $shipping['vai'] ?? null,
+                    'tracking_number' => $shipping['tracking_number'] ?? null,
+                    'remark' => $shipping['remark'] ?? null,
+                    'term' => $shipping['term'] ?? null,
+                    'date' => $shipping['date'] ?? null,
+                    'created_by' => $uid
                 ]);
             }
         }
@@ -793,19 +879,16 @@ class PurchaseController extends Controller
         }
 
         $details = $this->detailService->purchaseDetail($purchase->purchase_id);
-
-        $payments = DB::table('purchase_payments')
-            ->select('id', 'amount', 'paid_at')
-            ->where('purchase_id', $purchase->purchase_id)
-            ->where('is_deleted', 0)
-            ->get();
+        $payments = $this->detailService->purchasePayment($purchase->purchase_id);
+        $shippings = $this->detailService->purchaseShipping($purchase->purchase_id);
 
         // Merge purchase info with details + payments
         $data = array_merge(
             $purchase->toArray(),
             [
                 'details'  => $details,
-                'payments' => $payments
+                'payments' => $payments,
+                'shippings' => $shippings
             ]
         );
 
@@ -833,20 +916,16 @@ class PurchaseController extends Controller
 
 
         $details = $this->detailService->purchaseRawDetail($purchase->purchase_id);
-        // dd($details);
-
-        $payments = DB::table('purchase_payments')
-            ->select('id', 'amount', 'paid_at')
-            ->where('purchase_id', $purchase->purchase_id)
-            ->where('is_deleted', 0)
-            ->get();
+        $payments = $this->detailService->purchasePayment($purchase->purchase_id);
+        $shippings = $this->detailService->purchaseShipping($purchase->purchase_id);
 
         // Merge purchase info with details + payments
         $data = array_merge(
             $purchase->toArray(),
             [
                 'details'  => $details,
-                'payments' => $payments
+                'payments' => $payments,
+                'shippings' => $shippings
             ]
         );
 
@@ -892,7 +971,20 @@ class PurchaseController extends Controller
             'items.*.item_cost' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
             'payments'           => 'array',
             'payments.*.amount'  => 'numeric|min:0',
-            'payments.*.paid_at' => 'date'
+            'payments.*.paid_at' => 'date',
+            'payments.*.payment_method' => 'nullable|string',
+            'payments.*.transection_id' => 'nullable|string',
+            'payments.*.remark' => 'nullable|string',
+            'shippings'  => 'nullable|array',
+            'shippings.*.fee' => 'nullable|numeric',
+            'shippings.*.carrier' => 'nullable|string',
+            'shippings.*.vai' => 'nullable|in:truck,air,sea',
+            'shippings.*.tracking_number' => 'nullable|string',
+            'shippings.*.remark' => 'nullable|string',
+            'shippings.*.term' => 'nullable|integer',
+            'shippings.*.date' => 'nullable|date',
+            'payment_status' => 'nullable|string',
+
         ]);
 
         // return response()->json([
@@ -906,7 +998,8 @@ class PurchaseController extends Controller
         });
         $taxRate = (float) ($validated['tax_rate'] ?? 0);
         $taxAmount = round($subTotal * $taxRate / 100, 2);
-        $shippingFee = (float) ($validated['shipping_fee'] ?? 0);
+        $shippings = $validated['shippings'] ?? 0;
+        $shippingFee = (float) (($shippings ? collect($shippings)->sum('fee') : 0));
         $totalAmount = round($subTotal + $taxAmount + $shippingFee, 2);
         $totalPaid = (float) ($validated['total_paid'] ?? 0);
         $balance = round($totalAmount - $totalPaid, 2);
@@ -924,6 +1017,7 @@ class PurchaseController extends Controller
             'exchange_rate' => $validated['exchange_rate'] ?? $purchase->exchange_rate,
             'invoice_number' => $validated['invoice_number'] ?? $purchase->invoice_number,
             'status'        => $validated['status'],
+            'payment_status' => $validated['payment_status'] ?? $purchase->payment_status,
         ]);
 
         PurchaseDetail::where('purchase_id', $id)->delete();
@@ -939,23 +1033,93 @@ class PurchaseController extends Controller
                 'subtotal'    => $item['quantity'] * $item['item_cost'],
             ]);
         }
-        PurchasePayment::where('purchase_id', $id)->delete();
+        $paymentIds = PurchasePayment::where('purchase_id', $id)
+            ->pluck('payment_id');
+
+        // Payment::whereIn('payment_id', $paymentIds)->delete();
+
+        // PurchasePayment::where('purchase_id', $id)->delete();
 
         $payments = [];
         if (!empty($validated['payments'])) {
             foreach ($validated['payments'] as $payment) {
-                $payments[] = PurchasePayment::create([
-                    'purchase_id' => $id,
-                    'amount'      => $payment['amount'],
-                    'paid_at'     => $payment['paid_at'],
-                    'created_by'  => $uid,
-                ]);
+                $amount = (int)$payment['amount']??0;
+                $payment_method = $payment['payment_method']??null;
+                if($amount > 0){
+                    $existingPayment = count($paymentIds) > 0 ? Payment::where('payment_id', $paymentIds[count($paymentIds)-1])->first() : null;
+                    if($existingPayment){
+                        $paymented = $existingPayment->update([
+                            'payment_method'=>$payment_method??'cash',
+                            'transection_id'=> $payment_method!='cash'?$payment['transection_id']??null:null,
+                            'amount'=> (float)$amount,
+                            'remark' => $payment['remark']??null,
+                            'paid_at' => $payment['paid_at']??now(),
+                            'created_by'=> $uid
+                        ]);
+                    } else {
+                        $paymented = Payment::create([
+                            'payment_method'=>$payment_method??'cash',
+                            'transection_id'=> $payment_method!='cash'?$payment['transection_id']??null:null,
+                            'amount'=> (float)$amount,
+                            'remark' => $payment['remark']??null,
+                            'paid_at' => $payment['paid_at']??now(),
+                            'created_by'=> $uid
+                        ]);
+                        if(!empty($paymented)){
+                            $payments[] = PurchasePayment::create([
+                                'purchase_id' => $id,
+                                'payment_id'      => $paymented->payment_id,
+                                'created_by'  => $uid,
+                            ]);
+                        }
+                    }
+                }
+            }
+        }
+        if($paymented){
+            $total_paid = count($paymentIds) > 0 ? Payment::whereIn('payment_id', $paymentIds)->select(DB::raw('SUM(amount) as total_payment'))->first()->total_payment : $paymented->amount;
+            $purchase->update([
+                'total_paid' => $total_paid,
+                'balance' => (float)$purchase->total_amount - (float)$total_paid,
+            ]);
+        }
+
+        if (!empty($shippings)) {
+            $shippingData = Sipping::where('purchase_id', $id)->first();
+            // return response()->json($shipping, 404);
+            if(!empty($shippingData)){
+                foreach ($shippings as $shipping) {
+                    $shippingData->update([
+                        'fee' => $shipping['fee'] ?? 0,
+                        'carrier' => $shipping['carrier'] ?? null,
+                        'vai' => $shipping['vai'] ?? null,
+                        'tracking_number' => $shipping['tracking_number'] ?? null,
+                        'remark' => $shipping['remark'] ?? null,
+                        'term' => $shipping['term'] ?? null,
+                        'date' => $shipping['date'] ?? null,
+                    ]);
+                }
+            }else{
+                foreach ($shippings as $shipping) {
+                    Sipping::create([
+                        'purchase_id' => $id,
+                        'fee' => $shipping['fee'] ?? 0,
+                        'carrier' => $shipping['carrier'] ?? null,
+                        'vai' => $shipping['vai'] ?? null,
+                        'tracking_number' => $shipping['tracking_number'] ?? null,
+                        'remark' => $shipping['remark'] ?? null,
+                        'term' => $shipping['term'] ?? null,
+                        'date' => $shipping['date'] ?? null,
+                        'created_by'=>$uid
+                    ]);
+                }
             }
         }
 
         return response()->json([
             'message' => 'Purchase updated successfully',
             'status'  => 200,
+            'data'    => $validated['payments'] ?? []
         ]);
     }
 
@@ -994,7 +1158,19 @@ class PurchaseController extends Controller
             'items.*.item_cost' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
             'payments'           => 'array',
             'payments.*.amount'  => 'numeric|min:0',
-            'payments.*.paid_at' => 'date'
+            'payments.*.paid_at' => 'date',
+            'payments.*.payment_method' => 'nullable|string',
+            'payments.*.transection_id' => 'nullable|string',
+            'payments.*.remark' => 'nullable|string',
+            'shippings'  => 'nullable|array',
+            'shippings.*.fee' => 'nullable|numeric',
+            'shippings.*.carrier' => 'nullable|string',
+            'shippings.*.vai' => 'nullable|in:truck,air,sea',
+            'shippings.*.tracking_number' => 'nullable|string',
+            'shippings.*.remark' => 'nullable|string',
+            'shippings.*.term' => 'nullable|integer',
+            'shippings.*.date' => 'nullable|date',
+            'payment_status' => 'nullable|string',
         ]);
 
         $subTotal = collect($validated['items'])->sum(function ($item) {
@@ -1002,7 +1178,8 @@ class PurchaseController extends Controller
         });
         $taxRate = (float) ($validated['tax_rate'] ?? 0);
         $taxAmount = round($subTotal * $taxRate / 100, 2);
-        $shippingFee = (float) ($validated['shipping_fee'] ?? 0);
+        $shippings = $validated['shippings'] ?? 0;
+        $shippingFee = (float) (($shippings ? collect($shippings)->sum('fee') : 0));
         $totalAmount = round($subTotal + $taxAmount + $shippingFee, 2);
         $totalPaid = (float) ($validated['total_paid'] ?? 0);
         $balance = round($totalAmount - $totalPaid, 2);
@@ -1020,6 +1197,7 @@ class PurchaseController extends Controller
             'exchange_rate' => $validated['exchange_rate'] ?? $purchase->exchange_rate,
             'invoice_number' => $validated['invoice_number'] ?? $purchase->invoice_number,
             'status'        => $validated['status'],
+            'payment_status' => $validated['payment_status'] ?? $purchase->payment_status,
         ]);
 
         PurchaseRawDetail::where('purchase_id', $id)->delete();
@@ -1034,17 +1212,86 @@ class PurchaseController extends Controller
                 'subtotal'    => $item['quantity'] * $item['item_cost'],
             ]);
         }
-        PurchasePayment::where('purchase_id', $id)->delete();
+
+        $paymentIds = PurchasePayment::where('purchase_id', $id)
+            ->pluck('payment_id');
+
+        // Payment::whereIn('payment_id', $paymentIds)->delete();
+
+        // PurchasePayment::where('purchase_id', $id)->delete();
 
         $payments = [];
         if (!empty($validated['payments'])) {
             foreach ($validated['payments'] as $payment) {
-                $payments[] = PurchasePayment::create([
-                    'purchase_id' => $purchase->purchase_id,
-                    'amount'      => $payment['amount'],
-                    'paid_at'     => $payment['paid_at'],
-                    'created_by'  => $uid,
-                ]);
+                $amount = $payment['amount']??0;
+                $payment_method = $payment['payment_method']??null;
+                if($amount > 0){
+                    $existingPayment = count($paymentIds) > 0 ? Payment::where('payment_id', $paymentIds[count($paymentIds)-1])->first() : null;
+                    if($existingPayment){
+                        $paymented = $existingPayment->update([
+                            'payment_method'=>$payment_method??'cash',
+                            'transection_id'=> $payment_method!='cash'?$payment['transection_id']??null:null,
+                            'amount'=> (float)$amount,
+                            'remark' => $payment['remark']??null,
+                            'paid_at' => $payment['paid_at']??now(),
+                            'created_by'=> $uid
+                        ]);
+                    } else {
+                        $paymented = Payment::create([
+                            'payment_method'=>$payment_method??'cash',
+                            'transection_id'=> $payment_method!='cash'?$payment['transection_id']??null:null,
+                            'amount'=> (float)$amount,
+                            'remark' => $payment['remark']??null,
+                            'paid_at' => $payment['paid_at']??now(),
+                            'created_by'=> $uid
+                        ]);
+                        if(!empty($paymented)){
+                            $payments[] = PurchasePayment::create([
+                                'purchase_id' => $id,
+                                'payment_id'      => $paymented->payment_id,
+                                'created_by'  => $uid,
+                            ]);
+                        }
+                    }
+                }
+            }
+        }
+        if($paymented){
+            $total_paid = count($paymentIds) > 0 ? Payment::whereIn('payment_id', $paymentIds)->select(DB::raw('SUM(amount) as total_payment'))->first()->total_payment : $paymented->amount;
+            $purchase->update([
+                'total_paid' => $total_paid,
+                'balance' => (float)$purchase->total_amount - (float)$total_paid,
+            ]);
+        }
+
+        if (!empty($shippings)) {
+            $shippingData = Sipping::where('purchase_id', $id)->first();
+            if(!empty($shippingData)){
+                foreach ($shippings as $shipping) {
+                    $shippingData->update([
+                        'fee' => $shipping['fee'] ?? 0,
+                        'carrier' => $shipping['carrier'] ?? null,
+                        'vai' => $shipping['vai'] ?? null,
+                        'tracking_number' => $shipping['tracking_number'] ?? null,
+                        'remark' => $shipping['remark'] ?? null,
+                        'term' => $shipping['term'] ?? null,
+                        'date' => $shipping['date'] ?? null,
+                    ]);
+                }
+            }else{
+                foreach ($shippings as $shipping) {
+                    Sipping::create([
+                        'purchase_id' => $id,
+                        'fee' => $shipping['fee'] ?? 0,
+                        'carrier' => $shipping['carrier'] ?? null,
+                        'vai' => $shipping['vai'] ?? null,
+                        'tracking_number' => $shipping['tracking_number'] ?? null,
+                        'remark' => $shipping['remark'] ?? null,
+                        'term' => $shipping['term'] ?? null,
+                        'date' => $shipping['date'] ?? null,
+                        'created_by'=>$uid
+                    ]);
+                }
             }
         }
 
@@ -1113,6 +1360,8 @@ class PurchaseController extends Controller
 
     public function purchaseCancel($id)
     {
+        $user = Auth::user();
+        $uid = $user->id;
         $purchase = Purchase::find($id);
         if($purchase->status == 1){
             return response()->json([
@@ -1126,6 +1375,11 @@ class PurchaseController extends Controller
                 'status'  => 404
             ]);
         }
+        PurchaseStatus::create([
+            'purchase_id' => $id,
+            'status' => 'cancelled',
+            'created_by' => $uid,
+        ]);
         $purchase->update([
             'status' => 2,
         ]);
@@ -1136,6 +1390,8 @@ class PurchaseController extends Controller
     }
     public function purchaseUncancel($id)
     {
+        $user = Auth::user();
+        $uid = $user->id;
         $purchase = Purchase::find($id);
         if (!$purchase) {
             return response()->json([
@@ -1143,6 +1399,11 @@ class PurchaseController extends Controller
                 'status'  => 404
             ]);
         }
+        PurchaseStatus::create([
+            'purchase_id' => $id,
+            'status' => 'cancelled',
+            'created_by' => $uid,
+        ]);
         $purchase->status = 0;
         $purchase->save();
         return response()->json([
@@ -1172,7 +1433,7 @@ class PurchaseController extends Controller
         // Use DB transaction for atomicity
         DB::beginTransaction();
         try {
-            $purchaseDB->update(['status' => 1]);
+
 
             $user = Auth::user();
             $uid = $user->id;
@@ -1237,6 +1498,12 @@ class PurchaseController extends Controller
                 ]);
 
             }
+            PurchaseStatus::create([
+                'purchase_id' => $id,
+                'status' => 'confirmed',
+                'created_by' => $uid,
+            ]);
+            $purchaseDB->update(['status' => 1]);
 
             DB::commit();
             return response()->json([
@@ -1277,7 +1544,6 @@ class PurchaseController extends Controller
         // Use DB transaction for atomicity
         DB::beginTransaction();
         try {
-            $purchaseDB->update(['status' => 1]);
 
             $user = Auth::user();
             $uid = $user->id;
@@ -1338,6 +1604,14 @@ class PurchaseController extends Controller
 
             }
 
+
+            PurchaseStatus::create([
+                'purchase_id' => $id,
+                'status' => 'confirmed',
+                'created_by' => $uid,
+            ]);
+            $purchaseDB->update(['status' => 1]);
+
             DB::commit();
             return response()->json([
                 'message' => 'Purchase confirmed and items inserted into stock successfully',
@@ -1367,8 +1641,10 @@ class PurchaseController extends Controller
         }
 
         $validated = $request->validate([
-            'amount'  => 'required|numeric|min:0',
-            'paid_at' => 'required|date'
+            'payment_method' => 'nullable|string',
+            'transection_id' => 'nullable|string',
+            'amount'=> 'nullable|numeric',
+            'paid_at' => 'nullable|date',
         ]);
 
         $user = Auth::user();
@@ -1386,12 +1662,24 @@ class PurchaseController extends Controller
             ], 400);
         }
 
-        PurchasePayment::create([
-            'purchase_id' => $id,
-            'amount'      => $validated['amount'],
-            'paid_at'     => $validated['paid_at'],
-            'created_by'  => $uid,
-        ]);
+        $payment_method = $validated['payment_method']??'cash';
+        $amount = $validated['amount']??0;
+        if((float)$amount > 0){
+            $paymented = Payment::create([
+                'payment_method'=>$payment_method??'cash',
+                'transection_id'=> $payment_method!='cash'?$validated['transection_id']??null:null,
+                'amount'=> (float)$amount,
+                'remark' => $validated['remark']??null,
+                'paid_at' => $validated['paid_at']??now(),
+                'created_by'=> $uid
+            ]);
+            if(!empty($paymented)){
+                PurchasePayment::create([
+                    'purchase_id'=> $id,
+                    'payment_id'=> $paymented->payment_id,
+                ]);
+            }
+        }
 
         // Update total_paid and balance in purchases table
         $purchase->total_paid += $validated['amount'];

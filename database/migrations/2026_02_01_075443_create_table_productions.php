@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::create('productions', function (Blueprint $table) {
             $table->id();
             $table->string('production_no')->unique();
-            $table->date('production_date');
+            $table->dateTime('production_date');
             $table->unsignedBigInteger('item_id');
             $table->decimal('quantity', 15, 2);
             $table->decimal('total_cost', 15, 2)->nullable();

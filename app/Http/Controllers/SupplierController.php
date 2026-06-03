@@ -10,9 +10,11 @@ use Illuminate\Support\Facades\Auth;
 
 class SupplierController extends Controller
 {
-    public function __construct(private PostImage $postImage)
-    {
-    }
+    protected $postImage;
+	public function __construct(PostImage $postImage)
+	{
+        $this->postImage = $postImage;
+	}
 
     public function index()
     {
@@ -82,8 +84,9 @@ class SupplierController extends Controller
         $imageName = null;
         if ($request->hasFile('image')) {
             $file = $request->file('image');
-            $imageName = time() . '.' . $file->getClientOriginalExtension();
-            $file->storeAs('public/images', $imageName);
+            $imageName = $this->postImage->uploadSingle($file);
+            // $imageName = time() . '.' . $file->getClientOriginalExtension();
+            // $file->storeAs('public/images', $imageName);
         }
         $data = Suppliers::create([
             'supplier_name' => $validated['supplier_name'],
@@ -182,8 +185,7 @@ class SupplierController extends Controller
         $imageName = null;
         if ($request->hasFile('image')&&!empty($validated["image"])) {
             $file = $request->file('image');
-            $imageName = time() . '.' . $file->getClientOriginalExtension();
-            $file->storeAs('public/images', $imageName);
+            $imageName = $this->postImage->replaceSingle($supplier->image, $file);
         }
 
 
@@ -239,6 +241,7 @@ class SupplierController extends Controller
             ]);
         }
 
+        $this->postImage->deleteSingle($supplier->image);
         $supplier->is_deleted = 1;
         $supplier->save();
 
@@ -284,7 +287,7 @@ class SupplierController extends Controller
 			'data.*.address' => 'nullable|string|max:255',
 		]);
 		$suppliers = $request->data;
-		
+
 		$user = Auth::user();
 		$uid = $user->id;
 		$proId = $user->profile_id;

@@ -1757,7 +1757,7 @@ class ReportController extends Controller
 
 
         $revenue = (float)number_format($revenueQuery[0]->revenue, 2, '.','');
-        $total_cost = (float)number_format($cost-$waste, 2, '.','');
+        $total_cost = (float)number_format($cost - $waste, 2, '.','');
         $cross_profit = (float)number_format($revenue-$total_cost, 2, '.','');
         $expense_cost = (float)number_format($expense[0]->amount, 2, '.','');
         $net_profit = (float)number_format($cross_profit-$expense_cost, 2, '.','');

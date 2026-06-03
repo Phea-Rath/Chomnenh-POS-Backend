@@ -24,23 +24,25 @@ return new class extends Migration
             $table->string("image")->nullable();
             $table->boolean("is_deleted")->default(0);
             $table->rememberToken();
-            $table->date("login_at")->nullable();
+            $table->dateTime("login_at")->nullable();
+            $table->string('email', 50)->nullable();
+            $table->string('telegram_id', 50)->nullable();
             $table->timestamps();
             $table->foreign("profile_id")->references('id')->on("profiles")->onDelete('cascade');
             $table->foreign("role_id")->references('role_id')->on("roles");
         });
 
-        \App\Models\Users::create([
-            'username' => 'superadmin',
-            'profile_id' => 1,
-            'phone_number' => '0979772133',
-            'password' => bcrypt('12345678'), // hashed password
-            'role_id' => 1,
-            'role' => 'superadmin',
-            'status' => 1,
-            'created_by' => 0,
-            'image' => null, // path or filename
-        ]);
+        // \App\Models\Users::create([
+        //     'username' => 'superadmin',
+        //     'profile_id' => 1,
+        //     'phone_number' => '0979772133',
+        //     'password' => bcrypt('12345678'), // hashed password
+        //     'role_id' => 1,
+        //     'role' => 'superadmin',
+        //     'status' => 1,
+        //     'created_by' => 0,
+        //     'image' => null, // path or filename
+        // ]);
     }
 
     /**

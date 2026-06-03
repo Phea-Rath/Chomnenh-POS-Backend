@@ -383,7 +383,7 @@ class ProductionController extends Controller
             'quantity' => 'required|integer|min:1',
             'total_cost' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
             'raw_materials' => 'required|array|min:1',
-            'raw_materials.*.raw_material_id' => 'required|integer|exists:items,item_id',
+            'raw_materials.*.raw_material_id' => 'required|integer|exists:raw_materials,id',
             'raw_materials.*.quantity' => 'required|numeric|min:0.01',
             'raw_materials.*.cost_per_unit' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
         ]);
@@ -407,7 +407,7 @@ class ProductionController extends Controller
 
                 $details[] = ProductionDetail::create([
                     'production_id' => $id,
-                    'item_id' => $material['raw_material_id'],
+                    'raw_material_id' => $material['raw_material_id'],
                     'quantity' => $material['quantity'],
                     'cost_per_unit' => $material['cost_per_unit'],
                     'total_cost' => $totalMaterialCost,

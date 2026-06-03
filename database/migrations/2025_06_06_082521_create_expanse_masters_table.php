@@ -15,7 +15,7 @@ return new class extends Migration
              Schema::create('expense_masters', function (Blueprint $table) {
             $table->increments("expense_id");
             $table->string("expense_no");
-            $table->date("expense_date");
+            $table->dateTime("expense_date");
             $table->string("expense_by");
             $table->double("amount");
             $table->integer("created_by");

@@ -11,8 +11,10 @@ use Illuminate\Support\Facades\Auth;
 
 class CustomerController extends Controller
 {
-	public function __construct(private PostImage $postImage)
+    protected $postImage;
+	public function __construct(PostImage $postImage)
 	{
+        $this->postImage = $postImage;
 	}
 
 	public function index()
@@ -81,8 +83,9 @@ class CustomerController extends Controller
 		$imageName = null;
         if ($request->hasFile('image')) {
             $file = $request->file('image');
-            $imageName = time() . '.' . $file->getClientOriginalExtension();
-            $file->storeAs('public/images', $imageName);
+            $imageName = $this->postImage->uploadSingle($file);
+            // $imageName = time() . '.' . $file->getClientOriginalExtension();
+            // $file->storeAs('public/images', $imageName);
         }
 		$data = Customers::create([
 			'customer_name' => $validated['customer_name'],
@@ -172,8 +175,7 @@ class CustomerController extends Controller
 		$imageName = null;
         if ($request->hasFile('image')) {
             $file = $request->file('image');
-            $imageName = time() . '.' . $file->getClientOriginalExtension();
-            $file->storeAs('public/images', $imageName);
+            $imageName = $this->postImage->replaceSingle($customers->image, $file);
         }
 		if($imageName){
 		$customers->update([
@@ -226,6 +228,7 @@ class CustomerController extends Controller
 				"message" => "This customer not found!",
 			], 404);
 		}
+        $this->postImage->deleteSingle($customers->image);
 		$customers->is_deleted = 1;
 		$customers->save();
 		return response()->json([
@@ -270,7 +273,7 @@ class CustomerController extends Controller
 			'data.*.address' => 'nullable|string|max:255',
 		]);
 		$customers = $request->data;
-		
+
 		$user = Auth::user();
 		$uid = $user->id;
 		$proId = $user->profile_id;

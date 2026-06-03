@@ -15,7 +15,7 @@ return new class extends Migration
             $table->id('purchase_id');
             $table->string('purchase_no', 50)->nullable();
             $table->unsignedInteger('supplier_id');
-            $table->date('purchase_date')->nullable();
+            $table->dateTime('purchase_date')->nullable();
             $table->decimal('sub_total', 10, 2)->default(0);
             $table->decimal('tax_rate', 5, 2)->default(0);
             $table->decimal('tax_amount', 10, 2)->default(0);
@@ -28,6 +28,7 @@ return new class extends Migration
             $table->unsignedBigInteger('created_by')->nullable();
             $table->decimal('exchange_rate', 10, 2)->default(1);
             $table->string('invoice_number', 50)->nullable();
+            $table->string('payment_status', 100)->nullable();
             $table->tinyInteger('status')->default(0);
             $table->foreign('supplier_id')->references('supplier_id')->on('suppliers');
             $table->timestamps();

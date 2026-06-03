@@ -28,7 +28,8 @@ class Purchase extends Model
         'invoice_number',
         'status',
         'updated_by',
-        'is_deleted'
+        'is_deleted',
+        'payment_status'
     ];
 
     public function details()

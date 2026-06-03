@@ -15,7 +15,6 @@ return new class extends Migration
             $table->id();
             $table->unsignedBigInteger("order_id");
             $table->unsignedBigInteger("item_id");
-            $table->string("item_name");
             $table->decimal("price", 20, 2);
             $table->decimal("item_price", 20, 2);
             $table->decimal("discount", 20, 2)->default(0);

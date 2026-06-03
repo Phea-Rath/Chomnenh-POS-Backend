@@ -25,6 +25,7 @@ return new class extends Migration
             $table->string('village_id')->nullable();
             $table->string('supplier_tel')->nullable();
             $table->string('supplier_email')->nullable();
+            $table->string('description')->nullable();
             $table->integer('created_by');
             $table->string('image')->nullable();
             $table->string('is_deleted')->default(0);

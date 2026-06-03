@@ -21,33 +21,33 @@ return new class extends Migration
             $table->timestamps();
         });
 
-        Warehouses::insert([
-            [
-                'warehouse_name' => 'main stock',
-                'status' => 'stock',
-                'created_by' => 1
-            ],
-            [
-                'warehouse_name' => 'PO',
-                'status' => 'stock',
-                'created_by' => 1
-            ],
-            [
-                'warehouse_name' => 'sale stock',
-                'status' => 'stock',
-                'created_by' => 1
-            ],
-            [
-                'warehouse_name' => 'waste stock',
-                'status' => 'stock',
-                'created_by' => 1
-            ],
-            [
-                'warehouse_name' => 'production stock',
-                'status' => 'stock',
-                'created_by' => 1
-            ]
-        ]);
+        // Warehouses::insert([
+        //     [
+        //         'warehouse_name' => 'main stock',
+        //         'status' => 'stock',
+        //         'created_by' => 1
+        //     ],
+        //     [
+        //         'warehouse_name' => 'PO',
+        //         'status' => 'stock',
+        //         'created_by' => 1
+        //     ],
+        //     [
+        //         'warehouse_name' => 'sale stock',
+        //         'status' => 'stock',
+        //         'created_by' => 1
+        //     ],
+        //     [
+        //         'warehouse_name' => 'waste stock',
+        //         'status' => 'stock',
+        //         'created_by' => 1
+        //     ],
+        //     [
+        //         'warehouse_name' => 'production stock',
+        //         'status' => 'stock',
+        //         'created_by' => 1
+        //     ]
+        // ]);
     }
 
     /**

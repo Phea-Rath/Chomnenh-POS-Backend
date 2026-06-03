@@ -41,6 +41,12 @@ $app->singleton(
     App\Exceptions\Handler::class
 );
 
+// $app->withMiddleware(function ($middleware) {
+//     $middleware->alias([
+//         'performance' => \App\Http\Middleware\ApiPerformanceMiddleware::class,
+//     ]);
+// });
+
 /*
 |--------------------------------------------------------------------------
 | Return The Application

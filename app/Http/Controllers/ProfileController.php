@@ -156,7 +156,7 @@ class ProfileController extends Controller
     public function getByUser(string $id)
     {
 
-        $profile = Profile::join('users', 'profiles.id', '=', 'users.profile_id')
+        $profile = DB::table('profiles')->join('users', 'profiles.id', '=', 'users.profile_id')
             ->where('users.id', $id)
             ->where('profiles.is_deleted', 0)
             // ->where('created_by', $proId)

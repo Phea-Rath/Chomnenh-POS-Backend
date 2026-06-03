@@ -521,20 +521,22 @@ class ItemController extends Controller
                     'barcode' => $barcode,
                 ]);
 
-                foreach ($files as $file) {
-                    $filename = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
-                    $file->storeAs('public/images', $filename);
-                    $storedImages[] = $filename;
-                    $image = Image::create([
-                        'image' => $filename,
-                    ]);
+                // foreach ($files as $file) {
+                //     $filename = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
+                //     $file->storeAs('public/images', $filename);
+                //     $storedImages[] = $filename;
+                //     $image = Image::create([
+                //         'image' => $filename,
+                //     ]);
 
-                    $image = ItemImage::create([
-                        'item_id' => $items->item_id,
-                        'image_id' => $image->id,
-                    ]);
-                }
-                $storedImageValue = json_encode($storedImages);
+                //     $image = ItemImage::create([
+                //         'item_id' => $items->item_id,
+                //         'image_id' => $image->id,
+                //     ]);
+                // }
+                // $storedImageValue = json_encode($storedImages);
+
+                $this->postImage->attachItemImages($items->item_id, $files);
 
 
         } else {
@@ -614,51 +616,54 @@ class ItemController extends Controller
         $storedImageValue = $items->item_image; // default: keep existing
         if ($request->hasFile('item_images')) {
             $files = $request->file('item_images');
-            $filenames = [];
-            $directory = 'public/images';
 
-            if (!Storage::exists($directory)) {
-                Storage::makeDirectory($directory);
-            }
+            $imageIds = ($validated['edit_image_id']=="null"?[]:$validated['edit_image_id']);
+            $this->postImage->replaceItemImages($imageIds, $id, $files);
+            // $filenames = [];
+            // $directory = 'public/images';
 
-            foreach ($files as $file) {
-                $filename = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
-                $path = $file->storeAs($directory, $filename);
-                if (!$path) {
-                    return response()->json([
-                        'message' => 'Failed to upload one of the images',
-                    ], 500);
-                }
-                $filenames[] = $filename;
-                $image = Image::create([
-                    'image' => $filename,
-                ]);
+            // if (!Storage::exists($directory)) {
+            //     Storage::makeDirectory($directory);
+            // }
 
-                $image = ItemImage::create([
-                    'item_id' => $items->item_id,
-                    'image_id' => $image->id,
-                ]);
-            }
+            // foreach ($files as $file) {
+            //     $filename = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
+            //     $path = $file->storeAs($directory, $filename);
+            //     if (!$path) {
+            //         return response()->json([
+            //             'message' => 'Failed to upload one of the images',
+            //         ], 500);
+            //     }
+            //     $filenames[] = $filename;
+            //     $image = Image::create([
+            //         'image' => $filename,
+            //     ]);
 
-            // delete previous images if present
-            if ($items->item_image) {
-                $existing = json_decode($items->item_image, true);
-                if (is_array($existing)) {
-                    foreach ($existing as $old) {
-                        $oldPath = public_path('storage/images/' . $old);
-                        if (file_exists($oldPath)) {
-                            @unlink($oldPath);
-                        }
-                    }
-                } else {
-                    $oldPath = public_path('storage/images/' . $items->item_image);
-                    if (file_exists($oldPath)) {
-                        @unlink($oldPath);
-                    }
-                }
-            }
+            //     $image = ItemImage::create([
+            //         'item_id' => $items->item_id,
+            //         'image_id' => $image->id,
+            //     ]);
+            // }
 
-            $storedImageValue = json_encode($filenames);
+            // // delete previous images if present
+            // if ($items->item_image) {
+            //     $existing = json_decode($items->item_image, true);
+            //     if (is_array($existing)) {
+            //         foreach ($existing as $old) {
+            //             $oldPath = public_path('storage/images/' . $old);
+            //             if (file_exists($oldPath)) {
+            //                 @unlink($oldPath);
+            //             }
+            //         }
+            //     } else {
+            //         $oldPath = public_path('storage/images/' . $items->item_image);
+            //         if (file_exists($oldPath)) {
+            //             @unlink($oldPath);
+            //         }
+            //     }
+            // }
+
+            // $storedImageValue = json_encode($filenames);
         }
 
         // Update item fields
@@ -705,7 +710,7 @@ class ItemController extends Controller
                 "message" => "This item not found!",
             ], 404);
         }
-
+        $this->postImage->deleteItemImagesByItemId($id);
         $item->is_deleted = 1;
         $item->save();
         return response()->json([
@@ -743,26 +748,16 @@ class ItemController extends Controller
             ], 404);
         }
 
-        $imageIds = DB::table('item_images')->where('item_id', $id)->pluck('image_id');
-        $images = DB::table('images')->whereIn('id', $imageIds)->select('image')->get();
+
+        $this->postImage->deleteItemImagesByItemId($id);
+
+        $item->delete();
 
 
-
-
-        if (count($images) > 0) {
-            $item->delete();
-            foreach($images as $i){
-                $imagePath = public_path('storage/images/' . $i->image);
-                if (file_exists($imagePath)) {
-                    unlink($imagePath);
-                    // dd($imagePath);
-                }
-            }
-            return response()->json([
-                "message" => "Item deleted successfully",
-                "status" => 200,
-            ], 200);
-}
+        return response()->json([
+            "message" => "Item deleted successfully",
+            "status" => 200,
+        ], 200);
     }
 
     public function updateImage(Request $request, string $id)

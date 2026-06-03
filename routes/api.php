@@ -64,15 +64,15 @@ Route::get('sale-item-marketplace', [orderPageController::class, 'saleItemMarket
 Route::get('item-marketplace/{id}', [ItemController::class, 'show']);
 Route::get('/profile-by-id/{id}', [ProfileController::class, 'show']);
 Route::get('/test-telegram', [TelegramService::class, 'testTelegram']);
-Route::get('/stock-raw/{id}', [StockMasterController::class, 'showRaw']);
-Route::get('stock_masters/{id}', [StockMasterController::class, 'show']);
-Route::get('order_masters/{id}', [OrderMasterController::class, 'show']);
-Route::get('purchase/{id}', [PurchaseController::class, 'show']);
-Route::get('production/{id}', [ProductionController::class, 'show']);
-Route::get('profile-by-user/{id}', [ProfileController::class, 'getByUser']);
 
 Broadcast::routes(['middleware' => ['auth:sanctum']]);
 Route::group(['middleware' => ['auth:sanctum']], function () {
+    Route::get('/stock-raw/{id}', [StockMasterController::class, 'showRaw']);
+    Route::get('stock_masters/{id}', [StockMasterController::class, 'show']);
+    Route::get('order_masters/{id}', [OrderMasterController::class, 'show']);
+    Route::get('purchase/{id}', [PurchaseController::class, 'show']);
+    Route::get('production/{id}', [ProductionController::class, 'show']);
+    Route::get('profile-by-user/{id}', [ProfileController::class, 'getByUser']);
     Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');
     Route::post('aba-checkout', [PaymentController::class, 'getPaymentLink'])->middleware('auth:sanctum');
     Route::get('aba-callback', [PaymentController::class, 'callback'])->middleware('auth:sanctum');
@@ -296,4 +296,7 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
                 });
 
     Route::get('/total-cost/{quan}/{id}', [\App\Http\Controllers\StockDetailController::class, 'TotalCost']);
+    Route::get('/top-seller', [OrderMasterController::class, 'topThereUserOrder']);
+    Route::get('/top-raw-materials', [DashboardController::class, 'topRawMaterials']);
+    Route::get('/top-items', [DashboardController::class, 'topItems']);
 });

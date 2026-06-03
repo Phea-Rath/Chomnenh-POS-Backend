@@ -24,7 +24,7 @@ return new class extends Migration
                   ->default(0)
                   ->comment('រយៈពេល (ថ្ងៃ)');
 
-            $table->date('date_term')
+            $table->dateTime('date_term')
                   ->nullable()
                   ->comment('កាលបរិច្ឆេទផុតកំណត់');
 

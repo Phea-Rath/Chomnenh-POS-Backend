@@ -11,6 +11,7 @@ use KHQR\Models\IndividualInfo;
 use KHQR\Config\Constants;
 use KHQR\Helpers\KHQRData;
 use App\Services\AbaPayWayService;
+use Http;
 
 class PaymentController extends Controller
 {
@@ -21,22 +22,46 @@ class PaymentController extends Controller
         $proId = $user->profile_id;
         $profile = DB::table('profiles')->find($proId);
 
-        $amount =1?? $request->input('amount', 1.00);
-        $currency = $request->input('currency', 'USD') === 'KHR'
-            ? KHQRData::CURRENCY_KHR
-            : KHQRData::CURRENCY_USD;
+        $apiUrl = env('BAKONG_GENERATE_QR_URL', 'https://api.bakongrelay.com/v1/generate_qr');
+        // dd($apiUrl);
 
-        // 2. Build the KHQR individual/merchant details payload
-        $individualInfo = new IndividualInfo(
-            bakongAccountID: 'tep_phhearat@bkrt',
-            merchantName: 'Ratha Yen',
-            merchantCity: 'Phnom Penh',
-            currency: $currency,
-            amount: $amount
-        );
+        $amount = 100 ?? $request->input('amount', 1.00);
+        $response = Http::withHeaders([
+            'content-type' => 'application/json',
+        ])->post($apiUrl, [
+            "account_id"=> "tep_phhearat@bkrt",
+            "bank_account" => "tep_phhearat@bkrt",
+            "merchant_name" => "TEP PHEARAT",
+            "merchant_city" => "Phnom Penh",
+            "amount" => $amount,
+            "currency" => "KHR",
+            "expiration" => 300, // QR code validity in seconds
+        ]);
+        if ($response->failed()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to connect to Bakong Server.'
+            ], 500);
+        }
 
-        // 3. Generate the response string and its MD5 hash
-        $khqrResponse = BakongKHQR::generateIndividual($individualInfo);
+        $result = $response->json();
+        // 3. Verify status code (0 means success)
+        if (isset($result['responseCode']) && $result['responseCode'] === 0) {
+            // This will exactly produce the raw string you provided
+            $qrString = $result['data']['qr'];
+
+            return response()->json([
+                'success' => true,
+                'qr' => $qrString,
+                'md5' => $result['data']['md5'], // For transaction tracking
+                'qr_image_url' => 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=' . urlencode($qrString)
+            ]);
+        }
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to build standard KHQR structure.'
+        ], 400);
         // dd($khqrResponse);
         if (($khqrResponse->status['code'] ?? null) === 0) {
             $qrString = $khqrResponse->data['qr'];
@@ -104,22 +129,39 @@ class PaymentController extends Controller
     public function verifyPayment($md5)
     {
         try {
-            $token = env('BAKONG_TOKEN');
-            if (!$token) {
-                return response()->json(['message' => 'Missing BAKONG_TOKEN'], 500);
+
+            $token = env('BAKONG_TOKEN','eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJkYXRhIjp7ImlkIjoiZWMyZGViMGU5YmYwNGMxMiJ9LCJpYXQiOjE3ODA0NjI0NjgsImV4cCI6MTc4ODIzODQ2OH0.R9ZxWBTpCbOlieFyzj8uk9ev04aKU01qy40hwLGh0uY');
+            $apiUrl = env('BAKONG_API_URL', 'https://api-bakong.nbc.gov.kh');
+
+            // Send an authorized request to Bakong API
+            $response = Http::withHeaders([
+                'Authorization' => $token,
+                'Content-Type' => 'application/json'
+            ])->post($apiUrl . '/v1/check_transaction_by_md5', [
+                'md5' => $md5
+            ]);
+
+            if ($response->failed()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to connect to Bakong Server.'
+                ], 500);
             }
 
-            $bakong = new BakongKHQR($token);
-            $result = $bakong->checkTransactionByMD5($md5);
+            $result = $response->json();
 
-            $responseCode = $result['responseCode'] ?? null;
-            $statusCode = $result['status']['code'] ?? null;
-            $isPaid = ($responseCode === 0 || $responseCode === '0' || $statusCode === 0 || $statusCode === '0');
+            // Bakong API usually returns status code 0 for a successfully processed transaction
+            if (isset($result['responseCode']) && $result['responseCode'] === 0) {
+                return response()->json([
+                    'paid' => true,
+                    'message' => 'Payment received successfully!',
+                    'data' => $result['data']
+                ]);
+            }
 
             return response()->json([
-                'status' => $isPaid ? 'PAID' : 'PENDING',
-                'detail' => $result['data'] ?? null,
-                'raw' => $result,
+                'paid' => false,
+                'message' => 'Payment is still pending.'
             ]);
         } catch (\Exception $e) {
             Log::error("Bakong Verify Error: " . $e->getMessage());

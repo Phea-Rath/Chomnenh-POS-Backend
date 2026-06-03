@@ -212,9 +212,9 @@ class orderPageController extends Controller
         if ($items->isEmpty()) {
             return response()->json([
                 'message' => 'No items found',
-                'status' => 404,
+                'status' => 200,
                 'data' => []
-            ], 404);
+            ], 200);
         }
 
         $itemIds = $pageItems->pluck('item_id')->filter()->unique()->toArray();

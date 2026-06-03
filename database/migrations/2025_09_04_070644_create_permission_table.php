@@ -33,7 +33,7 @@ return new class extends Migration
         ];
 
 
-        Permission::insert($permissions);
+        // Permission::insert($permissions);
     }
 
     /**

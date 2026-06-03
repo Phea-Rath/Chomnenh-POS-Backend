@@ -16,7 +16,7 @@ return new class extends Migration
             $table->string("order_no");
             $table->string("order_tel")->nullable();
             $table->string("order_address")->nullable();
-            $table->date("order_date");
+            $table->dateTime("order_date");
             $table->double("delivery_fee")->default(0);
             $table->unsignedInteger("deliver_id")->nullable();
             $table->integer("through")->nullable();
@@ -24,25 +24,17 @@ return new class extends Migration
             $table->double("order_discount");
             $table->string("sale_type");//'sale, wholesale'
             $table->unsignedInteger("order_customer_id")->default(0);
-            $table->string("order_payment_method");
             $table->string("order_payment_status");
             $table->double("order_total");
-            $table->date("due_date")->nullable();
+            $table->dateTime("due_date")->nullable();
             $table->string('reference_no')->nullable();
             $table->double("order_tax")->default(0);
+            $table->int("status")->default(1);
             $table->double("exchange_rate")->default(4000);
+            $table->double("payment")->default(0);
             $table->double("balance");
             $table->double("term")->default(0);
-            $table->double("payment");
             $table->unsignedBigInteger("created_by");
-            $table->integer("status")->default(1);
-                // 1. pending
-                // 2. editing
-                // 3. packaged
-                // 4. pickup
-                // 5. delivering
-                // 6. completed
-                // 7. cancelled
             $table->boolean("is_active")->default(true);
             $table->boolean("is_deleted")->default(0);
             $table->boolean("online")->default(0);

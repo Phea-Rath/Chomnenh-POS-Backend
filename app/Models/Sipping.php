@@ -2,19 +2,23 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class PurchasePayment extends Model
+class Sipping extends Model
 {
-    use HasFactory;
-    protected $table = 'purchase_payments';
+    protected $table = 'shipping';
+
     protected $fillable = [
         'purchase_id',
-        'payment_id',
+        'tracking_number',
+        'carrier',
+        'fee',
+        'vai',
+        'remark',
+        'term',
+        'date',
+        'created_by'
     ];
-
-    public $timestamps = false;
 
     public function purchase()
     {

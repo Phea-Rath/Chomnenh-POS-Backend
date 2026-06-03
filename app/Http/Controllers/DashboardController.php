@@ -499,4 +499,145 @@ class DashboardController extends Controller
 
         return (float) $query->sum($sumColumn);
     }
+
+
+
+    public function topItems(Request $request)
+    {
+        $filters = $this->dashboardFilters($request);
+        $operation = $request->input('operation', 'sale');
+        $filterBy = $request->input('filter', 'price');
+        $limit = $request->input('limit', 5);
+
+        [$startDate, $endDate] = $this->resolveOptionalRange($filters);
+        $proId = Auth::user()->profile_id;
+
+        $query = match ($operation) {
+            'sale' => DB::table('order_items as oi')
+                ->join('order_masters as om', 'oi.order_id', '=', 'om.order_id')
+                ->join('users as u', 'om.created_by', '=', 'u.id')
+                ->where('oi.is_deleted', 0)
+                ->where('om.is_deleted', 0)
+                ->whereIn('om.status', self::SALE_STATUSES)
+                ->where('u.profile_id', $proId)
+                ->when($startDate && $endDate, fn($q) => $q->whereBetween('om.order_date', [$startDate->format('Y-m-d H:i:s'), $endDate->format('Y-m-d H:i:s')]))
+                ->select('oi.item_id', 'oi.item_name', DB::raw('SUM(oi.quantity) as quantity'), DB::raw('SUM(oi.price) as price'))
+                ->groupBy('oi.item_id', 'oi.item_name'),
+
+            'purchase' => DB::table('purchase_details as pd')
+                ->join('purchases as p', 'pd.purchase_id', '=', 'p.purchase_id')
+                ->join('users as u', 'p.created_by', '=', 'u.id')
+                ->where('pd.is_deleted', 0)
+                ->where('p.is_deleted', 0)
+                ->where('u.profile_id', $proId)
+                ->when($startDate && $endDate, fn($q) => $q->whereBetween('p.purchase_date', [$startDate->format('Y-m-d H:i:s'), $endDate->format('Y-m-d H:i:s')]))
+                ->select('pd.item_id', 'pd.item_name', DB::raw('SUM(pd.quantity) as quantity'), DB::raw('SUM(pd.subtotal) as price'))
+                ->groupBy('pd.item_id', 'pd.item_name'),
+
+            'stock' => DB::table('stock_details as sd')
+                ->join('stock_masters as sm', 'sd.stock_id', '=', 'sm.stock_id')
+                ->join('users as u', 'sm.stock_created_by', '=', 'u.id')
+                ->join('items as i', 'sd.item_id', '=', 'i.item_id')
+                ->where('sd.is_deleted', 0)
+                ->where('sm.stock_type_id', 2) // In
+                ->where('u.profile_id', $proId)
+                ->when($startDate && $endDate, fn($q) => $q->whereBetween('sm.stock_date', [$startDate->format('Y-m-d H:i:s'), $endDate->format('Y-m-d H:i:s')]))
+                ->select('sd.item_id', 'i.item_name', DB::raw('SUM(sd.quantity) as quantity'), DB::raw('SUM(sd.quantity * sd.item_cost) as price'))
+                ->groupBy('sd.item_id', 'i.item_name'),
+
+            'production' => DB::table('productions as pr')
+                ->join('items as i', 'pr.item_id', '=', 'i.item_id')
+                ->join('users as u', 'pr.created_by', '=', 'u.id')
+                ->where('pr.is_deleted', 0)
+                ->where('u.profile_id', $proId)
+                ->when($startDate && $endDate, fn($q) => $q->whereBetween('pr.production_date', [$startDate->format('Y-m-d H:i:s'), $endDate->format('Y-m-d H:i:s')]))
+                ->select('pr.item_id', 'i.item_name', DB::raw('SUM(pr.quantity) as quantity'), DB::raw('SUM(pr.total_cost) as price'))
+                ->groupBy('pr.item_id', 'i.item_name'),
+
+            default => null
+        };
+
+        if (!$query) {
+            return response()->json([
+                'status' => 400,
+                'message' => 'Invalid operation type provided'
+            ], 400);
+        }
+
+        $items = $query->orderByDesc($filterBy === 'quantity' ? 'quantity' : 'price')
+            ->limit($limit)
+            ->get();
+
+        return response()->json([
+            'status' => 200,
+            'message' => 'Top items fetched successfully',
+            'data' => $items,
+        ]);
+    }
+
+    public function topRawMaterials(Request $request)
+    {
+        $filters = $this->dashboardFilters($request);
+        $operation = $request->input('operation', 'purchase');
+        $filterBy = $request->input('filter', 'price');
+        $limit = $request->input('limit', 5);
+
+        [$startDate, $endDate] = $this->resolveOptionalRange($filters);
+        $proId = Auth::user()->profile_id;
+
+        $query = match ($operation) {
+            'purchase' => DB::table('purchase_raw_details as prd')
+                ->join('purchases as p', 'prd.purchase_id', '=', 'p.purchase_id')
+                ->join('raw_materials as rm', 'prd.raw_material_id', '=', 'rm.id')
+                ->join('users as u', 'p.created_by', '=', 'u.id')
+                ->where('prd.is_deleted', 0)
+                ->where('p.is_deleted', 0)
+                ->where('u.profile_id', $proId)
+                ->when($startDate && $endDate, fn($q) => $q->whereBetween('p.purchase_date', [$startDate->format('Y-m-d H:i:s'), $endDate->format('Y-m-d H:i:s')]))
+                ->select('prd.raw_material_id as material_id', 'rm.material_name', DB::raw('SUM(prd.quantity) as quantity'), DB::raw('SUM(prd.subtotal) as price'))
+                ->groupBy('prd.raw_material_id', 'rm.material_name'),
+
+            'stock' => DB::table('stock_raw_details as srd')
+                ->join('stock_masters as sm', 'srd.stock_id', '=', 'sm.stock_id')
+                ->join('raw_materials as rm', 'srd.raw_material_id', '=', 'rm.id')
+                ->join('users as u', 'sm.stock_created_by', '=', 'u.id')
+                ->where('srd.is_deleted', 0)
+                ->where('sm.is_deleted', 0)
+                ->where('sm.stock_type_id', 2) // In
+                ->where('u.profile_id', $proId)
+                ->when($startDate && $endDate, fn($q) => $q->whereBetween('sm.stock_date', [$startDate->format('Y-m-d H:i:s'), $endDate->format('Y-m-d H:i:s')]))
+                ->select('srd.raw_material_id as material_id', 'rm.material_name', DB::raw('SUM(srd.quantity) as quantity'), DB::raw('SUM(srd.quantity * srd.item_cost) as price'))
+                ->groupBy('srd.raw_material_id', 'rm.material_name'),
+
+            'production' => DB::table('production_details as pd')
+                ->join('productions as pr', 'pd.production_id', '=', 'pr.id')
+                ->join('raw_materials as rm', 'pd.raw_material_id', '=', 'rm.id')
+                ->join('users as u', 'pr.created_by', '=', 'u.id')
+                ->where('pd.is_deleted', 0)
+                ->where('pr.is_deleted', 0)
+                ->where('u.profile_id', $proId)
+                ->when($startDate && $endDate, fn($q) => $q->whereBetween('pr.production_date', [$startDate->format('Y-m-d H:i:s'), $endDate->format('Y-m-d H:i:s')]))
+                ->select('pd.raw_material_id as material_id', 'rm.material_name', DB::raw('SUM(pd.quantity) as quantity'), DB::raw('SUM(pd.total_cost) as price'))
+                ->groupBy('pd.raw_material_id', 'rm.material_name'),
+
+            default => null
+        };
+
+        if (!$query) {
+            return response()->json([
+                'status' => 400,
+                'message' => 'Invalid operation type provided'
+            ], 400);
+        }
+
+        $materials = $query->orderByDesc($filterBy === 'quantity' ? 'quantity' : 'price')
+            ->limit($limit)
+            ->get();
+
+        return response()->json([
+            'status' => 200,
+            'message' => 'Top raw materials fetched successfully',
+            'data' => $materials,
+        ]);
+    }
 }

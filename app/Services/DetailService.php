@@ -291,6 +291,47 @@ class DetailService {
         return $purchase_detail;
     }
 
+    public function purchasePayment(string $id){
+        $payments = DB::table('purchase_payments as  pp')
+                ->join('payments as p','pp.payment_id', '=', 'p.payment_id')
+                ->where('pp.purchase_id', $id)
+                ->select(
+                    'p.amount',
+                    'p.payment_method',
+                    'p.transection_id',
+                    'p.remark',
+                    'p.paid_at',
+                    'p.created_at',
+                )
+                ->get();
+
+        return $payments;
+    }
+
+    public function purchaseShipping(string $id){
+        $shippings = DB::table('shipping')
+                ->where('purchase_id', $id)->first();
+
+        return $shippings;
+    }
+
+    public function orderPayment(string $id){
+        $payments = DB::table('order_payments as  pp')
+                ->join('payments as p','pp.payment_id', '=', 'p.payment_id')
+                ->where('pp.order_id', $id)
+                ->select(
+                    'p.amount',
+                    'p.payment_method',
+                    'p.transection_id',
+                    'p.remark',
+                    'p.paid_at',
+                    'p.created_at',
+                )
+                ->get();
+
+        return $payments;
+    }
+
     public function orderDetailById($id) {
         // $user = Auth::user();
         // $uid = $user->id;

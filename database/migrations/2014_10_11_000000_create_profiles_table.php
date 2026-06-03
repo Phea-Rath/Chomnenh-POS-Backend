@@ -19,7 +19,7 @@ return new class extends Migration
             $table->string("telephone");
             $table->string("qr_code")->nullable();
             $table->string("address")->nullable();
-            $table->date("start_date");
+            $table->dateTime("start_date");
             $table->integer("term");
             $table->date("end_date");
             $table->integer("created_by");
