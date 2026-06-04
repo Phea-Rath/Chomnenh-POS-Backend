@@ -916,8 +916,8 @@ class ItemController extends Controller
                 }
                 foreach($items as $index => $item){
                     $matchedData = $dataByCode[$item->material_code] ?? null;
-                    $quantity = $matchedData['quantity'] ?? 0;
-                    $cost = $matchedData['cost'] ?? null;
+                    $quantity = (int)str_replace(',', '', $matchedData['quantity'] ?? 0);
+                    $cost = (float)str_replace(',', '', $matchedData['cost'] ?? 0);
                     $result[] = [
                         'id' => $item->material_id,
                         'code' => $item->material_code,
@@ -939,15 +939,15 @@ class ItemController extends Controller
                 }
                 foreach($items as $index => $item){
                     $matchedData = $dataByCode[$item->item_code] ?? null;
-                    $quantity = (int)$matchedData['quantity'] ?? 0;
-                    $cost = (float)$matchedData['cost'] ?? null;
+                    $quantity = (int)str_replace(',', '', $matchedData['quantity'] ?? 0);
+                    $cost = (float)str_replace(',', '', $matchedData['cost'] ?? 0);
                     $result[] = [
                         'id' => $item->item_id,
                         'code' => $item->item_code,
                         'name' => $item->item_name,
                         'price' => $item->item_price,
-                        'quantity' =>(int)$quantity,
-                        'cost' => (float)$cost ?? $item->item_cost,
+                        'quantity' =>$quantity,
+                        'cost' => $cost ?? $item->item_cost,
                     ];
                 }
             }
@@ -997,8 +997,8 @@ class ItemController extends Controller
             }
             foreach($items as $index => $item){
                 $matchedData = $dataByCode[$item->item_code] ?? null;
-                $quantity = (int)$matchedData['quantity'] ?? 0;
-                $price = (float)$matchedData['price'] ?? 0;
+                $quantity = (int)str_replace(',', '', $matchedData['quantity']) ?? 0;
+                $price = (float)str_replace(',', '', $matchedData['price']) ?? 0;
                 $result[] = [
                     'id' => $item->item_id,
                     'code' => $item->item_code,
