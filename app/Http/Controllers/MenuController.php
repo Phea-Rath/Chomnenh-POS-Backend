@@ -4,11 +4,17 @@ namespace App\Http\Controllers;
 
 use App\Models\Menus;
 use App\Models\Permission;
+use App\Services\PostImage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class MenuController extends Controller
 {
+    protected $postImage;
+    function __construct(PostImage $postImage)
+    {
+        $this->postImage = $postImage;
+    }
     public function index()
     {
         $allMenus = Menus::orderBy('order_menu', 'asc')->get();
@@ -239,7 +245,7 @@ class MenuController extends Controller
         ]);
     }
     public function getMenuSettingByUserId($id){
-        $user = 
+        $user =
         $permissions = Permission::where('user_id', $id)->pluck('menu_id');
         $query = Menus::select('menu_id', 'menu_name', 'menu_icon', 'menu_path', 'order_menu')
         ->orderBy('order_menu', 'asc');
@@ -319,8 +325,7 @@ class MenuController extends Controller
         $imageName = null;
         if ($request->hasFile('menu_icon')) {
             $file = $request->file('menu_icon');
-            $imageName = time() . '.' . $file->getClientOriginalExtension();
-            $file->storeAs('public/images', $imageName);
+            $this->postImage->uploadSingle($file);
         }
         $menu = Menus::create([
             'menu_name' => $validated['menu_name'],
@@ -361,8 +366,8 @@ class MenuController extends Controller
         $imageName = null;
         if ($request->hasFile('menu_icon')) {
             $file = $request->file('menu_icon');
-            $imageName = time() . '.' . $file->getClientOriginalExtension();
-            $file->storeAs('public/images', $imageName);
+
+            $this->postImage->replaceSingle($menu->menu_icon, $file);
         }
         if($imageName){
             $menu->update([
