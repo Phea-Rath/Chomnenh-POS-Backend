@@ -40,12 +40,21 @@ class RawMaterialController extends Controller
         $limit = $request->input('limit', 10);
         $page = $request->input('page', 1);
         $search = $request->input('search', '');
+        $filter = $request->input('filter', 'all');
+        $supplierId = $request->input('supplier_id', 0);
 
          $query = DB::table('raw_materials')
             ->leftJoin('users', 'users.id', '=', 'raw_materials.created_by')
             ->leftJoin('profiles', 'users.profile_id', '=', 'profiles.id')
             ->where('profiles.id', $proId)
             ->where('raw_materials.is_deleted', 0);
+
+        if ($filter == 'supplier' && $supplierId != 0) {
+            $query->join('purchase_raw_details', 'purchase_raw_details.raw_material_id', '=', 'raw_materials.id')
+                ->join('purchases', 'purchases.purchase_id', '=', 'purchase_raw_details.purchase_id')
+                ->where('purchases.supplier_id', $supplierId)
+                ->distinct();
+        }
 
         // 2. Add Search Logic (Conditional)
         if (!empty($search)) {

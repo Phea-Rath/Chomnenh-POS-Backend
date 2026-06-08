@@ -292,6 +292,8 @@ class ItemController extends Controller
         $page = $request->input('page', 1);
         $categoryId = $request->input('category_id', 0);
         $brandId = $request->input('brand_id', 0);
+        $filter = $request->input('filter', 'all');
+        $supplierId = $request->input('supplier_id', 0);
 
 
         // 1. Capture the search term
@@ -304,6 +306,13 @@ class ItemController extends Controller
             ->where('profiles.id', $proId)
             ->where('items.item_type', 0)
             ->where('items.is_deleted', 0);
+
+        if ($filter == 'supplier' && $supplierId != 0) {
+            $query->join('purchase_details', 'purchase_details.item_id', '=', 'items.item_id')
+                ->join('purchases', 'purchases.purchase_id', '=', 'purchase_details.purchase_id')
+                ->where('purchases.supplier_id', $supplierId)
+                ->distinct();
+        }
 
         // 2. Add Search Logic (Conditional)
         if (!empty($search)) {
@@ -1026,4 +1035,6 @@ class ItemController extends Controller
             ], 500);
         }
     }
+
+    
 }

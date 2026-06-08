@@ -255,10 +255,14 @@ class StockMasterController extends Controller
             ->join('stock_types as st', 'sm.stock_type_id', '=', 'st.stock_type_id')
             ->join('users as s', 'sm.stock_created_by', '=', 's.id')
             ->join('profiles as p', 's.profile_id', '=', 'p.id')
+            ->leftJoin('users as r', 'sm.received_by', '=', 'r.id')
+            ->leftJoin('users as a', 'sm.approved_by', '=', 'a.id')
             ->select(
                 'from_w.warehouse_name as from_warehouse_name',
                 'to_w.warehouse_name as to_warehouse_name',
                 's.username as created_by_name',
+                'r.username as received_by_name',
+                'a.username as approved_by_name',
                 'st.stock_type_name',
                 'sm.*'
             )
@@ -326,10 +330,14 @@ class StockMasterController extends Controller
             ->join('stock_types as st', 'sm.stock_type_id', '=', 'st.stock_type_id')
             ->join('users as s', 'sm.stock_created_by', '=', 's.id')
             ->join('profiles as p', 's.profile_id', '=', 'p.id')
+            ->leftJoin('users as r', 'sm.received_by', '=', 'r.id')
+            ->leftJoin('users as a', 'sm.approved_by', '=', 'a.id')
             ->select(
                 'from_w.warehouse_name as from_warehouse_name',
                 'to_w.warehouse_name as to_warehouse_name',
                 's.username as created_by_name',
+                'r.username as received_by_name',
+                'a.username as approved_by_name',
                 'st.stock_type_name',
                 'sm.*'
             )
@@ -1097,6 +1105,8 @@ class StockMasterController extends Controller
             // 'from_warehouse' => 'required|integer',
             'warehouse_id' => 'required|integer|exists:warehouses,warehouse_id',
             'stock_remark' => 'nullable|string|max:255',
+            'received_by' => 'nullable|integer|exists:users,id',
+            'approved_by' => 'nullable|integer|exists:users,id',
             'items' => 'array||min:1',
             'items.*.item_id' => 'required|integer|exists:items,item_id',
             'items.*.quantity' => 'required|integer',
@@ -1135,6 +1145,8 @@ class StockMasterController extends Controller
             'stock_remark' => $validated['stock_remark'],
             'exchange_rate' => $exchange_rate->usd_to_khr ?? 4000,
             'stock_created_by' => $uid,
+            'received_by' => $validated['received_by'] ?? null,
+            'approved_by' => $validated['approved_by'] ?? null,
         ]);
         $items = [];
         foreach ($validated['items'] as $item) {
@@ -1175,6 +1187,8 @@ class StockMasterController extends Controller
             'from_warehouse' => 'required|integer',
             'warehouse_id' => 'required|integer|exists:warehouses,warehouse_id',
             'stock_remark' => 'nullable|string|max:255',
+            'received_by' => 'nullable|integer|exists:users,id',
+            'approved_by' => 'nullable|integer|exists:users,id',
             'items' => 'array||min:1',
             'items.*.item_id' => 'required|integer|exists:items,item_id',
             'items.*.quantity' => 'required|integer',
@@ -1211,6 +1225,8 @@ class StockMasterController extends Controller
             'stock_remark' => $validated['stock_remark'],
             'exchange_rate' => $exchange_rate->usd_to_khr ?? 4000,
             'stock_created_by' => $uid,
+            'received_by' => $validated['received_by'] ?? null,
+            'approved_by' => $validated['approved_by'] ?? null,
         ]);
         $items = [];
         foreach ($validated['items'] as $item) {
@@ -1252,6 +1268,8 @@ class StockMasterController extends Controller
             // 'from_warehouse' => 'required|integer',
             'warehouse_id' => 'required|integer',
             'stock_remark' => 'nullable|string|max:255',
+            'received_by' => 'nullable|integer|exists:users,id',
+            'approved_by' => 'nullable|integer|exists:users,id',
             'exchange_rate' => 'nullable|numeric',
             'items' => 'array||min:1',
             'items.*.raw_material_id' => 'required|integer|exists:raw_materials,id',
@@ -1299,6 +1317,8 @@ class StockMasterController extends Controller
             'stock_remark' => $validated['stock_remark'],
             'exchange_rate' => $validated['exchange_rate'] ?? $exchange_rate->usd_to_khr,
             'stock_created_by' => $uid,
+            'received_by' => $validated['received_by'] ?? null,
+            'approved_by' => $validated['approved_by'] ?? null,
         ]);
         $items = [];
         foreach ($validated['items'] as $item) {
@@ -1466,6 +1486,8 @@ class StockMasterController extends Controller
             'warehouse_id' => 'required|integer|exists:warehouses,warehouse_id',
             'stock_date' => 'required|date',
             'stock_remark' => 'nullable|string|max:255',
+            'received_by' => 'nullable|integer|exists:users,id',
+            'approved_by' => 'nullable|integer|exists:users,id',
             'items' => 'array||min:1',
             'items.*.item_id' => 'required|integer|exists:items,item_id',
             'items.*.quantity' => 'required|integer',
@@ -1487,6 +1509,8 @@ class StockMasterController extends Controller
             'stock_date' => $validated['stock_date'],
             'quantity' => array_sum(array_column($validated['items'], 'quantity')),
             'stock_remark' => $validated['stock_remark'],
+            'received_by' => $validated['received_by'] ?? null,
+            'approved_by' => $validated['approved_by'] ?? null,
             // 'stock_created_by'=> $validated['stock_created_by'],
         ]);
 
@@ -1534,6 +1558,8 @@ class StockMasterController extends Controller
             'warehouse_id' => 'required|integer|exists:warehouses,warehouse_id',
             'stock_date' => 'required|date',
             'stock_remark' => 'nullable|string|max:255',
+            'received_by' => 'nullable|integer|exists:users,id',
+            'approved_by' => 'nullable|integer|exists:users,id',
             'items' => 'array||min:1',
             'items.*.item_id' => 'required|integer|exists:items,item_id',
             'items.*.quantity' => 'required|integer',
@@ -1554,6 +1580,8 @@ class StockMasterController extends Controller
             'stock_date' => $validated['stock_date'],
             'quantity' => array_sum(array_column($validated['items'], 'quantity')),
             'stock_remark' => $validated['stock_remark'],
+            'received_by' => $validated['received_by'] ?? null,
+            'approved_by' => $validated['approved_by'] ?? null,
             // 'stock_created_by'=> $validated['stock_created_by'],
         ]);
 
@@ -1603,6 +1631,8 @@ class StockMasterController extends Controller
             'warehouse_id' => 'required|integer',
             'stock_date' => 'required|date',
             'stock_remark' => 'required|string|max:255',
+            'received_by' => 'nullable|integer|exists:users,id',
+            'approved_by' => 'nullable|integer|exists:users,id',
             'exchange_rate' => 'nullable|numeric',
             'items' => 'array||min:1',
             'items.*.raw_material_id' => 'required|integer',
@@ -1627,6 +1657,8 @@ class StockMasterController extends Controller
             'stock_date' => $validated['stock_date'],
             'quantity' => array_sum(array_column($validated['items'], 'quantity')),
             'stock_remark' => $validated['stock_remark'],
+            'received_by' => $validated['received_by'] ?? null,
+            'approved_by' => $validated['approved_by'] ?? null,
         ]);
 
 

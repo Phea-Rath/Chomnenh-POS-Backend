@@ -299,4 +299,8 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::get('/top-seller', [OrderMasterController::class, 'topThereUserOrder']);
     Route::get('/top-raw-materials', [DashboardController::class, 'topRawMaterials']);
     Route::get('/top-items', [DashboardController::class, 'topItems']);
+
+    Route::get('/menu-website-current-user',[PermissionController::class, 'getPermissionMenuByCurrentUserV2']);
+    Route::get('/menu-website-by-user/{id}',[PermissionController::class, 'getPermissionMenuByUserV2']);
+    Route::post('/allow-permission',[PermissionController::class, 'updateAllow']);
 });

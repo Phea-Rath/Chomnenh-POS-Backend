@@ -310,6 +310,13 @@ class DetailService {
 
     public function purchaseShipping(string $id){
         $shippings = DB::table('shipping')
+            ->select(
+                'shipping.purchase_id',
+                'shipping.carrier',
+                'shipping.vai',
+                'shipping.fee',
+                'tracking_number'
+            )
                 ->where('purchase_id', $id)->first();
 
         return $shippings;

@@ -189,25 +189,25 @@ class OrderMasterController extends Controller
             ->where('oi.is_deleted', 0)
             ->select(
                 'oi.id',
-                'oi.item_name',
                 'oi.item_id',
                 'oi.item_price',
                 'oi.quantity',
                 'oi.discount',
                 'oi.price',
                 'i.item_code',
+                'i.item_name',
                 DB::raw('MIN(im.id) as first_image_id'),
                 DB::raw('MIN(im.image) as first_image')
             )
             ->groupBy(
                 'oi.id',
-                'oi.item_name',
                 'oi.item_id',
                 'oi.item_price',
                 'oi.quantity',
                 'oi.discount',
                 'oi.price',
-                'i.item_code'
+                'i.item_code',
+                'i.item_name'
             )
             ->orderBy('oi.id', 'asc')
             ->get();
@@ -578,7 +578,6 @@ class OrderMasterController extends Controller
             'order_tel' => 'nullable|string|max:255',
             'order_address' => 'nullable|string|max:255',
             'order_payment_status' => 'nullable|string|max:255',
-            'order_payment_method' => 'nullable|string|max:255',
             'order_date' => 'nullable|date|max:255',
             'status' => 'required|integer',
             'order_customer_id' => 'nullable|integer',
@@ -586,19 +585,22 @@ class OrderMasterController extends Controller
             'through' => 'nullable|integer',
             'term' => 'nullable|integer|max:255',
             'created_by' => 'nullable|integer',
-            'remark' => 'nullable|string|max:255',
             'reference_no' => 'nullable|string|max:255',
-            'transection_id' => 'nullable|string|max:255',
             'sale_type' => 'nullable|string|max:255',
             'delivery_fee' => 'nullable|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
             'order_tax' => 'nullable|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
-            'payment' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
             'items' => 'required|array|min:1',
             'items.*.item_id' => 'required|integer|exists:items,item_id',
-            'items.*.item_for' => 'nullable|string|in:sale,sample,free',
             'items.*.item_price' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
             'items.*.quantity' => 'required|integer',
+            'items.*.item_for' => 'nullable|string|in:sale,sample,free',
             'items.*.discount' => 'nullable|numeric|min:0',
+            'payments'           => 'nullable||array',
+            'payments.*.amount'  => 'numeric|min:0',
+            'payments.*.paid_at' => 'date',
+            'payments.*.payment_method' => 'nullable|string',
+            'payments.*.transection_id' => 'nullable|string',
+            'payments.*.remark' => 'nullable|string'
         ]);
         $order_date =  $order_date?? $now->format('Y-m-d');
         // dd($validated);
@@ -613,7 +615,8 @@ class OrderMasterController extends Controller
         $taxAmount = (float) ($validated['order_tax'] ?? 0);
         $deliveryFee = (float) $validated['delivery_fee'];
         $grandTotal = round($subTotal - $discountAmount + $taxAmount + $deliveryFee, 2);
-        $payment = (float) $validated['payment'];
+        $payments = $validated['payments'] ?? 0;
+        $payment = $payments? collect($payments)->sum('amount'): 0 ;
         $balance = round($grandTotal - $payment, 2);
 
         $online = $validated['online'] ?? 0;
@@ -650,20 +653,22 @@ class OrderMasterController extends Controller
             'created_by' => $created_by,
         ]);
 
-        if((float)$validated['payment'] > 0){
-            $payment = Payment::create([
-                'payment_method'=>$validated['order_payment_method'],
-                'transection_id'=> $validated['order_payment_method']!='cash'?$validated['transection_id']??null:null,
-                'amount'=> $validated['payment'],
-                'remark' => $validated['remark']??null,
-                'paid_at' => $validated['paid_at']??now(),
-                'created_by'=> $uid
-            ]);
-            if(!empty($payment)){
-                OrderPayment::create([
-                    'order_id'=> $order_masters->order_id,
-                    'payment_id'=> $payment->payment_id,
+        if(!empty($validated['payments'])){
+            foreach($validated['payments'] as $payment){
+                $paymented = Payment::create([
+                    'payment_method'=>$payment['payment_method'],
+                    'transection_id'=> $payment['payment_method']!='cash'?$payment['transection_id']??null:null,
+                    'amount'=> $payment['amount'],
+                    'remark' => $payment['remark']??null,
+                    'paid_at' => $payment['paid_at']??now(),
+                    'created_by'=> $uid
                 ]);
+                if(!empty($paymented)){
+                    OrderPayment::create([
+                        'order_id'=> $order_masters->order_id,
+                        'payment_id'=> $paymented->payment_id,
+                    ]);
+                }
             }
         }
 
@@ -856,7 +861,6 @@ class OrderMasterController extends Controller
             'order_tel' => 'nullable|string|max:255',
             'order_address' => 'nullable|string|max:255',
             'order_date' => 'date',
-            'paid_at' => 'nullable|date',
             'transection_id' => 'nullable|string|max:255',
             'remark' => 'nullable|string|max:255',
             'order_payment_status' => 'nullable|string|max:255',
@@ -869,7 +873,7 @@ class OrderMasterController extends Controller
             'term' => 'nullable|integer|max:255',
             'items' => 'required|array|min:1',
             'items.*.item_id' => 'required|integer|exists:items,item_id',
-            'items.*.item_name' => 'required|string|max:255',
+            'items.*.item_for' => 'nullable|string|in:sale,sample,free',
             'items.*.discount' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
             'items.*.unit_price' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
             'items.*.quantity' => 'required|integer',

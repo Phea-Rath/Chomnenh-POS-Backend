@@ -11,5 +11,12 @@ class Permission extends Model
     protected $table = "permission";
     public $incrementing = false;
     public $timestamps = false;
-    protected $fillable = ['user_id', 'menu_id'];
+    protected $fillable = [
+        'user_id',
+        'menu_id',
+        'is_view',
+        'is_modify',
+        'is_drop',
+        'is_execute'
+    ];
 }

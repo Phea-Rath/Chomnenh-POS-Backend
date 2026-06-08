@@ -10,5 +10,15 @@ class Menus extends Model
     use HasFactory;
     protected $table = 'menus';
     protected $primaryKey = "menu_id";
-    protected $fillable = ['menu_name', 'menu_type', 'menu_icon', 'menu_path', 'order_menu', 'parent_menu'];
+    protected $fillable = [
+        'menu_name',
+        'menu_type',
+        'menu_icon',
+        'menu_path',
+        'order_menu',
+        'parent_menu',
+        'menu_name_km',
+        'base_on',
+        'only'
+    ];
 }

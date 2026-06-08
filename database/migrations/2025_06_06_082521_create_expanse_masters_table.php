@@ -11,12 +11,12 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('expense_masters', function (Blueprint $table) {
-             Schema::create('expense_masters', function (Blueprint $table) {
+        Schema::create('expense_masters', function (Blueprint $table) {
             $table->increments("expense_id");
             $table->string("expense_no");
             $table->dateTime("expense_date");
             $table->string("expense_by");
+            $table->string("purchased_by")->nullable();
             $table->double("amount");
             $table->integer("created_by");
             $table->string("expense_other")->nullable();
@@ -24,7 +24,6 @@ return new class extends Migration
             $table->boolean("is_active")->default(true);
             $table->boolean("is_deleted")->default(0);
             $table->timestamps();
-        });
         });
     }
 

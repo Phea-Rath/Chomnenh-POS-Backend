@@ -4,12 +4,20 @@ namespace App\Http\Controllers;
 use Illuminate\Support\Facades\Schema;
 use App\Models\ExpanseItems;
 use App\Models\ExpanseMaster;
+use App\Services\PostImage;
 use DB;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 class ExpanseMasterController extends Controller
 {
+    protected $postImage;
+
+    public function __construct(PostImage $postImage)
+    {
+        $this->postImage = $postImage;
+    }
+
     /**
      * Display a listing of the resource.
      */
@@ -64,9 +72,22 @@ class ExpanseMasterController extends Controller
         ->get()
         ->groupBy('expense_id');
 
-    // Attach items to each master
-    $result = collect($masters->items())->map(function ($master) use ($items) {
+    // Load images ONLY for current page masters
+    $images = DB::table('expense_images as exi')
+        ->join('images as i', 'exi.image_id', '=', 'i.id')
+        ->whereIn('exi.expense_id', collect($masters->items())->pluck('expense_id'))
+        ->select('exi.expense_id', 'i.id as image_id', 'i.image')
+        ->get()
+        ->map(function ($img) {
+            $img->image = url('storage/images/' . $img->image);
+            return $img;
+        })
+        ->groupBy('expense_id');
+
+    // Attach items and images to each master
+    $result = collect($masters->items())->map(function ($master) use ($items, $images) {
         $master->items = $items->get($master->expense_id) ?? [];
+        $master->images = $images->get($master->expense_id) ?? [];
         return $master;
     });
 
@@ -107,28 +128,32 @@ class ExpanseMasterController extends Controller
             'amount' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
             'expense_other' => 'nullable|string|max:500',
             'expense_supplier' => 'required|string|max:500',
-            'items' => 'required|array|min:1',
-            'items.*.expense_type_id' => 'required|integer',
-            'items.*.description' => 'required|string|max:500',
-            'items.*.quantity' => 'required|integer',
-            'items.*.unit_price' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
-            'items.*.sub_total' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/'
+            'items' => 'required|json',
+            'purchased_by' => 'nullable|string|max:255',
+            'images' => 'nullable|array',
+            'images.*' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg,webp|max:2048',
         ]);
+
+        $items = json_decode($validate['items'], true);
 
         $expense_masters = ExpanseMaster::create([
             'expense_no' => $expense_no,
             'expense_date' => $validate['expense_date'],
             'expense_by' => $validate['expense_by'],
+            'purchased_by' => $validate['purchased_by'],
             'amount' => $validate['amount'],
             'created_by' => $uid,
             'expense_other' => $validate['expense_other'],
             'expense_supplier' => $validate['expense_supplier'],
         ]);
 
-        $expense_items = [];
-        foreach ($validate['items'] as $item) {
-            $expense_items[] = ExpanseItems::create([
-                'expense_id' => ExpanseMaster::max('expense_id'),
+        if ($request->hasFile('images')) {
+            $this->postImage->attachExpenseImages($expense_masters->expense_id, $request->file('images'));
+        }
+
+        foreach ($items as $item) {
+            ExpanseItems::create([
+                'expense_id' => $expense_masters->expense_id,
                 'expense_type_id' => $item['expense_type_id'],
                 'description' => $item['description'],
                 'quantity' => $item['quantity'],
@@ -141,7 +166,6 @@ class ExpanseMasterController extends Controller
         return response()->json([
             'message' => 'expense created successfully!',
             'status' => 200,
-
         ]);
     }
 
@@ -174,9 +198,21 @@ class ExpanseMasterController extends Controller
             ->get()
             ->groupBy('expense_id');
 
+        $images = DB::table('expense_images as exi')
+            ->join('images as i', 'exi.image_id', '=', 'i.id')
+            ->whereIn('exi.expense_id', $masters->pluck('expense_id'))
+            ->select('exi.expense_id', 'i.id as image_id', 'i.image')
+            ->get()
+            ->map(function ($img) {
+                $img->image = url('storage/images/' . $img->image);
+                return $img;
+            })
+            ->groupBy('expense_id');
+
         // Attach items to each master
-        $result = $masters->map(function ($master) use ($items) {
+        $result = $masters->map(function ($master) use ($items, $images) {
             $master->items = $items->get($master->expense_id) ?? [];
+            $master->images = $images->get($master->expense_id) ?? [];
             return $master;
         });
 
@@ -210,34 +246,37 @@ class ExpanseMasterController extends Controller
         $validate = $request->validate([
             'expense_date' => 'required|date',
             'expense_by' => 'required|string|max:255',
+            'purchased_by' => 'nullable|string|max:255',
             'amount' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
             'expense_other' => 'nullable|string|max:500',
             'expense_supplier' => 'required|string|max:500',
-            'items' => 'required|array|min:1',
-            'items.*.expense_type_id' => 'required|integer',
-            'items.*.description' => 'required|string|max:500',
-            'items.*.quantity' => 'required|integer',
-            'items.*.unit_price' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
-            'items.*.sub_total' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/'
+            'items' => 'required|json',
+            'images' => 'nullable|array',
+            'images.*' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg,webp|max:2048',
+            'image_ids' => 'nullable|array',
+            'image_ids.*' => 'nullable|integer',
         ]);
 
+        $items = json_decode($validate['items'], true);
+
         $expense_masters->update([
-            // 'expense_no'=>$expense_no,
             'expense_date' => $validate['expense_date'],
             'expense_by' => $validate['expense_by'],
+            'purchased_by' => $validate['purchased_by'],
             'amount' => $validate['amount'],
             'expense_other' => $validate['expense_other'],
             'expense_supplier' => $validate['expense_supplier'],
         ]);
 
-        if ($expense_masters) {
-            ExpanseItems::where('expense_id', $id)->delete();
+        if ($request->hasFile('images')) {
+            $this->postImage->replaceExpenseImages($request->image_ids, $id, $request->file('images'));
         }
 
-        $expense_items = [];
-        foreach ($validate['items'] as $item) {
-            $expense_items[] = ExpanseItems::create([
-                'expense_id' => $expense_masters->expense_id,
+        ExpanseItems::where('expense_id', $id)->delete();
+
+        foreach ($items as $item) {
+            ExpanseItems::create([
+                'expense_id' => $id,
                 'expense_type_id' => $item['expense_type_id'],
                 'description' => $item['description'],
                 'quantity' => $item['quantity'],
@@ -245,8 +284,6 @@ class ExpanseMasterController extends Controller
                 'sub_total' => $item['sub_total']
             ]);
         }
-
-        // return $this->show($id);
 
         return response()->json([
             'message' => 'expense updated successfully!',

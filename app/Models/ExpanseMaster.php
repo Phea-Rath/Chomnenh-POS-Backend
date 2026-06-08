@@ -8,5 +8,5 @@ class ExpanseMaster extends Model
 {
     protected $primaryKey = 'expense_id';
     protected $table = 'expense_masters';
-    protected $fillable = ['expense_no', 'expense_date', 'expense_by', 'expense_type', 'amount', 'created_by', 'expense_other', 'expense_supplier', 'is_active', 'is_deleted'];
+    protected $fillable = ['expense_no', 'expense_date', 'expense_by', 'purchased_by', 'expense_type', 'amount', 'created_by', 'expense_other', 'expense_supplier', 'is_active', 'is_deleted'];
 }

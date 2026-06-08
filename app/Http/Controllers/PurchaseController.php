@@ -184,6 +184,10 @@ class PurchaseController extends Controller
             ];
         })->values()->toArray();
 
+        $payments = $this->detailService->purchasePayment($purchaseId);
+        $shippings = $this->detailService->purchaseShipping($purchaseId);
+
+
         $subTotal = (float) $purchase->sub_total;
         $taxPercent = (float) $purchase->tax_rate;
         $taxAmount = (float) $purchase->tax_amount;
@@ -204,7 +208,7 @@ class PurchaseController extends Controller
             'tax_amount' => $taxAmount,
             'discount_percent' => $discountPercent,
             'discount_amount' => $discountAmount,
-            'delivery_fee' => $deliveryFee,
+            // 'delivery_fee' => $deliveryFee,
             'grand_total' => $grandTotal,
             'paymented' => (float) $purchase->total_paid,
             'balance' => (float) $purchase->balance,
@@ -212,6 +216,8 @@ class PurchaseController extends Controller
             'grand_total_khr' => round($grandTotal * $exchangeRate, 2),
             'created_by_name' => $purchase->created_by_name,
             'items' => $items,
+            'payments' => $payments,
+            'shippings' => $shippings,
         ];
     }
 
@@ -373,6 +379,9 @@ class PurchaseController extends Controller
             ];
         })->values()->toArray();
 
+        $payments = $this->detailService->purchasePayment($purchaseId);
+        $shippings = $this->detailService->purchaseShipping($purchaseId);
+
         $subTotal = (float) $purchase->sub_total;
         $taxPercent = (float) $purchase->tax_rate;
         $taxAmount = (float) $purchase->tax_amount;
@@ -393,7 +402,7 @@ class PurchaseController extends Controller
             'tax_amount' => $taxAmount,
             'discount_percent' => $discountPercent,
             'discount_amount' => $discountAmount,
-            'delivery_fee' => $deliveryFee,
+            // 'delivery_fee' => $deliveryFee,
             'grand_total' => $grandTotal,
             'paymented' => (float) $purchase->total_paid,
             'balance' => (float) $purchase->balance,
@@ -401,6 +410,8 @@ class PurchaseController extends Controller
             'grand_total_khr' => round($grandTotal * $exchangeRate, 2),
             'created_by_name' => $purchase->created_by_name,
             'items' => $items,
+            'payments' => $payments,
+            'shippings' => $shippings,
         ];
     }
 
@@ -587,9 +598,11 @@ class PurchaseController extends Controller
             'tax_rate'           => 'nullable|numeric',
             'shipping_fee'       => 'nullable|numeric',
             'total_paid'         => 'nullable|numeric',
-            'exchange_rate'      => 'nullable|numeric',
-            'invoice_number' => 'nullable|string|max:50',
+            // 'exchange_rate'      => 'nullable|numeric',
+            'quote_no' => 'nullable|string|max:50',
             'status'             => 'required|integer',
+            'description' => 'nullable|string',
+            'due_term' => 'nullable|integer',
             'purchase_type'      => 'required|integer',
             'items'              => 'required|array|min:1',
             'items.*.item_id'    => 'required|integer|exists:items,item_id',
@@ -648,9 +661,12 @@ class PurchaseController extends Controller
             'total_amount'  => $totalAmount,
             'total_paid'    => $totalPaid,
             'balance'       => $balance,
+            'due_term'       => $validated['due_term'],
+            'due_date'       => now()->addDay((int)$validated['due_term'] ?? 0),
+            'description'       => $validated['description'],
             'purchase_type' => $validated['purchase_type'] ?? 0,
             'exchange_rate' => $exchange_rate->usd_to_khr ?? 4000,
-            'invoice_number' => $validated['invoice_number'] ?? '',
+            'quote_no' => $validated['quote_no'] ?? '',
             'status'        => $validated['status'],
             'created_by'    => $uid,
             'payment_status' => $validated['payment_status'] ?? null,
@@ -733,8 +749,10 @@ class PurchaseController extends Controller
             'tax_rate'           => 'nullable|numeric',
             'shipping_fee'       => 'nullable|numeric',
             'total_paid'         => 'nullable|numeric',
-            'exchange_rate'      => 'nullable|numeric',
-            'invoice_number' => 'nullable|string|max:50',
+            // 'exchange_rate'      => 'nullable|numeric',
+            'description' => 'nullable|string',
+            'due_term' => 'nullable|integer',
+            'quote_no' => 'nullable|string|max:50',
             'status'             => 'required|integer',
             'purchase_type'      => 'required|integer',
             'items'              => 'required|array|min:1',
@@ -782,6 +800,7 @@ class PurchaseController extends Controller
             ->count();
         $purchaseNo = 'RPO-' . now()->format('Ymd') . '-' . str_pad($count + 1, 5, '0', STR_PAD_LEFT);
 
+        $exchange_rate = ExchangeRate::find($proId);
         $purchase = Purchase::create([
             'purchase_no'   => $purchaseNo,
             'supplier_id'   => $supplierId ?? Suppliers::max('supplier_id'),
@@ -793,9 +812,12 @@ class PurchaseController extends Controller
             'total_amount'  => $totalAmount,
             'total_paid'    => $totalPaid,
             'balance'       => $balance,
+            'due_term'       => $validated['due_term'],
+            'due_date'       => now()->addDay((int)$validated['due_term'] ?? 0),
+            'description'       => $validated['description'],
             'purchase_type' => $validated['purchase_type'] ?? 0,
-            'exchange_rate' => $validated['exchange_rate'],
-            'invoice_number' => $validated['invoice_number'] ?? '',
+            'exchange_rate' => $exchange_rate->usd_to_khr ?? 4000,
+            'quote_no' => $validated['quote_no'] ?? '',
             'status'        => $validated['status'],
             'created_by'    => $uid,
             'payment_status' => $validated['payment_status'] ?? null,
@@ -962,8 +984,10 @@ class PurchaseController extends Controller
             'tax_rate'      => 'nullable|numeric',
             'shipping_fee'  => 'nullable|numeric',
             'total_paid'    => 'nullable|numeric',
-            'exchange_rate' => 'nullable|numeric',
-            'invoice_number' => 'nullable|string|max:50',
+            // 'exchange_rate' => 'nullable|numeric',
+            'description' => 'nullable|string',
+            'due_term' => 'nullable|integer',
+            'quote_no' => 'nullable|string|max:50',
             'status'        => 'required|integer',
             'items'         => 'required|array|min:1',
             'items.*.item_id'    => 'required|integer|exists:items,item_id',
@@ -1014,8 +1038,11 @@ class PurchaseController extends Controller
             'total_amount'  => $totalAmount,
             'total_paid'    => $totalPaid,
             'balance'       => $balance,
-            'exchange_rate' => $validated['exchange_rate'] ?? $purchase->exchange_rate,
-            'invoice_number' => $validated['invoice_number'] ?? $purchase->invoice_number,
+            'due_term'       => $validated['due_term'],
+            'due_date'       => now()->addDay((int)$validated['due_term'] ?? 0),
+            'description'       => $validated['description'],
+            // 'exchange_rate' => $validated['exchange_rate'] ?? $purchase->exchange_rate,
+            'quote_no' => $validated['quote_no'] ?? $purchase->quote_no,
             'status'        => $validated['status'],
             'payment_status' => $validated['payment_status'] ?? $purchase->payment_status,
         ]);
@@ -1040,7 +1067,7 @@ class PurchaseController extends Controller
 
         // PurchasePayment::where('purchase_id', $id)->delete();
 
-        $payments = [];
+        $paymented = '';
         if (!empty($validated['payments'])) {
             foreach ($validated['payments'] as $payment) {
                 $amount = (int)$payment['amount']??0;
@@ -1149,8 +1176,10 @@ class PurchaseController extends Controller
             'tax_rate'      => 'nullable|numeric',
             'shipping_fee'  => 'nullable|numeric',
             'total_paid'    => 'nullable|numeric',
-            'exchange_rate' => 'nullable|numeric',
-            'invoice_number' => 'nullable|string|max:50',
+            // 'exchange_rate' => 'nullable|numeric',
+            'description' => 'nullable|string',
+            'due_term' => 'nullable|integer',
+            'quote_no' => 'nullable|string|max:50',
             'status'        => 'required|integer',
             'items'         => 'required|array|min:1',
             'items.*.item_id'    => 'required|integer',
@@ -1167,9 +1196,9 @@ class PurchaseController extends Controller
             'shippings.*.carrier' => 'nullable|string',
             'shippings.*.vai' => 'nullable|in:truck,air,sea',
             'shippings.*.tracking_number' => 'nullable|string',
-            'shippings.*.remark' => 'nullable|string',
-            'shippings.*.term' => 'nullable|integer',
-            'shippings.*.date' => 'nullable|date',
+            // 'shippings.*.remark' => 'nullable|string',
+            // 'shippings.*.term' => 'nullable|integer',
+            // 'shippings.*.date' => 'nullable|date',
             'payment_status' => 'nullable|string',
         ]);
 
@@ -1194,8 +1223,11 @@ class PurchaseController extends Controller
             'total_amount'  => $totalAmount,
             'total_paid'    => $totalPaid,
             'balance'       => $balance,
-            'exchange_rate' => $validated['exchange_rate'] ?? $purchase->exchange_rate,
-            'invoice_number' => $validated['invoice_number'] ?? $purchase->invoice_number,
+            'due_term'       => $validated['due_term'],
+            'due_date'       => now()->addDay((int)$validated['due_term'] ?? 0),
+            'description'       => $validated['description'],
+            // 'exchange_rate' => $validated['exchange_rate'] ?? $purchase->exchange_rate,
+            'quote_no' => $validated['quote_no'] ?? $purchase->quote_no,
             'status'        => $validated['status'],
             'payment_status' => $validated['payment_status'] ?? $purchase->payment_status,
         ]);
@@ -1220,7 +1252,7 @@ class PurchaseController extends Controller
 
         // PurchasePayment::where('purchase_id', $id)->delete();
 
-        $payments = [];
+        $paymented = '';
         if (!empty($validated['payments'])) {
             foreach ($validated['payments'] as $payment) {
                 $amount = $payment['amount']??0;

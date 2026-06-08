@@ -27,8 +27,11 @@ return new class extends Migration
             $table->tinyInteger('is_deleted')->default(0);
             $table->unsignedBigInteger('created_by')->nullable();
             $table->decimal('exchange_rate', 10, 2)->default(1);
-            $table->string('invoice_number', 50)->nullable();
+            $table->string('quote_no', 50)->nullable();
             $table->string('payment_status', 100)->nullable();
+            $table->integer('due_term')->nullable(0);
+            $table->dateTime('due_date');
+            $table->description('due_date', 255)->nullable();
             $table->tinyInteger('status')->default(0);
             $table->foreign('supplier_id')->references('supplier_id')->on('suppliers');
             $table->timestamps();

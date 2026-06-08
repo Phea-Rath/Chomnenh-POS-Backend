@@ -21,6 +21,8 @@ return new class extends Migration
             $table->string("stock_remark")->nullable();
             $table->decimal("exchange_rate",10,2)->default(4000);
             $table->unsignedInteger("stock_created_by");
+            $table->unsignedInteger("received_by")->nullable();
+            $table->unsignedInteger("approved_by")->nullable();
             $table->integer("quantity")->default(0);
             $table->boolean("is_deleted")->default(0);
             $table->timestamps();

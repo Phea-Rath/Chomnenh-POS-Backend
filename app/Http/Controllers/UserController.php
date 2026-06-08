@@ -37,6 +37,7 @@ class UserController extends Controller
             ->join('roles as r', 'r.role_id','=', 'u.role_id')
             ->where('u.is_deleted', 0)
             ->where('u.id','!=', $uid)
+            ->where('u.role_id','!=', 2)
             ->select(
                 'u.*',
                 'r.role_name as role',
