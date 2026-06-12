@@ -18,6 +18,7 @@ return new class extends Migration
             $table->decimal('item_cost', 10, 2)->default(0);
             $table->integer('quantity')->default(0);
             $table->decimal('unit_price', 10, 2)->default(0);
+            $table->decimal('discount', 10, 2)->default(0);
             $table->decimal('subtotal', 10, 2)->default(0);
             $table->tinyInteger('is_deleted')->default(0);
             $table->foreign('purchase_id')->references('purchase_id')->on('purchases')->onDelete('cascade');

@@ -13,6 +13,7 @@ class PurchaseDetail extends Model
         'item_id',
         'quantity',
         'item_cost',
+        'discount',
         'attributes',
         'subtotal',
         'is_deleted'

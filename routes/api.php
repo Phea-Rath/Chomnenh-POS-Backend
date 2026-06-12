@@ -303,4 +303,9 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::get('/menu-website-current-user',[PermissionController::class, 'getPermissionMenuByCurrentUserV2']);
     Route::get('/menu-website-by-user/{id}',[PermissionController::class, 'getPermissionMenuByUserV2']);
     Route::post('/allow-permission',[PermissionController::class, 'updateAllow']);
+
+    Route::post('/wholesale',[OrderMasterController::class, 'storeWholesale']);
+    Route::put('/wholesale/{id}',[OrderMasterController::class, 'updateWholesale']);
+    Route::post('/retail',[OrderMasterController::class, 'storeRetail']);
+
 });

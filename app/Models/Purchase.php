@@ -20,19 +20,19 @@ class Purchase extends Model
         'tax_amount',
         'shipping_fee',
         'total_amount',
+        'total_discount',
         'total_paid',
         'balance',
+        'quote_no',
         'purchase_type',
         'created_by',
-        'due_term',
-        'due_date',
+        'seller',
+        'approved_by',
+        'updated_by',
         'description',
-        // 'exchange_rate',
-        'quote_no',
         'status',
         'updated_by',
-        'is_deleted',
-        'payment_status'
+        'is_deleted'
     ];
 
     public function details()

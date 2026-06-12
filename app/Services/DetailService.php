@@ -123,14 +123,13 @@ class DetailService {
         $purchase_detail = DB::table('purchase_details')
             ->join('purchases', 'purchase_details.purchase_id', '=', 'purchases.purchase_id')
             ->join('items', 'purchase_details.item_id', '=', 'items.item_id')
+            ->join('scales', 'scales.scale_id', '=', 'items.scale_id')
             ->join('categories', 'items.category_id', '=', 'categories.category_id')
             ->select(
                 'purchase_details.*',
                 'items.item_code',
                 'items.item_name',
-                'items.item_price',
-                'items.wholesale_price',
-                'items.discount',
+                'scales.scale_name as unit',
                 'items.category_id',
                 'items.is_deleted as item_is_deleted',
                 'categories.category_name',
@@ -192,6 +191,7 @@ class DetailService {
             ->select(
                 'purchase_raw_details.*',
                 'raw_materials.material_code',
+                'raw_materials.primary_unit as unit',
                 'raw_materials.material_name',
                 'raw_materials.material_image',
                 'raw_materials.is_deleted',
@@ -347,13 +347,16 @@ class DetailService {
             ->join('order_masters', 'order_items.order_id', '=', 'order_masters.order_id')
             ->join('items', 'order_items.item_id', '=', 'items.item_id')
             ->join('categories', 'items.category_id', '=', 'categories.category_id')
+            ->join('scales', 'items.scale_id', '=', 'scales.scale_id')
             ->select(
                 'order_items.*',
                 'items.item_name',
                 'items.item_code',
                 'items.category_id',
+                'items.scale_id',
                 'items.is_deleted as item_is_deleted',
                 'categories.category_name',
+                'scales.scale_name',
                 'order_masters.created_by as created_by'
             )
             // ->where('order_masters.created_by', $uid)
@@ -514,7 +517,7 @@ class DetailService {
             foreach($items as $it){
                 $productionQuan = $totalOrdered;
                 if($productionQuan){
-                    $it->sold = $productionQuan;
+                    $it->used = $productionQuan;
                     $it->in_stock = $it->in_stock - $productionQuan;
                 }
             }
@@ -528,11 +531,11 @@ class DetailService {
     {
         // FIFO -> oldest stock first
         $records = DB::table($table)
-            ->join('purchases as p', 'p.purchase_id', '=', $table.'.purchase_id')
+            ->join('stock_masters as sm', 'sm.stock_id', '=', $table.'.stock_id')
             ->where($item_label, $item_id)
-            ->where('p.is_deleted', 0)
+            ->where('sm.is_deleted', 0)
             ->where($table.'.quantity', '>', 0)
-            ->orderBy('p.created_at', 'asc')
+            ->orderBy('sm.created_at', 'asc')
             ->get();
 
         $remainingQty = $requiredQuantity;

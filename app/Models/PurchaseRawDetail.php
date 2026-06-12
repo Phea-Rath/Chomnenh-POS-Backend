@@ -16,6 +16,7 @@ class PurchaseRawDetail extends Model
         'raw_material_id',
         'item_cost',
         'quantity',
+        'discount',
         'unit_price',
         'subtotal',
         'is_deleted',

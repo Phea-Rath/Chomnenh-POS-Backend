@@ -17,6 +17,7 @@ return new class extends Migration
             $table->unsignedBigInteger('raw_material_id');
             $table->decimal('item_cost', 12, 2)->default(0);
             $table->decimal('quantity', 12, 2)->default(0);
+            $table->decimal('discount', 12, 2)->default(0);
             $table->decimal('subtotal', 12, 2)->default(0);
             $table->boolean('is_deleted')->default(false);
             $table->timestamps();

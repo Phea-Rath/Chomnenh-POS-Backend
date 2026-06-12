@@ -743,6 +743,308 @@ class OrderMasterController extends Controller
         ]);
     }
 
+
+    public function storeWholesale(Request $request)
+    {
+        $user = Auth::user();
+        $uid = $user->id;
+        $proId = $user->profile_id;
+        $now = now();
+        $month = $now->format('m');
+        $year = $now->format('y');
+
+        $exchange_rate = ExchangeRate::find($proId);
+        $orderCount = OrderMaster::where('created_by', $uid)
+            ->whereMonth('order_date', $month)
+            ->whereYear('order_date', $now->format('Y'))
+            ->count();
+        $order_no = 'ORD' . $uid . $proId . $year . $month . '-' . str_pad($orderCount + 1, 4, '0', STR_PAD_LEFT);
+        $order_date = $now->format('Y-m-d');
+
+        $validated = $request->validate([
+            'order_payment_status' => 'required|string|max:255',
+            'description' => 'required|string|max:255',
+            'order_date' => 'required|date|max:255',
+            'order_customer_id' => 'required|integer',
+            'term' => 'nullable|integer|max:255',
+            'seller' => 'nullable|integer',
+            'reference_no' => 'nullable|string|max:255',
+            'delivery_fee' => 'nullable|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
+            'order_tax' => 'nullable|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
+            'items' => 'required|array|min:1',
+            'items.*.item_id' => 'required|integer|exists:items,item_id',
+            'items.*.item_price' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
+            'items.*.quantity' => 'required|integer',
+            'items.*.item_for' => 'required|string|in:sale,sample,free',
+            'items.*.discount' => 'nullable|numeric|min:0',
+            // 'payments'           => 'nullable||array',
+            // 'payments.*.amount'  => 'numeric|min:0',
+            // 'payments.*.paid_at' => 'date',
+            // 'payments.*.payment_method' => 'nullable|string',
+            // 'payments.*.transection_id' => 'nullable|string',
+            // 'payments.*.remark' => 'nullable|string'
+        ]);
+        $order_date =  $order_date?? $now->format('Y-m-d');
+        // dd($validated);
+        $subTotal = collect($validated['items'])->sum(function ($item) {
+            return (float) $item['item_price'] * (int) $item['quantity'];
+        });
+        $discountAmount = collect($validated['items'])->sum(function ($item) {
+            $lineSubtotal = (float) $item['item_price'] * (int) $item['quantity'];
+            $discountPercent = (float) ($item['discount'] ?? 0);
+            return round($lineSubtotal * $discountPercent / 100, 2);
+        });
+        $taxAmount = (float) ($validated['order_tax'] ?? 0);
+        $deliveryFee = (float) $validated['delivery_fee'];
+        $grandTotal = round($subTotal - $discountAmount + $taxAmount + $deliveryFee, 2);
+        $payments = $validated['payments'] ?? 0;
+        $payment = $payments? collect($payments)->sum('amount'): 0 ;
+        $balance = round($grandTotal - $payment, 2);
+
+        $online = $validated['online'] ?? 0;
+        $seller = $validated['seller'] ?? $uid;
+
+        $due_date = null;
+        if($validated['term']) {
+            $due_date =  $order_date ? Carbon::parse( $order_date)->addDays((int)$validated['term']) : Carbon::now()->addDays((int)$validated['term']);
+        }
+        try{
+            DB::beginTransaction();
+            // Create the order master
+            $order_masters = OrderMaster::create([
+                'order_no' => $order_no,
+                'order_customer_id' => $validated['order_customer_id'] ?? 1,
+                'sale_type' => 'wholesale',
+                'online' => 0,
+                'status' => 1,
+                'reference_no' => $validated['reference_no'] ?? null,
+                'due_date' => $due_date,
+                'deliver_id' => $validated['deliver_id'] ?? 1,
+                'description' => $validated['description'] ,
+                'order_date' => $order_date,
+                'delivery_fee' => $validated['delivery_fee'] ?? 0,
+                'through' => $uid,
+                'order_payment_status' => $balance <= 0 ? 'paid' : $validated['order_payment_status'],
+                'balance' => $balance,
+                'term' => $validated['term'] ?? 0,
+                'payment' => $payment,
+                'order_subtotal' => $subTotal,
+                'order_discount' => $discountAmount,
+                'order_tax' => $taxAmount,
+                'order_total' => $grandTotal,
+                'exchange_rate' => (double)$exchange_rate->usd_to_khr,
+                'seller' => $seller,
+                'updated_by' => $uid,
+            ]);
+
+            // if(!empty($validated['payments'])){
+            //     foreach($validated['payments'] as $payment){
+            //         $paymented = Payment::create([
+            //             'payment_method'=>$payment['payment_method'],
+            //             'transection_id'=> $payment['payment_method']!='cash'?$payment['transection_id']??null:null,
+            //             'amount'=> $payment['amount'],
+            //             'remark' => $payment['remark']??null,
+            //             'paid_at' => $payment['paid_at']??now(),
+            //             'created_by'=> $uid
+            //         ]);
+            //         if(!empty($paymented)){
+            //             OrderPayment::create([
+            //                 'order_id'=> $order_masters->order_id,
+            //                 'payment_id'=> $paymented->payment_id,
+            //             ]);
+            //         }
+            //     }
+            // }
+
+            $order_id = $order_masters->order_id;
+            $order_items = [];
+            // $order_details = [];
+
+            foreach ($validated['items'] as $item) {
+                $lineSubtotal = (float) $item['item_price'] * (int) $item['quantity'];
+                $discountPercent = (float) ($item['discount'] ?? 0);
+                $lineDiscount = round($lineSubtotal * $discountPercent / 100, 2);
+                $lineTotal = round($lineSubtotal - $lineDiscount, 2);
+
+                $order_items[] = OrderItems::create([
+                    'order_id' => $order_id,
+                    'item_id' => $item['item_id'],
+                    'item_for' => $item['item_for'] ?? 'sale',
+                    'item_price' => $item['item_price'],
+                    'discount' => $discountPercent,
+                    'price' => $lineTotal,
+                    'quantity' => $item['quantity'],
+                    ]);
+                    }
+            $profile = DB::table('profiles')->where('id', $proId)->first();
+
+                $message = $this->formatMessage($order_masters, $validated, $user);
+                $init_keyboard = [
+                    [
+                        [
+                            'text' => '🧾Invoice',
+                            'url'  => 'https://www.chomnenhapp.com/invoice/' . $order_id
+                        ]
+                    ]
+                ];
+                TelegramService::sendMessage($message, $proId, $init_keyboard, $profile->chat_id);
+
+                DB::commit();
+            // return $message;
+            // return $this->show($order_masters->order_id);
+            return response()->json([
+                'message' => 'order master created successfully!',
+                'status' => 200,
+                "data" => $order_masters,
+            ]);
+        }catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'message' => 'Error create wholesale: ' . $e->getMessage(),
+                'status' => 500
+            ], 500);
+        }
+    }
+
+    public function storeRetail(Request $request)
+    {
+        $user = Auth::user();
+        $uid = $user->id;
+        $proId = $user->profile_id;
+        $now = now();
+        $month = $now->format('m');
+        $year = $now->format('y');
+
+        $exchange_rate = ExchangeRate::find($proId);
+        $orderCount = OrderMaster::where('created_by', $uid)
+            ->whereMonth('order_date', $month)
+            ->whereYear('order_date', $now->format('Y'))
+            ->count();
+        $order_no = 'ORD' . $uid . $proId . $year . $month . '-' . str_pad($orderCount + 1, 4, '0', STR_PAD_LEFT);
+        $order_date = $now->format('Y-m-d');
+
+        $validated = $request->validate([
+            'order_date' => 'required|date',
+            'items' => 'required|array|min:1',
+            'items.*.item_id' => 'required|integer|exists:items,item_id',
+            'items.*.item_price' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
+            'items.*.quantity' => 'required|integer',
+            'items.*.discount' => 'required|integer|numeric|min:0|max:100',
+            'amount'  => 'numeric|min:0',
+            'paid_at' => 'date',
+            'payment_method' => 'required|string',
+            'transection_id' => 'nullable|string',
+            'remark' => 'nullable|string'
+        ]);
+        $order_date =  $order_date?? $now->format('Y-m-d');
+        // dd($validated);
+        $subTotal = collect($validated['items'])->sum(function ($item) {
+            return (float) $item['item_price'] * (int) $item['quantity'];
+        });
+        $discountAmount = collect($validated['items'])->sum(function ($item) {
+            $lineSubtotal = (float) $item['item_price'] * (int) $item['quantity'];
+            $discountPercent = (float) ($item['discount'] ?? 0);
+            return round($lineSubtotal * $discountPercent / 100, 2);
+        });
+        $grandTotal = round($subTotal - $discountAmount, 2);
+        $created_by =  $uid;
+
+        try{
+            DB::beginTransaction();
+            // Create the order master
+            $order_masters = OrderMaster::create([
+                'order_no' => $order_no,
+                'order_customer_id' => 1,
+                'sale_type' => 'wholesale',
+                'online' => 0,
+                'status' => 1,
+                'reference_no' => null,
+                'due_date' => $order_date,
+                'deliver_id' => 1,
+                'order_date' => $order_date,
+                'delivery_fee' => 0,
+                'through' => $uid,
+                'order_payment_status' => 'paid',
+                'balance' => 0,
+                'term' => 0,
+                'payment' => $grandTotal,
+                'order_subtotal' => $subTotal,
+                'order_discount' => $discountAmount,
+                'order_tax' => 0,
+                'order_total' => $grandTotal,
+                'exchange_rate' => (double)$exchange_rate->usd_to_khr,
+                'created_by' => $created_by,
+            ]);
+
+
+            $paymented = Payment::create([
+                'payment_method'=> $validated['payment_method'],
+                'transection_id'=> $validated['payment_method']!='cash'?$validated['transection_id']??null:null,
+                'amount'=> $grandTotal,
+                'remark' => null,
+                'paid_at' => now(),
+                'created_by'=> $uid
+            ]);
+            if(!empty($paymented)){
+                OrderPayment::create([
+                    'order_id'=> $order_masters->order_id,
+                    'payment_id'=> $paymented->payment_id,
+                ]);
+            }
+
+
+
+            $order_id = $order_masters->order_id;
+            $order_items = [];
+            // $order_details = [];
+
+            foreach ($validated['items'] as $item) {
+                $lineSubtotal = (float) $item['item_price'] * (int) $item['quantity'];
+                $discountPercent = (float) ($item['discount'] ?? 0);
+                $lineDiscount = round($lineSubtotal * $discountPercent / 100, 2);
+                $lineTotal = round($lineSubtotal - $lineDiscount, 2);
+
+                $order_items[] = OrderItems::create([
+                    'order_id' => $order_id,
+                    'item_id' => $item['item_id'],
+                    'item_for' => $item['item_for'] ?? 'sale',
+                    'item_price' => $item['item_price'],
+                    'discount' => $discountPercent,
+                    'price' => $lineTotal,
+                    'quantity' => $item['quantity'],
+                    ]);
+                }
+            // $profile = DB::table('profiles')->where('id', $proId)->first();
+            // if($validated['sale_type'] == 'wholesale') {
+
+            //     $message = $this->formatMessage($order_masters, $validated, $user);
+            //     $init_keyboard = [
+            //         [
+            //             [
+            //                 'text' => '🧾Invoice',
+            //                 'url'  => 'https://www.chomnenhapp.com/invoice/' . $order_id
+            //             ]
+            //         ]
+            //     ];
+            //     TelegramService::sendMessage($message, $proId, $init_keyboard, $profile->chat_id);
+            // }
+            // return $message;
+            // return $this->show($order_masters->order_id);
+            DB::commit();
+            return response()->json([
+                'message' => 'order master created successfully!',
+                'status' => 200,
+                "data" => $order_masters,
+            ]);
+        }catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'message' => 'Error create retail: ' . $e->getMessage(),
+                'status' => 500
+            ], 500);
+        }
+    }
+
     function formatMessage($order, $validated, $user) {
             $order_no = $order->order_no;
             $sale_type = $order->sale_type;
@@ -997,6 +1299,165 @@ class OrderMasterController extends Controller
             'message' => 'order master updated successfully!',
             'status' => 200,
         ]);
+    }
+
+
+    public function updateWholesale(Request $request, string $id)
+    {
+        $user = Auth::user();
+        $uid = $user->id;
+        $proId = $user->profile_id;
+        $order_masters = OrderMaster::find($id);
+        if (!$order_masters) {
+            return response()->json([
+                'message' => 'order master not found!',
+                'status' => 404,
+            ]);
+        }
+
+        $validated = $request->validate([
+            'order_payment_status' => 'required|string|max:255',
+            'description' => 'required|string|max:255',
+            'order_date' => 'required|date',
+            'order_customer_id' => 'required|integer',
+            'term' => 'nullable|integer',
+            'seller' => 'nullable|integer',
+            'reference_no' => 'nullable|string|max:255',
+            'delivery_fee' => 'nullable|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
+            'order_tax' => 'nullable|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
+            'items' => 'required|array|min:1',
+            'items.*.item_id' => 'required|integer|exists:items,item_id',
+            'items.*.item_price' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
+            'items.*.quantity' => 'required|integer',
+            'items.*.item_for' => 'required|string|in:sale,sample,free',
+            'items.*.discount' => 'nullable|numeric|min:0',
+            // 'payments'           => 'nullable||array',
+            // 'payments.*.amount'  => 'numeric|min:0',
+            // 'payments.*.paid_at' => 'date',
+            // 'payments.*.payment_method' => 'nullable|string',
+            // 'payments.*.transection_id' => 'nullable|string',
+            // 'payments.*.remark' => 'nullable|string'
+        ]);
+
+        $subTotal = collect($validated['items'])->sum(function ($item) {
+            return (float) $item['item_price'] * (int) $item['quantity'];
+        });
+        $discountAmount = collect($validated['items'])->sum(function ($item) {
+            $lineSubtotal = (float) $item['item_price'] * (int) $item['quantity'];
+            $discountPercent = (float) ($item['discount'] ?? 0);
+            return round($lineSubtotal * $discountPercent / 100, 2);
+        });
+        $taxAmount = (float) ($validated['order_tax'] ?? 0);
+        $deliveryFee = (float) $validated['delivery_fee'];
+        $grandTotal = round($subTotal - $discountAmount + $taxAmount + $deliveryFee, 2);
+
+        $seller = $validated['seller'] ?? $uid;
+        $due_date = null;
+        $term = $validated['term'] ?? 0;
+        if($term) {
+            $due_date = $validated['order_date'] ? Carbon::parse($validated['order_date'])->addDays((int)$validated['term']) : Carbon::now()->addDays((int)$validated['term']);
+        }
+        try{
+            DB::beginTransaction();
+            // Create the order master
+            $order_masters->update([
+                'deliver_id' => 1,
+                'order_date' => $validated['order_date'],
+                'description' => $validated['description'],
+                'seller' => $seller,
+                'updated_by' => $uid,
+                'delivery_fee' => $validated['delivery_fee'],
+                'order_payment_status' => $validated['order_payment_status'],
+                'balance' => (float)$grandTotal - (float)$order_masters->paymented,
+                'order_subtotal' => $subTotal,
+                'order_discount' => $discountAmount,
+                'order_tax' => $taxAmount,
+                'order_total' => $grandTotal,
+                'due_date' => $due_date,
+                'term' => $term ?? 0,
+            ]);
+
+            // $paymentIds = OrderPayment::where('order_id', $id)->pluck('payment_id');
+            // $paymented = null;
+            // if (!empty($validated['payments'])) {
+            //     foreach ($validated['payments'] as $payment) {
+            //         $amount = $payment['amount']??0;
+            //         $payment_method = $payment['payment_method']??null;
+            //         if($amount > 0){
+            //             $existingPayment = count($paymentIds) > 0 ? Payment::where('payment_id', $paymentIds[count($paymentIds)-1])->first() : null;
+            //             if($existingPayment){
+            //                 $paymented = $existingPayment->update([
+            //                     'payment_method'=>$payment_method??'cash',
+            //                     'transection_id'=> $payment_method!='cash'?$payment['transection_id']??null:null,
+            //                     'amount'=> (float)$amount,
+            //                     'remark' => $payment['remark']??null,
+            //                     'paid_at' => $payment['paid_at']??now(),
+            //                     'created_by'=> $uid
+            //                 ]);
+            //             }else{
+            //                 $paymented = Payment::create([
+            //                     'payment_method'=>$payment_method??'cash',
+            //                     'transection_id'=> $payment_method!='cash'?$payment['transection_id']??null:null,
+            //                     'amount'=> (float)$amount,
+            //                     'remark' => $payment['remark']??null,
+            //                     'paid_at' => $payment['paid_at']??now(),
+            //                     'created_by'=> $uid
+            //                 ]);
+            //                 if(!empty($paymented)){
+            //                     OrderPayment::create([
+            //                         'order_id'=> $id,
+            //                         'payment_id'=> $paymented->payment_id,
+            //                     ]);
+            //                 }
+            //             }
+            //         }
+            //     }
+            // }
+
+            // if($paymented){
+            //     $total_paid = count($paymentIds) > 0 ? Payment::whereIn('payment_id', $paymentIds)->select(DB::raw('SUM(amount) as total_payment'))->first()->total_payment : $paymented->amount;
+            //     $order_masters->update([
+            //         'payment' => $total_paid,
+            //         'balance' => (float)$order_masters->order_total - (float)$total_paid,
+            //     ]);
+            // }
+
+            $order_items = [];
+            if ($order_masters) {
+                OrderItems::where('order_id', $id)->delete();
+            }
+            foreach ($validated['items'] as $item) {
+                $lineSubtotal = (float) $item['item_price'] * (int) $item['quantity'];
+                $discountPercent = (float) ($item['discount'] ?? 0);
+                $lineDiscount = round($lineSubtotal * $discountPercent / 100, 2);
+                $lineTotal = round($lineSubtotal - $lineDiscount, 2);
+
+                // return response()->json([
+                //     'discount' => $item['discount'],
+                // ]);
+                $order_items[] = OrderItems::create([
+                    'order_id' => $order_masters->order_id,
+                    'item_id' => $item['item_id'],
+                    'item_price' => $item['item_price'],
+                    'discount' => (float)$item['discount'],
+                    'price' => $lineTotal,
+                    'quantity' => $item['quantity'],
+                ]);
+            }
+
+            DB::commit();
+            // return $this->show($id);
+            return response()->json([
+                'message' => 'order master updated successfully!',
+                'status' => 200,
+            ]);
+        }catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'message' => 'Error update wholesale: ' . $e->getMessage(),
+                'status' => 500
+            ], 500);
+        }
     }
 
     /**

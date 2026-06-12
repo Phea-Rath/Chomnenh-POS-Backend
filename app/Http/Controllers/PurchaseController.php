@@ -135,13 +135,13 @@ class PurchaseController extends Controller
                 'p.purchase_id',
                 'p.purchase_no',
                 'p.status',
-                'p.due_term',
-                'p.due_date',
-                'p.payment_status',
                 'p.quote_no',
+                'p.saller',
+                'p.approved_by',
                 'p.supplier_id',
                 'p.purchase_date',
                 'p.sub_total',
+                'p.total_discount',
                 'p.tax_rate',
                 'p.tax_amount',
                 'p.shipping_fee',
@@ -169,6 +169,7 @@ class PurchaseController extends Controller
                 'pd.item_cost',
                 'pd.unit_price',
                 'pd.quantity',
+                'pd.discount',
                 'pd.subtotal',
                 'i.item_name',
                 'i.item_code'
@@ -184,6 +185,7 @@ class PurchaseController extends Controller
                 'item_name' => $item->item_name,
                 'price' => $price,
                 'quantity' => (int) $item->quantity,
+                'discount' => (float) $item->discount,
                 'total' => (float) $item->subtotal,
             ];
         })->values()->toArray();
@@ -197,7 +199,7 @@ class PurchaseController extends Controller
         $taxAmount = (float) $purchase->tax_amount;
         $deliveryFee = (float) $purchase->shipping_fee;
         $grandTotal = (float) $purchase->total_amount;
-        $discountAmount = round(max(0, ($subTotal + $taxAmount + $deliveryFee) - $grandTotal), 2);
+        $discountAmount = (float) $purchase->total_discount;
         $discountPercent = $subTotal > 0 ? round(($discountAmount / $subTotal) * 100, 2) : 0;
         $exchangeRate = (float) $purchase->exchange_rate;
 
@@ -205,10 +207,9 @@ class PurchaseController extends Controller
             'purchase_id' => $purchase->purchase_id,
             'purchase_no' => $purchase->purchase_no,
             'status' => (int) $purchase->status,
-            'due_date' => (int) $purchase->due_date,
-            'due_term' => (int) $purchase->due_term,
-            'payment_status' => (int) $purchase->payment_status,
-            'quote_no' => (int) $purchase->quote_no,
+            'quote_no' => $purchase->quote_no,
+            'saller' => $purchase->saller ? (int) $purchase->saller : null,
+            'approved_by' => $purchase->approved_by,
             'supplier_id' => (int) $purchase->supplier_id,
             'purchase_date' => $purchase->created_at ?? $purchase->purchase_date,
             'subtotal' => $subTotal,
@@ -341,13 +342,13 @@ class PurchaseController extends Controller
                 'p.purchase_id',
                 'p.purchase_no',
                 'p.status',
-                'p.due_term',
-                'p.due_date',
-                'p.payment_status',
                 'p.quote_no',
+                'p.saller',
+                'p.approved_by',
                 'p.supplier_id',
                 'p.purchase_date',
                 'p.sub_total',
+                'p.total_discount',
                 'p.tax_rate',
                 'p.tax_amount',
                 'p.shipping_fee',
@@ -399,7 +400,7 @@ class PurchaseController extends Controller
         $taxAmount = (float) $purchase->tax_amount;
         $deliveryFee = (float) $purchase->shipping_fee;
         $grandTotal = (float) $purchase->total_amount;
-        $discountAmount = round(max(0, ($subTotal + $taxAmount + $deliveryFee) - $grandTotal), 2);
+        $discountAmount = (float) $purchase->total_discount;
         $discountPercent = $subTotal > 0 ? round(($discountAmount / $subTotal) * 100, 2) : 0;
         $exchangeRate = (float) $purchase->exchange_rate;
 
@@ -407,10 +408,9 @@ class PurchaseController extends Controller
             'purchase_id' => $purchase->purchase_id,
             'purchase_no' => $purchase->purchase_no,
             'status' => (int) $purchase->status,
-            'due_date' => (int) $purchase->due_date,
-            'due_term' => (int) $purchase->due_term,
-            'payment_status' => (int) $purchase->payment_status,
-            'quote_no' => (int) $purchase->quote_no,
+            'quote_no' => $purchase->quote_no,
+            'saller' => $purchase->saller ? (int) $purchase->saller : null,
+            'approved_by' => $purchase->approved_by,
             'supplier_id' => (int) $purchase->supplier_id,
             'purchase_date' => $purchase->created_at ?? $purchase->purchase_date,
             'subtotal' => $subTotal,
@@ -604,302 +604,302 @@ class PurchaseController extends Controller
 
     public function store(Request $request)
     {
-        $user = Auth::user();
-        $uid = $user->id;
-        $proId = $user->profile_id;
+         DB::beginTransaction();
+        try {
+            $user = Auth::user();
+            $uid = $user->id;
+            $proId = $user->profile_id;
 
-        $validated = $request->validate([
-            'supplier_id'        => 'nullable|integer|exists:suppliers,supplier_id',
-            'purchase_date'      => 'required|date',
-            'tax_rate'           => 'nullable|numeric',
-            'shipping_fee'       => 'nullable|numeric',
-            'total_paid'         => 'nullable|numeric',
-            // 'exchange_rate'      => 'nullable|numeric',
-            'quote_no' => 'nullable|string|max:50',
-            'status'             => 'required|integer',
-            'description' => 'nullable|string',
-            'due_term' => 'nullable|integer',
-            'purchase_type'      => 'required|integer',
-            'items'              => 'required|array|min:1',
-            'items.*.item_id'    => 'required|integer|exists:items,item_id',
-            'items.*.quantity'   => 'required|integer|min:1',
-            'items.*.item_cost'  => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
-            'payments'           => 'array',
-            'payments.*.amount'  => 'numeric|min:0',
-            'payments.*.paid_at' => 'nullable|date',
-            'payments.*.payment_method' => 'nullable|string',
-            'payments.*.transection_id' => 'nullable|string',
-            'payments.*.remark' => 'nullable|string',
-            'shippings'  => 'nullable|array',
-            'shippings.*.fee' => 'nullable|numeric',
-            'shippings.*.carrier' => 'nullable|string',
-            'shippings.*.vai' => 'nullable|in:truck,air,sea',
-            'shippings.*.tracking_number' => 'nullable|string',
-            'shippings.*.remark' => 'nullable|string',
-            'shippings.*.term' => 'nullable|integer',
-            'shippings.*.date' => 'nullable|date',
-            'payment_status' => 'nullable|string',
-        ]);
-
-
-        $supplierId = $validated['supplier_id'] ?? null;
-        $subTotal = collect($validated['items'])->sum(function ($item) {
-            return (float) $item['quantity'] * (float) $item['item_cost'];
-        });
-        $taxRate = (float) ($validated['tax_rate'] ?? 0);
-        $taxAmount = round($subTotal * $taxRate / 100, 2);
-        $shippings = $validated['shippings'] ?? 0;
-        $shippingFee = (float) ($shippings ? collect($shippings)->sum('fee') : 0);
-        $totalAmount = round($subTotal + $taxAmount + $shippingFee, 2);
-        $totalPaid = (float) ($validated['total_paid'] ?? 0);
-        $balance = round($totalAmount - $totalPaid, 2);
-
-        $exchange_rate = ExchangeRate::find($proId);
-        $now = now();
-
-        $count = Purchase::join('users as u', 'purchases.created_by', '=', 'u.id')
-            ->join('profiles as pr', 'u.profile_id', '=', 'pr.id')
-            ->where('pr.id', $proId)
-            ->whereYear('purchases.created_at', $now->year)
-            ->whereMonth('purchases.created_at', $now->month)
-            ->count();
-        $purchaseNo = 'PO-' . now()->format('Ymd') . '-' . str_pad($count + 1, 5, '0', STR_PAD_LEFT);
-
-
-        $purchase = Purchase::create([
-            'purchase_no'   => $purchaseNo,
-            'supplier_id'   => $supplierId ?? Suppliers::max('supplier_id'),
-            'purchase_date' => $validated['purchase_date'],
-            'sub_total'     => $subTotal,
-            'tax_rate'      => $taxRate,
-            'tax_amount'    => $taxAmount,
-            'shipping_fee'  => $shippingFee,
-            'total_amount'  => $totalAmount,
-            'total_paid'    => $totalPaid,
-            'balance'       => $balance,
-            'due_term'       => $validated['due_term'],
-            'due_date'       => now()->addDay((int)$validated['due_term'] ?? 0),
-            'description'       => $validated['description'],
-            'purchase_type' => $validated['purchase_type'] ?? 0,
-            'exchange_rate' => $exchange_rate->usd_to_khr ?? 4000,
-            'quote_no' => $validated['quote_no'] ?? '',
-            'status'        => $validated['status'],
-            'created_by'    => $uid,
-            'payment_status' => $validated['payment_status'] ?? null,
-        ]);
-
-        $details = [];
-        foreach ($validated['items'] as $item) {
-            $details[] = PurchaseDetail::create([
-                'purchase_id' => $purchase->purchase_id,
-                'item_id'     => $item['item_id'],
-                'quantity'    => $item['quantity'],
-                'item_cost'  => $item['item_cost'],
-                'subtotal'    => $item['quantity'] * $item['item_cost'],
+            $validated = $request->validate([
+                'supplier_id'        => 'nullable|integer|exists:suppliers,supplier_id',
+                'purchase_date'      => 'required|date',
+                'tax_rate'           => 'nullable|numeric',
+                'shipping_fee'       => 'nullable|numeric',
+                'total_paid'         => 'nullable|numeric',
+                'quote_no' => 'nullable|string|max:50',
+                'status'             => 'required|integer',
+                'description' => 'nullable|string',
+                'saller' => 'nullable|integer|exists:users,id',
+                'items'              => 'required|array|min:1',
+                'items.*.item_id'    => 'required|integer|exists:items,item_id',
+                'items.*.quantity'   => 'required|integer|min:1',
+                'items.*.item_cost'  => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
+                'items.*.discount'   => 'nullable|numeric|min:0|max:100',
+                'shippings'  => 'nullable|array',
+                'shippings.*.fee' => 'nullable|numeric',
+                'shippings.*.carrier' => 'nullable|string',
+                'shippings.*.vai' => 'nullable|in:truck,air,sea',
             ]);
-        }
 
-        $payments = [];
-        if (!empty($validated['payments'])) {
-            foreach ($validated['payments'] as $payment) {
-                $amount = $payment['amount'] ?? 0;
-                $payment_method = $payment['payment_method'] ?? null;
-                if($amount > 0){
-                    $paymented = Payment::create([
-                        'payment_method'=>$payment_method ?? 'cash',
-                        'transection_id'=> $payment_method!='cash'?$payment['transection_id'] ?? null : null,
-                        'amount'=> (float)$amount,
-                        'remark' => $payment['remark'] ?? null,
-                        'paid_at' => $payment['paid_at'] ?? now(),
-                        'created_by'=> $uid
-                    ]);
-                    if(!empty($paymented)){
-                        $payments[] = PurchasePayment::create([
-                            'purchase_id' => $purchase->purchase_id,
-                            'payment_id'      => $paymented->payment_id,
-                            'created_by'  => $uid,
-                        ]);
-                    }
-                }
+
+            $supplierId = $validated['supplier_id'] ?? null;
+            $subTotal = collect($validated['items'])->sum(function ($item) {
+                return (float) $item['quantity'] * (float) $item['item_cost'];
+            });
+            $totalDiscount = (float) collect($validated['items'])->sum(function ($item) {
+                $quantity = (int) $item['quantity'];
+                $itemCost = (float) $item['item_cost'];
+                $discountPercent = (float) ($item['discount'] ?? 0);
+
+                // Calculate line subtotal: Qty * Unit Cost
+                $lineSubtotal = $quantity * $itemCost;
+
+                // Calculate the actual dollar/price discount for this line item
+                $lineDiscountAmount = ($lineSubtotal * $discountPercent) / 100;
+
+                return $lineDiscountAmount;
+            });
+            $taxRate = (float) ($validated['tax_rate'] ?? 0);
+            $taxAmount = round($subTotal * $taxRate / 100, 2);
+            $shippings = $validated['shippings'] ?? 0;
+            $shippingFee = (float) ($shippings ? collect($shippings)->sum('fee') : 0);
+            $totalAmount = round($subTotal - $totalDiscount + $taxAmount + $shippingFee, 2);
+            $totalPaid = (float) ($validated['total_paid'] ?? 0);
+            $balance = round($totalAmount - $totalPaid, 2);
+
+            $exchange_rate = ExchangeRate::find($proId);
+            $now = now();
+
+            $count = Purchase::join('users as u', 'purchases.created_by', '=', 'u.id')
+                ->join('profiles as pr', 'u.profile_id', '=', 'pr.id')
+                ->where('pr.id', $proId)
+                ->whereYear('purchases.created_at', $now->year)
+                ->whereMonth('purchases.created_at', $now->month)
+                ->count();
+            $purchaseNo = 'PO-' . now()->format('Ymd') . '-' . str_pad($count + 1, 5, '0', STR_PAD_LEFT);
+
+
+            $purchase = Purchase::create([
+                'purchase_no'   => $purchaseNo,
+                'supplier_id'   => $supplierId ?? Suppliers::max('supplier_id'),
+                'purchase_date' => $validated['purchase_date'],
+                'sub_total'     => $subTotal,
+                'tax_rate'      => $taxRate,
+                'tax_amount'    => $taxAmount,
+                'shipping_fee'  => $shippingFee,
+                'total_amount'  => $totalAmount,
+                'total_discount'  => $totalDiscount,
+                'total_paid'    => $totalPaid,
+                'balance'       => $balance,
+                'description'       => $validated['description'] ?? null,
+                'exchange_rate' => $exchange_rate->usd_to_khr ?? 4000,
+                'quote_no' => $validated['quote_no'] ?? '',
+                'status'        => $validated['status'],
+                'updated_by' => $uid,
+                'created_by'    => $uid,
+                'saller' => $validated['saller'] ?? $uid,
+            ]);
+            if(!is_array($validated['items'])||count($validated['items'] ) <= 0){
+                return response()->json([
+                    'message'=>'Purchase not have items',
+                    'status'=> 304,
+                    'data' => $validated['items']
+                ],400);
             }
-        }
 
-        if (!empty($shippings)) {
-            foreach ($shippings as $shipping) {
-                Sipping::create([
+            $details = [];
+            foreach ($validated['items'] as $item) {
+                $lineSubtotal = (float) $item['quantity'] * (float) $item['item_cost'];
+                $lineDiscount = (float) ($item['discount'] ?? 0);
+                $details[] = PurchaseDetail::create([
                     'purchase_id' => $purchase->purchase_id,
-                    'fee' => $shipping['fee'] ?? 0,
-                    'carrier' => $shipping['carrier'] ?? null,
-                    'vai' => $shipping['vai'] ?? null,
-                    'tracking_number' => $shipping['tracking_number'] ?? null,
-                    'remark' => $shipping['remark'] ?? null,
-                    'term' => $shipping['term'] ?? null,
-                    'date' => $shipping['date'] ?? null,
-                    'created_by' => $uid
+                    'item_id'     => $item['item_id'],
+                    'quantity'    => $item['quantity'],
+                    'discount'    => $item['discount'],
+                    'item_cost'  => $item['item_cost'],
+                    'discount'    => $lineDiscount,
+                    'subtotal'    => round($lineSubtotal - $lineDiscount, 2),
                 ]);
             }
-        }
-        // Update items_cost for each item in the Items table
-        foreach ($validated['items'] as $item) {
-            $itemData = Items::where('item_id', $item['item_id'])->first();
-            $itemData->item_cost = $item['item_cost'];
-            $itemData->save();
-        }
 
-        return response()->json([
-            'message'  => 'Purchase created successfully!',
-            'status'   => 201,
-        ], 201);
+            if(count($details) <= 0){
+                return response()->json([
+                    'message'=>'Purchase details save fail',
+                    'status'=> 304,
+                    'data' => $details
+                ],400);
+            }
+
+            if (!empty($shippings)) {
+                foreach ($shippings as $shipping) {
+                    Sipping::create([
+                        'purchase_id' => $purchase->purchase_id,
+                        'fee' => $shipping['fee'] ?? 0,
+                        'carrier' => $shipping['carrier'] ?? null,
+                        'vai' => $shipping['vai'] ?? null,
+                        'created_by' => $uid
+                    ]);
+                }
+            }
+            // Update items_cost for each item in the Items table
+            foreach ($validated['items'] as $item) {
+                $itemData = Items::where('item_id', $item['item_id'])->first();
+                $itemData->item_cost = $item['item_cost'];
+                $itemData->save();
+            }
+
+            DB::commit();
+            return response()->json([
+                'message'  => 'Purchase created successfully!',
+                'status'   => 201,
+            ], 201);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'message' => 'Error store purchase: ' . $e->getMessage(),
+                'status' => 500,
+                'id'=>$purchase->purchase_id
+            ], 500);
+        }
     }
 
 
     public function storeRaw(Request $request)
     {
-        $user = Auth::user();
-        $uid = $user->id;
-        $proId = $user->profile_id;
+        DB::beginTransaction();
+        try {
+            $user = Auth::user();
+            $uid = $user->id;
+            $proId = $user->profile_id;
 
-        $validated = $request->validate([
-            'supplier_id'        => 'nullable|integer|exists:suppliers,supplier_id',
-            'purchase_date'      => 'required|date',
-            'tax_rate'           => 'nullable|numeric',
-            'shipping_fee'       => 'nullable|numeric',
-            'total_paid'         => 'nullable|numeric',
-            // 'exchange_rate'      => 'nullable|numeric',
-            'description' => 'nullable|string',
-            'due_term' => 'nullable|integer',
-            'quote_no' => 'nullable|string|max:50',
-            'status'             => 'required|integer',
-            'purchase_type'      => 'required|integer',
-            'items'              => 'required|array|min:1',
-            'items.*.item_id'    => 'required|integer|exists:raw_materials,id',
-            'items.*.quantity'   => 'required|integer|min:1',
-            'items.*.item_cost'  => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
-            'payments'           => 'array',
-            'payments.*.amount'  => 'numeric|min:0',
-            'payments.*.paid_at' => 'nullable|date',
-            'payments.*.payment_method' => 'nullable|string',
-            'payments.*.transection_id' => 'nullable|string',
-            'payments.*.remark' => 'nullable|string',
-            'shippings'  => 'nullable|array',
-            'shippings.*.fee' => 'nullable|numeric',
-            'shippings.*.carrier' => 'nullable|string',
-            'shippings.*.vai' => 'nullable|in:truck,air,sea',
-            'shippings.*.tracking_number' => 'nullable|string',
-            'shippings.*.remark' => 'nullable|string',
-            'shippings.*.term' => 'nullable|integer',
-            'shippings.*.date' => 'nullable|date',
-            'payment_status' => 'nullable|string',
+            $validated = $request->validate([
+                'supplier_id'        => 'nullable|integer|exists:suppliers,supplier_id',
+                'purchase_date'      => 'required|date',
+                'tax_rate'           => 'nullable|numeric',
+                'shipping_fee'       => 'nullable|numeric',
+                'total_paid'         => 'nullable|numeric',
+                'description' => 'nullable|string',
+                'saller' => 'nullable|integer|exists:users,id',
+                'quote_no' => 'nullable|string|max:50',
+                'status'             => 'required|integer',
+                'items'              => 'required|array|min:1',
+                'items.*.item_id'    => 'required|integer|exists:raw_materials,id',
+                'items.*.quantity'   => 'required|integer|min:1',
+                'items.*.item_cost'  => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
+                'items.*.discount'   => 'nullable|numeric|min:0',
+                'shippings'  => 'nullable|array',
+                'shippings.*.fee' => 'nullable|numeric',
+                'shippings.*.carrier' => 'nullable|string',
+                'shippings.*.vai' => 'nullable|in:truck,air,sea',
 
-        ]);
-
-
-        $supplierId = $validated['supplier_id'] ?? null;
-        $subTotal = collect($validated['items'])->sum(function ($item) {
-            return (float) $item['quantity'] * (float) $item['item_cost'];
-        });
-        $taxRate = (float) ($validated['tax_rate'] ?? 0);
-        $taxAmount = round($subTotal * $taxRate / 100, 2);
-        $shippings = $validated['shippings'] ?? 0;
-        $shippingFee = (float) (($shippings ? collect($shippings)->sum('fee') : 0));
-        $totalAmount = round($subTotal + $taxAmount + $shippingFee, 2);
-        $totalPaid = (float) ($validated['total_paid'] ?? 0);
-        $balance = round($totalAmount - $totalPaid, 2);
-
-        $now = now();
-
-        $count = Purchase::join('users as u', 'purchases.created_by', '=', 'u.id')
-            ->join('profiles as pr', 'u.profile_id', '=', 'pr.id')
-            ->where('pr.id', $proId)
-            ->whereYear('purchases.created_at', $now->year)
-            ->whereMonth('purchases.created_at', $now->month)
-            ->count();
-        $purchaseNo = 'RPO-' . now()->format('Ymd') . '-' . str_pad($count + 1, 5, '0', STR_PAD_LEFT);
-
-        $exchange_rate = ExchangeRate::find($proId);
-        $purchase = Purchase::create([
-            'purchase_no'   => $purchaseNo,
-            'supplier_id'   => $supplierId ?? Suppliers::max('supplier_id'),
-            'purchase_date' => $validated['purchase_date'],
-            'sub_total'     => $subTotal,
-            'tax_rate'      => $taxRate,
-            'tax_amount'    => $taxAmount,
-            'shipping_fee'  => $shippingFee,
-            'total_amount'  => $totalAmount,
-            'total_paid'    => $totalPaid,
-            'balance'       => $balance,
-            'due_term'       => $validated['due_term'],
-            'due_date'       => now()->addDay((int)$validated['due_term'] ?? 0),
-            'description'       => $validated['description'],
-            'purchase_type' => $validated['purchase_type'] ?? 0,
-            'exchange_rate' => $exchange_rate->usd_to_khr ?? 4000,
-            'quote_no' => $validated['quote_no'] ?? '',
-            'status'        => $validated['status'],
-            'created_by'    => $uid,
-            'payment_status' => $validated['payment_status'] ?? null,
-        ]);
-
-        $details = [];
-        foreach ($validated['items'] as $item) {
-            $details[] = PurchaseRawDetail::create([
-                'purchase_id' => $purchase->purchase_id,
-                'raw_material_id'     => $item['item_id'],
-                'quantity'    => $item['quantity'],
-                'item_cost'  => $item['item_cost'],
-                'subtotal'    => $item['quantity'] * $item['item_cost'],
             ]);
-        }
 
-        $payments = [];
-        if (!empty($validated['payments'])) {
-            foreach ($validated['payments'] as $payment) {
-                $amount = $payment['amount'] ?? 0;
-                $payment_method = $payment['payment_method'] ?? null;
-                if($amount > 0){
-                    $paymented = Payment::create([
-                        'payment_method'=>$payment_method??'cash',
-                        'transection_id'=> $payment_method!='cash'?$payment['transection_id']??null:null,
-                        'amount'=> (float)$amount,
-                        'remark' => $payment['remark']??null,
-                        'paid_at' => $payment['paid_at']??now(),
-                        'created_by'=> $uid
-                    ]);
-                    if(!empty($paymented)){
-                        $payments[] = PurchasePayment::create([
-                            'purchase_id' => $purchase->purchase_id,
-                            'payment_id'      => $paymented->payment_id,
-                            'created_by'  => $uid,
-                        ]);
-                    }
-                }
+
+            $supplierId = $validated['supplier_id'] ?? null;
+            $subTotal = collect($validated['items'])->sum(function ($item) {
+                return (float) $item['quantity'] * (float) $item['item_cost'];
+            });
+            $totalDiscount = (float) collect($validated['items'])->sum(function ($item) {
+                $quantity = (int) $item['quantity'];
+                $itemCost = (float) $item['item_cost'];
+                $discountPercent = (float) ($item['discount'] ?? 0);
+
+                // Calculate line subtotal: Qty * Unit Cost
+                $lineSubtotal = $quantity * $itemCost;
+
+                // Calculate the actual dollar/price discount for this line item
+                $lineDiscountAmount = ($lineSubtotal * $discountPercent) / 100;
+
+                return $lineDiscountAmount;
+            });
+            $taxRate = (float) ($validated['tax_rate'] ?? 0);
+            $taxAmount = round($subTotal * $taxRate / 100, 2);
+            $shippings = $validated['shippings'] ?? 0;
+            $shippingFee = (float) (($shippings ? collect($shippings)->sum('fee') : 0));
+            $totalAmount = round($subTotal - $totalDiscount + $taxAmount + $shippingFee, 2);
+            $totalPaid = (float) ($validated['total_paid'] ?? 0);
+            $balance = round($totalAmount - $totalPaid, 2);
+
+            $now = now();
+
+            $count = Purchase::join('users as u', 'purchases.created_by', '=', 'u.id')
+                ->join('profiles as pr', 'u.profile_id', '=', 'pr.id')
+                ->where('pr.id', $proId)
+                ->whereYear('purchases.created_at', $now->year)
+                ->whereMonth('purchases.created_at', $now->month)
+                ->count();
+            $purchaseNo = 'RPO-' . now()->format('Ymd') . '-' . str_pad($count + 1, 5, '0', STR_PAD_LEFT);
+
+            $exchange_rate = ExchangeRate::find($proId);
+            $purchase = Purchase::create([
+                'purchase_no'   => $purchaseNo,
+                'supplier_id'   => $supplierId ?? Suppliers::max('supplier_id'),
+                'purchase_date' => $validated['purchase_date'],
+                'sub_total'     => $subTotal,
+                'tax_rate'      => $taxRate,
+                'tax_amount'    => $taxAmount,
+                'shipping_fee'  => $shippingFee,
+                'total_discount'  => $totalDiscount,
+                'total_amount'  => $totalAmount,
+                'total_paid'    => $totalPaid,
+                'balance'       => $balance,
+                'description'       => $validated['description'] ?? null,
+                'exchange_rate' => $exchange_rate->usd_to_khr ?? 4000,
+                'quote_no' => $validated['quote_no'] ?? '',
+                'status'        => $validated['status'],
+                'created_by'    => $uid,
+                'saller' => $validated['saller'] ?? $uid,
+                'updated_by' => $uid,
+            ]);
+
+            if(!is_array($validated['items'] )||count($validated['items'] ) <= 0){
+                return response()->json([
+                    'message'=>'Purchase not have items',
+                    'status'=> 304,
+                    'data' => $validated['items']
+                ],400);
             }
-        }
-        if (!empty($shippings)) {
-            foreach ($shippings as $shipping) {
-                Sipping::create([
+            $details = [];
+            foreach ($validated['items'] as $item) {
+                $details[] = PurchaseRawDetail::create([
                     'purchase_id' => $purchase->purchase_id,
-                    'fee' => $shipping['fee'] ?? 0,
-                    'carrier' => $shipping['carrier'] ?? null,
-                    'vai' => $shipping['vai'] ?? null,
-                    'tracking_number' => $shipping['tracking_number'] ?? null,
-                    'remark' => $shipping['remark'] ?? null,
-                    'term' => $shipping['term'] ?? null,
-                    'date' => $shipping['date'] ?? null,
-                    'created_by' => $uid
+                    'raw_material_id'     => $item['item_id'],
+                    'quantity'    => $item['quantity'],
+                    'discount'    => $item['discount'],
+                    'item_cost'  => $item['item_cost'],
+                    'subtotal'    => $item['quantity'] * $item['item_cost'],
                 ]);
             }
-        }
-        // // Update items_cost for each item in the Items table
-        foreach ($validated['items'] as $item) {
-            $itemData = RawMaterial::where('id', $item['item_id'])->first();
-            $itemData->material_cost = $item['item_cost'];
-            $itemData->save();
-        }
+            if(count($details) <= 0){
+                return response()->json([
+                    'message'=>'Purchase details save fail',
+                    'status'=> 304,
+                    'data' => $details
+                ],400);
+            }
 
-        return response()->json([
-            'message'  => 'Purchase created successfully!',
-            'status'   => 201,
-        ], 201);
+
+            if (!empty($shippings)) {
+                foreach ($shippings as $shipping) {
+                    Sipping::create([
+                        'purchase_id' => $purchase->purchase_id,
+                        'fee' => $shipping['fee'] ?? 0,
+                        'carrier' => $shipping['carrier'] ?? null,
+                        'vai' => $shipping['vai'] ?? null,
+                        'created_by' => $uid
+                    ]);
+                }
+            }
+            // // Update items_cost for each item in the Items table
+            foreach ($validated['items'] as $item) {
+                $itemData = RawMaterial::where('id', $item['item_id'])->first();
+                $itemData->material_cost = $item['item_cost'];
+                $itemData->save();
+            }
+
+            DB::commit();
+            return response()->json([
+                'message'  => 'Purchase created successfully!',
+                'status'   => 201,
+            ], 201);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'message' => 'Error confirming purchase: ' . $e->getMessage(),
+                'status' => 500,
+                'id'=>$purchase->purchase_id
+            ], 500);
+        }
     }
 
     public function show($id)
@@ -1000,31 +1000,19 @@ class PurchaseController extends Controller
             'tax_rate'      => 'nullable|numeric',
             'shipping_fee'  => 'nullable|numeric',
             'total_paid'    => 'nullable|numeric',
-            // 'exchange_rate' => 'nullable|numeric',
             'description' => 'nullable|string',
-            'due_term' => 'nullable|integer',
+            'saller' => 'nullable|integer|exists:users,id',
             'quote_no' => 'nullable|string|max:50',
             'status'        => 'required|integer',
             'items'         => 'required|array|min:1',
             'items.*.item_id'    => 'required|integer|exists:items,item_id',
             'items.*.quantity'   => 'required|integer',
             'items.*.item_cost' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
-            'payments'           => 'array',
-            'payments.*.amount'  => 'numeric|min:0',
-            'payments.*.paid_at' => 'nullable|date',
-            'payments.*.payment_method' => 'nullable|string',
-            'payments.*.transection_id' => 'nullable|string',
-            'payments.*.remark' => 'nullable|string',
+            'items.*.discount'   => 'nullable|numeric|min:0|max:100',
             'shippings'  => 'nullable|array',
             'shippings.*.fee' => 'nullable|numeric',
             'shippings.*.carrier' => 'nullable|string',
             'shippings.*.vai' => 'nullable|in:truck,air,sea',
-            'shippings.*.tracking_number' => 'nullable|string',
-            'shippings.*.remark' => 'nullable|string',
-            'shippings.*.term' => 'nullable|integer',
-            'shippings.*.date' => 'nullable|date',
-            'payment_status' => 'nullable|string',
-
         ]);
 
         // return response()->json([
@@ -1032,138 +1020,118 @@ class PurchaseController extends Controller
         //     'status'  => 200,
         //     'data'    => $validated
         // ]);
+        DB::beginTransaction();
+        try {
 
-        $subTotal = collect($validated['items'])->sum(function ($item) {
-            return (float) $item['quantity'] * (float) $item['item_cost'];
-        });
-        $taxRate = (float) ($validated['tax_rate'] ?? 0);
-        $taxAmount = round($subTotal * $taxRate / 100, 2);
-        $shippings = $validated['shippings'] ?? 0;
-        $shippingFee = (float) (($shippings ? collect($shippings)->sum('fee') : 0));
-        $totalAmount = round($subTotal + $taxAmount + $shippingFee, 2);
-        $totalPaid = (float) ($validated['total_paid'] ?? 0);
-        $balance = round($totalAmount - $totalPaid, 2);
+            $subTotal = collect($validated['items'])->sum(function ($item) {
+                return (float) $item['quantity'] * (float) $item['item_cost'];
+            });
+            $totalDiscount = (float) collect($validated['items'])->sum(function ($item) {
+                $quantity = (int) $item['quantity'];
+                $itemCost = (float) $item['item_cost'];
+                $discountPercent = (float) ($item['discount'] ?? 0);
 
-        $purchase->update([
-            'supplier_id'   => $validated['supplier_id'],
-            'purchase_date' => $validated['purchase_date'],
-            'sub_total'     => $subTotal,
-            'tax_rate'      => $taxRate,
-            'tax_amount'    => $taxAmount,
-            'shipping_fee'  => $shippingFee,
-            'total_amount'  => $totalAmount,
-            'total_paid'    => $totalPaid,
-            'balance'       => $balance,
-            'due_term'       => $validated['due_term'],
-            'due_date'       => now()->addDay((int)$validated['due_term'] ?? 0),
-            'description'       => $validated['description'],
-            // 'exchange_rate' => $validated['exchange_rate'] ?? $purchase->exchange_rate,
-            'quote_no' => $validated['quote_no'] ?? $purchase->quote_no,
-            'status'        => $validated['status'],
-            'payment_status' => $validated['payment_status'] ?? $purchase->payment_status,
-        ]);
+                // Calculate line subtotal: Qty * Unit Cost
+                $lineSubtotal = $quantity * $itemCost;
 
-        PurchaseDetail::where('purchase_id', $id)->delete();
+                // Calculate the actual dollar/price discount for this line item
+                $lineDiscountAmount = ($lineSubtotal * $discountPercent) / 100;
 
-        $details = [];
-        foreach ($validated['items'] as $item) {
-            $details[] = PurchaseDetail::create([
-                'purchase_id' => $id,
-                'item_id'     => $item['item_id'],
-                'quantity'    => $item['quantity'],
-                'item_cost'  => $item['item_cost'],
-                // 'attributes'  => json_encode($item['attributes'],true),
-                'subtotal'    => $item['quantity'] * $item['item_cost'],
+                return $lineDiscountAmount;
+            });
+            $taxRate = (float) ($validated['tax_rate'] ?? 0);
+            $taxAmount = round($subTotal * $taxRate / 100, 2);
+            $shippings = $validated['shippings'] ?? 0;
+            $shippingFee = (float) (($shippings ? collect($shippings)->sum('fee') : 0));
+            $totalAmount = round($subTotal - $totalDiscount + $taxAmount + $shippingFee, 2);
+            $totalPaid = (float) ($validated['total_paid'] ?? 0);
+            $balance = round($totalAmount - $totalPaid, 2);
+
+            $purchase->update([
+                'supplier_id'   => $validated['supplier_id'],
+                'purchase_date' => $validated['purchase_date'],
+                'sub_total'     => $subTotal,
+                'tax_rate'      => $taxRate,
+                'tax_amount'    => $taxAmount,
+                'shipping_fee'  => $shippingFee,
+                'total_amount'  => $totalAmount,
+                'total_discount'  => $totalDiscount,
+                'total_paid'    => $totalPaid,
+                'balance'       => $balance,
+                'description'       => $validated['description'] ?? null,
+                'quote_no' => $validated['quote_no'] ?? $purchase->quote_no,
+                'status'        => $validated['status'],
+                'saller' => $validated['saller'] ?? $purchase->saller,
+                'updated_by' => $uid,
             ]);
-        }
-        $paymentIds = PurchasePayment::where('purchase_id', $id)
-            ->pluck('payment_id');
 
-        // Payment::whereIn('payment_id', $paymentIds)->delete();
+            PurchaseDetail::where('purchase_id', $id)->delete();
+            if(!is_array($validated['items'] )||count($validated['items'] ) <= 0){
+                return response()->json([
+                    'message'=>'Purchase not have items',
+                    'status'=> 304,
+                    'data' => $validated['items']
+                ],400);
+            }
+            $details = [];
+            foreach ($validated['items'] as $item) {
+                $lineSubtotal = (float) $item['quantity'] * (float) $item['item_cost'];
+                $lineDiscount = (float) ($item['discount'] ?? 0);
+                $details[] = PurchaseDetail::create([
+                    'purchase_id' => $id,
+                    'item_id'     => $item['item_id'],
+                    'quantity'    => $item['quantity'],
+                    'item_cost'  => $item['item_cost'],
+                    'discount'    => $lineDiscount,
+                    'subtotal'    => round($lineSubtotal - $lineDiscount, 2),
+                ]);
+            }
+            if(count($details) <= 0){
+                return response()->json([
+                    'message'=>'Purchase details save fail',
+                    'status'=> 304,
+                    'data' => $details
+                ],400);
+            }
 
-        // PurchasePayment::where('purchase_id', $id)->delete();
 
-        $paymented = '';
-        if (!empty($validated['payments'])) {
-            foreach ($validated['payments'] as $payment) {
-                $amount = (int)$payment['amount']??0;
-                $payment_method = $payment['payment_method']??null;
-                if($amount > 0){
-                    $existingPayment = count($paymentIds) > 0 ? Payment::where('payment_id', $paymentIds[count($paymentIds)-1])->first() : null;
-                    if($existingPayment){
-                        $paymented = $existingPayment->update([
-                            'payment_method'=>$payment_method??'cash',
-                            'transection_id'=> $payment_method!='cash'?$payment['transection_id']??null:null,
-                            'amount'=> (float)$amount,
-                            'remark' => $payment['remark']??null,
-                            'paid_at' => $payment['paid_at']??now(),
-                            'created_by'=> $uid
+            if (!empty($shippings)) {
+                $shippingData = Sipping::where('purchase_id', $id)->first();
+                // return response()->json($shipping, 404);
+                if(!empty($shippingData)){
+                    foreach ($shippings as $shipping) {
+                        $shippingData->update([
+                            'fee' => $shipping['fee'] ?? 0,
+                            'carrier' => $shipping['carrier'] ?? null,
+                            'vai' => $shipping['vai'] ?? null,
                         ]);
-                    } else {
-                        $paymented = Payment::create([
-                            'payment_method'=>$payment_method??'cash',
-                            'transection_id'=> $payment_method!='cash'?$payment['transection_id']??null:null,
-                            'amount'=> (float)$amount,
-                            'remark' => $payment['remark']??null,
-                            'paid_at' => $payment['paid_at']??now(),
-                            'created_by'=> $uid
+                    }
+                }else{
+                    foreach ($shippings as $shipping) {
+                        Sipping::create([
+                            'purchase_id' => $id,
+                            'fee' => $shipping['fee'] ?? 0,
+                            'carrier' => $shipping['carrier'] ?? null,
+                            'vai' => $shipping['vai'] ?? null,
+                            'created_by'=>$uid
                         ]);
-                        if(!empty($paymented)){
-                            $payments[] = PurchasePayment::create([
-                                'purchase_id' => $id,
-                                'payment_id'      => $paymented->payment_id,
-                                'created_by'  => $uid,
-                            ]);
-                        }
                     }
                 }
             }
-        }
-        if($paymented){
-            $total_paid = count($paymentIds) > 0 ? Payment::whereIn('payment_id', $paymentIds)->select(DB::raw('SUM(amount) as total_payment'))->first()->total_payment : $paymented->amount;
-            $purchase->update([
-                'total_paid' => $total_paid,
-                'balance' => (float)$purchase->total_amount - (float)$total_paid,
+
+            DB::commit();
+            return response()->json([
+                'message' => 'Purchase updated successfully',
+                'status'  => 200,
+                'data'    => $validated['payments'] ?? []
             ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'message' => 'Error update purchase: ' . $e->getMessage(),
+                'status' => 500
+            ], 500);
         }
-
-        if (!empty($shippings)) {
-            $shippingData = Sipping::where('purchase_id', $id)->first();
-            // return response()->json($shipping, 404);
-            if(!empty($shippingData)){
-                foreach ($shippings as $shipping) {
-                    $shippingData->update([
-                        'fee' => $shipping['fee'] ?? 0,
-                        'carrier' => $shipping['carrier'] ?? null,
-                        'vai' => $shipping['vai'] ?? null,
-                        'tracking_number' => $shipping['tracking_number'] ?? null,
-                        'remark' => $shipping['remark'] ?? null,
-                        'term' => $shipping['term'] ?? null,
-                        'date' => $shipping['date'] ?? null,
-                    ]);
-                }
-            }else{
-                foreach ($shippings as $shipping) {
-                    Sipping::create([
-                        'purchase_id' => $id,
-                        'fee' => $shipping['fee'] ?? 0,
-                        'carrier' => $shipping['carrier'] ?? null,
-                        'vai' => $shipping['vai'] ?? null,
-                        'tracking_number' => $shipping['tracking_number'] ?? null,
-                        'remark' => $shipping['remark'] ?? null,
-                        'term' => $shipping['term'] ?? null,
-                        'date' => $shipping['date'] ?? null,
-                        'created_by'=>$uid
-                    ]);
-                }
-            }
-        }
-
-        return response()->json([
-            'message' => 'Purchase updated successfully',
-            'status'  => 200,
-            'data'    => $validated['payments'] ?? []
-        ]);
     }
 
 
@@ -1192,161 +1160,131 @@ class PurchaseController extends Controller
             'tax_rate'      => 'nullable|numeric',
             'shipping_fee'  => 'nullable|numeric',
             'total_paid'    => 'nullable|numeric',
-            // 'exchange_rate' => 'nullable|numeric',
             'description' => 'nullable|string',
-            'due_term' => 'nullable|integer',
+            'saller' => 'nullable|integer|exists:users,id',
             'quote_no' => 'nullable|string|max:50',
             'status'        => 'required|integer',
             'items'         => 'required|array|min:1',
             'items.*.item_id'    => 'required|integer',
             'items.*.quantity'   => 'required|integer',
+            'items.*.discount'   => 'required|numeric|min:0|max:100',
             'items.*.item_cost' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
-            'payments'           => 'array',
-            'payments.*.amount'  => 'numeric|min:0',
-            'payments.*.paid_at' => 'nullable|date',
-            'payments.*.payment_method' => 'nullable|string',
-            'payments.*.transection_id' => 'nullable|string',
-            'payments.*.remark' => 'nullable|string',
             'shippings'  => 'nullable|array',
             'shippings.*.fee' => 'nullable|numeric',
             'shippings.*.carrier' => 'nullable|string',
             'shippings.*.vai' => 'nullable|in:truck,air,sea',
-            'shippings.*.tracking_number' => 'nullable|string',
-            // 'shippings.*.remark' => 'nullable|string',
-            // 'shippings.*.term' => 'nullable|integer',
-            // 'shippings.*.date' => 'nullable|date',
-            'payment_status' => 'nullable|string',
         ]);
 
-        $subTotal = collect($validated['items'])->sum(function ($item) {
-            return (float) $item['quantity'] * (float) $item['item_cost'];
-        });
-        $taxRate = (float) ($validated['tax_rate'] ?? 0);
-        $taxAmount = round($subTotal * $taxRate / 100, 2);
-        $shippings = $validated['shippings'] ?? 0;
-        $shippingFee = (float) (($shippings ? collect($shippings)->sum('fee') : 0));
-        $totalAmount = round($subTotal + $taxAmount + $shippingFee, 2);
-        $totalPaid = (float) ($validated['total_paid'] ?? 0);
-        $balance = round($totalAmount - $totalPaid, 2);
+        DB::beginTransaction();
+        try {
+            $subTotal = collect($validated['items'])->sum(function ($item) {
+                return (float) $item['quantity'] * (float) $item['item_cost'];
+            });
+            $totalDiscount = (float) collect($validated['items'])->sum(function ($item) {
+                $quantity = (int) $item['quantity'];
+                $itemCost = (float) $item['item_cost'];
+                $discountPercent = (float) ($item['discount'] ?? 0);
 
-        $purchase->update([
-            'supplier_id'   => $validated['supplier_id'],
-            'purchase_date' => $validated['purchase_date'],
-            'sub_total'     => $subTotal,
-            'tax_rate'      => $taxRate,
-            'tax_amount'    => $taxAmount,
-            'shipping_fee'  => $shippingFee,
-            'total_amount'  => $totalAmount,
-            'total_paid'    => $totalPaid,
-            'balance'       => $balance,
-            'due_term'       => $validated['due_term'],
-            'due_date'       => now()->addDay((int)$validated['due_term'] ?? 0),
-            'description'       => $validated['description'],
-            // 'exchange_rate' => $validated['exchange_rate'] ?? $purchase->exchange_rate,
-            'quote_no' => $validated['quote_no'] ?? $purchase->quote_no,
-            'status'        => $validated['status'],
-            'payment_status' => $validated['payment_status'] ?? $purchase->payment_status,
-        ]);
+                // Calculate line subtotal: Qty * Unit Cost
+                $lineSubtotal = $quantity * $itemCost;
 
-        PurchaseRawDetail::where('purchase_id', $id)->delete();
+                // Calculate the actual dollar/price discount for this line item
+                $lineDiscountAmount = ($lineSubtotal * $discountPercent) / 100;
 
-        $details = [];
-        foreach ($validated['items'] as $item) {
-            $details[] = PurchaseRawDetail::create([
-                'purchase_id' => $id,
-                'raw_material_id'     => $item['item_id'],
-                'quantity'    => $item['quantity'],
-                'item_cost'  => $item['item_cost'],
-                'subtotal'    => $item['quantity'] * $item['item_cost'],
+                return $lineDiscountAmount;
+            });
+            $taxRate = (float) ($validated['tax_rate'] ?? 0);
+            $taxAmount = round($subTotal * $taxRate / 100, 2);
+            $shippings = $validated['shippings'] ?? 0;
+            $shippingFee = (float) (($shippings ? collect($shippings)->sum('fee') : 0));
+            $totalAmount = round($subTotal - $totalDiscount + $taxAmount + $shippingFee, 2);
+            $totalPaid = (float) ($validated['total_paid'] ?? 0);
+            $balance = round($totalAmount - $totalPaid, 2);
+
+            $purchase->update([
+                'supplier_id'   => $validated['supplier_id'],
+                'purchase_date' => $validated['purchase_date'],
+                'sub_total'     => $subTotal,
+                'tax_rate'      => $taxRate,
+                'tax_amount'    => $taxAmount,
+                'shipping_fee'  => $shippingFee,
+                'total_amount'  => $totalAmount,
+                'total_discount'  => $totalDiscount,
+                'total_paid'    => $totalPaid,
+                'balance'       => $balance,
+                'description'       => $validated['description'] ?? null,
+                'quote_no' => $validated['quote_no'] ?? $purchase->quote_no,
+                'status'        => $validated['status'],
+                'saller' => $validated['saller'] ?? $purchase->saller,
+                'updated_by' => $uid,
             ]);
-        }
 
-        $paymentIds = PurchasePayment::where('purchase_id', $id)
-            ->pluck('payment_id');
+            PurchaseRawDetail::where('purchase_id', $id)->delete();
+            if(!is_array($validated['items'] )||count($validated['items'] ) <= 0){
+                return response()->json([
+                    'message'=>'Purchase not have items',
+                    'status'=> 304,
+                    'data' => $validated['items']
+                ],400);
+            }
 
-        // Payment::whereIn('payment_id', $paymentIds)->delete();
+            $details = [];
+            foreach ($validated['items'] as $item) {
+                $details[] = PurchaseRawDetail::create([
+                    'purchase_id' => $id,
+                    'raw_material_id'     => $item['item_id'],
+                    'quantity'    => $item['quantity'],
+                    'discount'    => $item['discount'],
+                    'item_cost'  => $item['item_cost'],
+                    'subtotal'    => $item['quantity'] * $item['item_cost'],
+                ]);
+            }
 
-        // PurchasePayment::where('purchase_id', $id)->delete();
+            if(count($details) <= 0){
+                return response()->json([
+                    'message'=>'Purchase details save fail',
+                    'status'=> 304,
+                    'data' => $details
+                ],400);
+            }
 
-        $paymented = '';
-        if (!empty($validated['payments'])) {
-            foreach ($validated['payments'] as $payment) {
-                $amount = $payment['amount']??0;
-                $payment_method = $payment['payment_method']??null;
-                if($amount > 0){
-                    $existingPayment = count($paymentIds) > 0 ? Payment::where('payment_id', $paymentIds[count($paymentIds)-1])->first() : null;
-                    if($existingPayment){
-                        $paymented = $existingPayment->update([
-                            'payment_method'=>$payment_method??'cash',
-                            'transection_id'=> $payment_method!='cash'?$payment['transection_id']??null:null,
-                            'amount'=> (float)$amount,
-                            'remark' => $payment['remark']??null,
-                            'paid_at' => $payment['paid_at']??now(),
-                            'created_by'=> $uid
+
+
+            if (!empty($shippings)) {
+                $shippingData = Sipping::where('purchase_id', $id)->first();
+                if(!empty($shippingData)){
+                    foreach ($shippings as $shipping) {
+                        $shippingData->update([
+                            'fee' => $shipping['fee'] ?? 0,
+                            'carrier' => $shipping['carrier'] ?? null,
+                            'vai' => $shipping['vai'] ?? null,
                         ]);
-                    } else {
-                        $paymented = Payment::create([
-                            'payment_method'=>$payment_method??'cash',
-                            'transection_id'=> $payment_method!='cash'?$payment['transection_id']??null:null,
-                            'amount'=> (float)$amount,
-                            'remark' => $payment['remark']??null,
-                            'paid_at' => $payment['paid_at']??now(),
-                            'created_by'=> $uid
+                    }
+                }else{
+                    foreach ($shippings as $shipping) {
+                        Sipping::create([
+                            'purchase_id' => $id,
+                            'fee' => $shipping['fee'] ?? 0,
+                            'carrier' => $shipping['carrier'] ?? null,
+                            'vai' => $shipping['vai'] ?? null,
+                            'created_by'=>$uid
                         ]);
-                        if(!empty($paymented)){
-                            $payments[] = PurchasePayment::create([
-                                'purchase_id' => $id,
-                                'payment_id'      => $paymented->payment_id,
-                                'created_by'  => $uid,
-                            ]);
-                        }
                     }
                 }
             }
-        }
-        if($paymented){
-            $total_paid = count($paymentIds) > 0 ? Payment::whereIn('payment_id', $paymentIds)->select(DB::raw('SUM(amount) as total_payment'))->first()->total_payment : $paymented->amount;
-            $purchase->update([
-                'total_paid' => $total_paid,
-                'balance' => (float)$purchase->total_amount - (float)$total_paid,
+
+            DB::commit();
+            return response()->json([
+                'message' => 'Purchase updated successfully',
+                'status'  => 200,
             ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'message' => 'Error confirming purchase: ' . $e->getMessage(),
+                'status' => 500
+            ], 500);
         }
-
-        if (!empty($shippings)) {
-            $shippingData = Sipping::where('purchase_id', $id)->first();
-            if(!empty($shippingData)){
-                foreach ($shippings as $shipping) {
-                    $shippingData->update([
-                        'fee' => $shipping['fee'] ?? 0,
-                        'carrier' => $shipping['carrier'] ?? null,
-                        'vai' => $shipping['vai'] ?? null,
-                        'tracking_number' => $shipping['tracking_number'] ?? null,
-                        'remark' => $shipping['remark'] ?? null,
-                        'term' => $shipping['term'] ?? null,
-                        'date' => $shipping['date'] ?? null,
-                    ]);
-                }
-            }else{
-                foreach ($shippings as $shipping) {
-                    Sipping::create([
-                        'purchase_id' => $id,
-                        'fee' => $shipping['fee'] ?? 0,
-                        'carrier' => $shipping['carrier'] ?? null,
-                        'vai' => $shipping['vai'] ?? null,
-                        'tracking_number' => $shipping['tracking_number'] ?? null,
-                        'remark' => $shipping['remark'] ?? null,
-                        'term' => $shipping['term'] ?? null,
-                        'date' => $shipping['date'] ?? null,
-                        'created_by'=>$uid
-                    ]);
-                }
-            }
-        }
-
-        return response()->json([
-            'message' => 'Purchase updated successfully',
-            'status'  => 200,
-        ]);
     }
 
     public function destroy($id)
@@ -1520,6 +1458,14 @@ class PurchaseController extends Controller
             // Get purchase details
             // $details = PurchaseDetail::where('purchase_id', $purchase["purchase_id"])->where('is_deleted', 0)->get();
             $details = $purchase['details'];
+            // dd($details);
+            if(count($details)<=0){
+                return response()->json([
+                    'message' => 'Purchase confirmed cannot confirm, This purchase not have items',
+                    'status' => 304,
+                    'data' => $details,
+                ],400);
+            }
             // Preload all items in one query for efficiency
             $itemIds = $details->pluck('item_id')->unique()->toArray();
             $itemsMap = Items::whereIn('item_id', $itemIds)->get()->keyBy('item_id');
@@ -1553,14 +1499,14 @@ class PurchaseController extends Controller
             ]);
             $purchaseDB->update(['status' => 1]);
 
-            DB::commit();
             return response()->json([
                 'message' => 'Purchase confirmed and items inserted into stock successfully',
                 'status' => 200,
                 'data' => $purchase,
                 'stock_master_id' => $stockMasterId,
                 'stock_items' => $stockItems
-            ]);
+                ]);
+                DB::commit();
         } catch (\Exception $e) {
             DB::rollBack();
             return response()->json([
@@ -1629,6 +1575,14 @@ class PurchaseController extends Controller
             // Get purchase details
             // $details = PurchaseDetail::where('purchase_id', $purchase["purchase_id"])->where('is_deleted', 0)->get();
             $details = $purchase['details'];
+
+            if( count($details) <= 0){
+                return response()->json([
+                    'message' => 'Purchase confirmed cannot confirm, This purchase not have items',
+                    'status' => 304,
+                    'data' => $details,
+                ],400);
+            }
             // Preload all items in one query for efficiency
             $itemIds = $details->pluck('raw_material_id')->unique()->toArray();
             $itemsMap = RawMaterial::whereIn('id', $itemIds)->get()->keyBy('id');

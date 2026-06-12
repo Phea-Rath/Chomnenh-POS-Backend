@@ -21,19 +21,20 @@ return new class extends Migration
             $table->decimal('tax_amount', 10, 2)->default(0);
             $table->decimal('shipping_fee', 10, 2)->default(0);
             $table->decimal('total_amount', 10, 2)->default(0);
+            $table->decimal('total_discount', 10, 2)->default(0);
             $table->decimal('total_paid', 10, 2)->default(0);
             $table->decimal('balance', 10, 2)->default(0);
             $table->integer('purchase_type')->default(0);
             $table->tinyInteger('is_deleted')->default(0);
             $table->unsignedBigInteger('created_by')->nullable();
+            $table->unsignedBigInteger('seller')->nullable();
+            $table->string('approved_by')->nullable();
             $table->decimal('exchange_rate', 10, 2)->default(1);
             $table->string('quote_no', 50)->nullable();
-            $table->string('payment_status', 100)->nullable();
-            $table->integer('due_term')->nullable(0);
-            $table->dateTime('due_date');
-            $table->description('due_date', 255)->nullable();
+            $table->string('description', 255)->nullable();
             $table->tinyInteger('status')->default(0);
             $table->foreign('supplier_id')->references('supplier_id')->on('suppliers');
+            $table->foreign('seller')->references('id')->on('users');
             $table->timestamps();
         });
     }
