@@ -742,6 +742,7 @@ class PurchaseController extends Controller
             return response()->json([
                 'message'  => 'Purchase created successfully!',
                 'status'   => 201,
+                'id'=> $purchase->purchase_id
             ], 201);
         } catch (\Exception $e) {
             DB::rollBack();
@@ -891,6 +892,7 @@ class PurchaseController extends Controller
             return response()->json([
                 'message'  => 'Purchase created successfully!',
                 'status'   => 201,
+                'id'=> $purchase->purchase_id
             ], 201);
         } catch (\Exception $e) {
             DB::rollBack();

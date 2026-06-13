@@ -242,6 +242,7 @@ class QuotationController extends Controller
             return response()->json([
                 'message' => 'Quotation created successfully',
                 'status' => 200,
+                'id'=> $quotation->quotation_id
             ], 201);
 
         } catch (\Exception $e) {
@@ -433,7 +434,7 @@ class QuotationController extends Controller
                 ->where('item_id', $item->item_id)
                 ->first();
 
-            if ($requiredQty > $inStock) { 
+            if ($requiredQty > $inStock) {
                 $outOfStockItems[] = [
                     'item_id' => $item->item_id,
                     'item_name' => $itemData->item_name,

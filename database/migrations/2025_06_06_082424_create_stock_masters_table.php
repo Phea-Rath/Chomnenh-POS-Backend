@@ -23,6 +23,7 @@ return new class extends Migration
             $table->unsignedInteger("stock_created_by");
             $table->unsignedInteger("received_by")->nullable();
             $table->unsignedInteger("approved_by")->nullable();
+            $table->string("reference_no")->nullable();
             $table->integer("quantity")->default(0);
             $table->boolean("is_deleted")->default(0);
             $table->timestamps();

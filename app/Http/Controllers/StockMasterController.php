@@ -1105,6 +1105,7 @@ class StockMasterController extends Controller
             // 'from_warehouse' => 'required|integer',
             'warehouse_id' => 'required|integer|exists:warehouses,warehouse_id',
             'stock_remark' => 'nullable|string|max:255',
+            'reference_no' => 'nullable|string|max:255',
             'received_by' => 'nullable|integer|exists:users,id',
             'approved_by' => 'nullable|integer|exists:users,id',
             'items' => 'array||min:1',
@@ -1140,6 +1141,7 @@ class StockMasterController extends Controller
             'stock_type_id' => 2,
             'from_warehouse' => 2,
             'warehouse_id' => $validated['warehouse_id'],
+            'referwnce_no' => $validated['reference_no'],
             'quantity' => array_sum(array_column($validated['items'], 'quantity')),
             'stock_date' => $stock_date,
             'stock_remark' => $validated['stock_remark'],
@@ -1172,6 +1174,7 @@ class StockMasterController extends Controller
         return response()->json([
             'message' => 'StockMaster created successfully!',
             'status' => 200,
+            'id'=> $data->stock_id
         ], 201);
     }
 
