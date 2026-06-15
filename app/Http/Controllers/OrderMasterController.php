@@ -834,6 +834,7 @@ class OrderMasterController extends Controller
                 'order_total' => $grandTotal,
                 'exchange_rate' => (double)$exchange_rate->usd_to_khr,
                 'seller' => $seller,
+                'created_by' => $uid,
                 'updated_by' => $uid,
             ]);
 
@@ -895,7 +896,7 @@ class OrderMasterController extends Controller
             return response()->json([
                 'message' => 'order master created successfully!',
                 'status' => 200,
-                "data" => $order_masters,
+                "data" => $order_masters->order_id,
             ]);
         }catch (\Exception $e) {
             DB::rollBack();
@@ -1034,7 +1035,7 @@ class OrderMasterController extends Controller
             return response()->json([
                 'message' => 'order master created successfully!',
                 'status' => 200,
-                "data" => $order_masters,
+                "data" => $order_masters->order_id,
             ]);
         }catch (\Exception $e) {
             DB::rollBack();
