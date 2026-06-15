@@ -183,6 +183,7 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::put('/purchase_confirm/{id}', [PurchaseController::class, 'purchaseConfirm']);
     Route::put('/purchase_confirm_raw/{id}', [PurchaseController::class, 'purchaseConfirmRaw']);
     Route::put('/purchase_payment/{id}', [PurchaseController::class, 'purchasePayment']);
+    Route::put('/purchase_approved/{id}', [PurchaseController::class, 'approved']);
     Route::resource('permission', PermissionController::class)->only(['index', 'show', 'store', 'update', 'destroy']);
     Route::resource('production', ProductionController::class)->only(['index', 'store', 'update', 'destroy']);
     Route::put('/permission-remove/{user_id}', [PermissionController::class, 'destroy']);

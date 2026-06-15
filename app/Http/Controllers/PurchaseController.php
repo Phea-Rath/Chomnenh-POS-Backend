@@ -136,7 +136,7 @@ class PurchaseController extends Controller
                 'p.purchase_no',
                 'p.status',
                 'p.quote_no',
-                'p.saller',
+
                 'p.approved_by',
                 'p.supplier_id',
                 'p.purchase_date',
@@ -208,7 +208,7 @@ class PurchaseController extends Controller
             'purchase_no' => $purchase->purchase_no,
             'status' => (int) $purchase->status,
             'quote_no' => $purchase->quote_no,
-            'saller' => $purchase->saller ? (int) $purchase->saller : null,
+
             'approved_by' => $purchase->approved_by,
             'supplier_id' => (int) $purchase->supplier_id,
             'purchase_date' => $purchase->created_at ?? $purchase->purchase_date,
@@ -343,7 +343,7 @@ class PurchaseController extends Controller
                 'p.purchase_no',
                 'p.status',
                 'p.quote_no',
-                'p.saller',
+
                 'p.approved_by',
                 'p.supplier_id',
                 'p.purchase_date',
@@ -409,7 +409,7 @@ class PurchaseController extends Controller
             'purchase_no' => $purchase->purchase_no,
             'status' => (int) $purchase->status,
             'quote_no' => $purchase->quote_no,
-            'saller' => $purchase->saller ? (int) $purchase->saller : null,
+
             'approved_by' => $purchase->approved_by,
             'supplier_id' => (int) $purchase->supplier_id,
             'purchase_date' => $purchase->created_at ?? $purchase->purchase_date,
@@ -614,12 +614,8 @@ class PurchaseController extends Controller
                 'supplier_id'        => 'nullable|integer|exists:suppliers,supplier_id',
                 'purchase_date'      => 'required|date',
                 'tax_rate'           => 'nullable|numeric',
-                'shipping_fee'       => 'nullable|numeric',
-                'total_paid'         => 'nullable|numeric',
                 'quote_no' => 'nullable|string|max:50',
-                'status'             => 'required|integer',
                 'description' => 'nullable|string',
-                'saller' => 'nullable|integer|exists:users,id',
                 'items'              => 'required|array|min:1',
                 'items.*.item_id'    => 'required|integer|exists:items,item_id',
                 'items.*.quantity'   => 'required|integer|min:1',
@@ -628,7 +624,7 @@ class PurchaseController extends Controller
                 'shippings'  => 'nullable|array',
                 'shippings.*.fee' => 'nullable|numeric',
                 'shippings.*.carrier' => 'nullable|string',
-                'shippings.*.vai' => 'nullable|in:truck,air,sea',
+                'shippings.*.via' => 'nullable|in:truck,air,sea',
             ]);
 
 
@@ -654,8 +650,6 @@ class PurchaseController extends Controller
             $shippings = $validated['shippings'] ?? 0;
             $shippingFee = (float) ($shippings ? collect($shippings)->sum('fee') : 0);
             $totalAmount = round($subTotal - $totalDiscount + $taxAmount + $shippingFee, 2);
-            $totalPaid = (float) ($validated['total_paid'] ?? 0);
-            $balance = round($totalAmount - $totalPaid, 2);
 
             $exchange_rate = ExchangeRate::find($proId);
             $now = now();
@@ -679,15 +673,15 @@ class PurchaseController extends Controller
                 'shipping_fee'  => $shippingFee,
                 'total_amount'  => $totalAmount,
                 'total_discount'  => $totalDiscount,
-                'total_paid'    => $totalPaid,
-                'balance'       => $balance,
+                'total_paid'    => 0,
+                'balance'       => $totalAmount,
                 'description'       => $validated['description'] ?? null,
                 'exchange_rate' => $exchange_rate->usd_to_khr ?? 4000,
                 'quote_no' => $validated['quote_no'] ?? '',
-                'status'        => $validated['status'],
+                'status'        => 0,
                 'updated_by' => $uid,
                 'created_by'    => $uid,
-                'saller' => $validated['saller'] ?? $uid,
+
             ]);
             if(!is_array($validated['items'])||count($validated['items'] ) <= 0){
                 return response()->json([
@@ -726,7 +720,7 @@ class PurchaseController extends Controller
                         'purchase_id' => $purchase->purchase_id,
                         'fee' => $shipping['fee'] ?? 0,
                         'carrier' => $shipping['carrier'] ?? null,
-                        'vai' => $shipping['vai'] ?? null,
+                        'via' => $shipping['via'] ?? null,
                         'created_by' => $uid
                     ]);
                 }
@@ -749,7 +743,6 @@ class PurchaseController extends Controller
             return response()->json([
                 'message' => 'Error store purchase: ' . $e->getMessage(),
                 'status' => 500,
-                'id'=>$purchase->purchase_id
             ], 500);
         }
     }
@@ -767,12 +760,9 @@ class PurchaseController extends Controller
                 'supplier_id'        => 'nullable|integer|exists:suppliers,supplier_id',
                 'purchase_date'      => 'required|date',
                 'tax_rate'           => 'nullable|numeric',
-                'shipping_fee'       => 'nullable|numeric',
-                'total_paid'         => 'nullable|numeric',
                 'description' => 'nullable|string',
-                'saller' => 'nullable|integer|exists:users,id',
+
                 'quote_no' => 'nullable|string|max:50',
-                'status'             => 'required|integer',
                 'items'              => 'required|array|min:1',
                 'items.*.item_id'    => 'required|integer|exists:raw_materials,id',
                 'items.*.quantity'   => 'required|integer|min:1',
@@ -781,7 +771,7 @@ class PurchaseController extends Controller
                 'shippings'  => 'nullable|array',
                 'shippings.*.fee' => 'nullable|numeric',
                 'shippings.*.carrier' => 'nullable|string',
-                'shippings.*.vai' => 'nullable|in:truck,air,sea',
+                'shippings.*.via' => 'nullable|in:truck,air,sea',
 
             ]);
 
@@ -808,8 +798,6 @@ class PurchaseController extends Controller
             $shippings = $validated['shippings'] ?? 0;
             $shippingFee = (float) (($shippings ? collect($shippings)->sum('fee') : 0));
             $totalAmount = round($subTotal - $totalDiscount + $taxAmount + $shippingFee, 2);
-            $totalPaid = (float) ($validated['total_paid'] ?? 0);
-            $balance = round($totalAmount - $totalPaid, 2);
 
             $now = now();
 
@@ -832,14 +820,14 @@ class PurchaseController extends Controller
                 'shipping_fee'  => $shippingFee,
                 'total_discount'  => $totalDiscount,
                 'total_amount'  => $totalAmount,
-                'total_paid'    => $totalPaid,
-                'balance'       => $balance,
+                'total_paid'    => 0,
+                'balance'       => $totalAmount,
                 'description'       => $validated['description'] ?? null,
                 'exchange_rate' => $exchange_rate->usd_to_khr ?? 4000,
                 'quote_no' => $validated['quote_no'] ?? '',
-                'status'        => $validated['status'],
+                'status'        => 0,
                 'created_by'    => $uid,
-                'saller' => $validated['saller'] ?? $uid,
+
                 'updated_by' => $uid,
             ]);
 
@@ -876,7 +864,7 @@ class PurchaseController extends Controller
                         'purchase_id' => $purchase->purchase_id,
                         'fee' => $shipping['fee'] ?? 0,
                         'carrier' => $shipping['carrier'] ?? null,
-                        'vai' => $shipping['vai'] ?? null,
+                        'via' => $shipping['via'] ?? null,
                         'created_by' => $uid
                     ]);
                 }
@@ -1000,12 +988,9 @@ class PurchaseController extends Controller
             'supplier_id'   => 'required|integer',
             'purchase_date' => 'required|date',
             'tax_rate'      => 'nullable|numeric',
-            'shipping_fee'  => 'nullable|numeric',
-            'total_paid'    => 'nullable|numeric',
             'description' => 'nullable|string',
-            'saller' => 'nullable|integer|exists:users,id',
+
             'quote_no' => 'nullable|string|max:50',
-            'status'        => 'required|integer',
             'items'         => 'required|array|min:1',
             'items.*.item_id'    => 'required|integer|exists:items,item_id',
             'items.*.quantity'   => 'required|integer',
@@ -1014,7 +999,7 @@ class PurchaseController extends Controller
             'shippings'  => 'nullable|array',
             'shippings.*.fee' => 'nullable|numeric',
             'shippings.*.carrier' => 'nullable|string',
-            'shippings.*.vai' => 'nullable|in:truck,air,sea',
+            'shippings.*.via' => 'nullable|in:truck,air,sea',
         ]);
 
         // return response()->json([
@@ -1046,7 +1031,7 @@ class PurchaseController extends Controller
             $shippings = $validated['shippings'] ?? 0;
             $shippingFee = (float) (($shippings ? collect($shippings)->sum('fee') : 0));
             $totalAmount = round($subTotal - $totalDiscount + $taxAmount + $shippingFee, 2);
-            $totalPaid = (float) ($validated['total_paid'] ?? 0);
+            $totalPaid = (float) ($purchase->total_paid ?? 0);
             $balance = round($totalAmount - $totalPaid, 2);
 
             $purchase->update([
@@ -1058,12 +1043,10 @@ class PurchaseController extends Controller
                 'shipping_fee'  => $shippingFee,
                 'total_amount'  => $totalAmount,
                 'total_discount'  => $totalDiscount,
-                'total_paid'    => $totalPaid,
                 'balance'       => $balance,
                 'description'       => $validated['description'] ?? null,
                 'quote_no' => $validated['quote_no'] ?? $purchase->quote_no,
-                'status'        => $validated['status'],
-                'saller' => $validated['saller'] ?? $purchase->saller,
+                'seller' => $validated['seller'] ?? $purchase->seller,
                 'updated_by' => $uid,
             ]);
 
@@ -1105,7 +1088,7 @@ class PurchaseController extends Controller
                         $shippingData->update([
                             'fee' => $shipping['fee'] ?? 0,
                             'carrier' => $shipping['carrier'] ?? null,
-                            'vai' => $shipping['vai'] ?? null,
+                            'via' => $shipping['via'] ?? null,
                         ]);
                     }
                 }else{
@@ -1114,7 +1097,7 @@ class PurchaseController extends Controller
                             'purchase_id' => $id,
                             'fee' => $shipping['fee'] ?? 0,
                             'carrier' => $shipping['carrier'] ?? null,
-                            'vai' => $shipping['vai'] ?? null,
+                            'via' => $shipping['via'] ?? null,
                             'created_by'=>$uid
                         ]);
                     }
@@ -1160,12 +1143,9 @@ class PurchaseController extends Controller
             'supplier_id'   => 'required|integer',
             'purchase_date' => 'required|date',
             'tax_rate'      => 'nullable|numeric',
-            'shipping_fee'  => 'nullable|numeric',
-            'total_paid'    => 'nullable|numeric',
             'description' => 'nullable|string',
-            'saller' => 'nullable|integer|exists:users,id',
+
             'quote_no' => 'nullable|string|max:50',
-            'status'        => 'required|integer',
             'items'         => 'required|array|min:1',
             'items.*.item_id'    => 'required|integer',
             'items.*.quantity'   => 'required|integer',
@@ -1174,7 +1154,7 @@ class PurchaseController extends Controller
             'shippings'  => 'nullable|array',
             'shippings.*.fee' => 'nullable|numeric',
             'shippings.*.carrier' => 'nullable|string',
-            'shippings.*.vai' => 'nullable|in:truck,air,sea',
+            'shippings.*.via' => 'nullable|in:truck,air,sea',
         ]);
 
         DB::beginTransaction();
@@ -1200,7 +1180,7 @@ class PurchaseController extends Controller
             $shippings = $validated['shippings'] ?? 0;
             $shippingFee = (float) (($shippings ? collect($shippings)->sum('fee') : 0));
             $totalAmount = round($subTotal - $totalDiscount + $taxAmount + $shippingFee, 2);
-            $totalPaid = (float) ($validated['total_paid'] ?? 0);
+            $totalPaid = (float) ($purchase->total_paid ?? 0);
             $balance = round($totalAmount - $totalPaid, 2);
 
             $purchase->update([
@@ -1212,12 +1192,10 @@ class PurchaseController extends Controller
                 'shipping_fee'  => $shippingFee,
                 'total_amount'  => $totalAmount,
                 'total_discount'  => $totalDiscount,
-                'total_paid'    => $totalPaid,
                 'balance'       => $balance,
                 'description'       => $validated['description'] ?? null,
                 'quote_no' => $validated['quote_no'] ?? $purchase->quote_no,
-                'status'        => $validated['status'],
-                'saller' => $validated['saller'] ?? $purchase->saller,
+                'seller' => $validated['seller'] ?? $purchase->seller,
                 'updated_by' => $uid,
             ]);
 
@@ -1259,7 +1237,7 @@ class PurchaseController extends Controller
                         $shippingData->update([
                             'fee' => $shipping['fee'] ?? 0,
                             'carrier' => $shipping['carrier'] ?? null,
-                            'vai' => $shipping['vai'] ?? null,
+                            'via' => $shipping['via'] ?? null,
                         ]);
                     }
                 }else{
@@ -1268,7 +1246,7 @@ class PurchaseController extends Controller
                             'purchase_id' => $id,
                             'fee' => $shipping['fee'] ?? 0,
                             'carrier' => $shipping['carrier'] ?? null,
-                            'vai' => $shipping['vai'] ?? null,
+                            'via' => $shipping['via'] ?? null,
                             'created_by'=>$uid
                         ]);
                     }
@@ -1417,6 +1395,12 @@ class PurchaseController extends Controller
                 'status'  => 404
             ]);
         }
+        if (!$purchase->status > 1) {
+            return response()->json([
+                'message' => 'Purchase not approved!',
+                'status'  => 404
+            ]);
+        }
 
         // Use DB transaction for atomicity
         DB::beginTransaction();
@@ -1482,7 +1466,7 @@ class PurchaseController extends Controller
                     'item_id' => $item->item_id,
                     'quantity' => (int)$item->quantity,
                     'item_cost' => $item->item_cost,
-                    'expire_date' => null, // Set if available
+                    'expire_date' => null, // Set if avialable
                     'transection_date' => $stock_date,
                     'is_deleted' => 0,
                     'created_at' => now(),
@@ -1533,6 +1517,12 @@ class PurchaseController extends Controller
         if (!$purchase) {
             return response()->json([
                 'message' => 'Purchase not found!',
+                'status'  => 404
+            ]);
+        }
+        if (!$purchase->status > 1) {
+            return response()->json([
+                'message' => 'Purchase not approved!',
                 'status'  => 404
             ]);
         }
@@ -1599,7 +1589,7 @@ class PurchaseController extends Controller
                     'raw_material_id' => $item->raw_material_id,
                     'quantity' => (int)$item->quantity,
                     'item_cost' => $item->item_cost,
-                    'expire_date' => null, // Set if available
+                    'expire_date' => null, // Set if avialable
                     'transection_date' => $stock_date,
                     'is_deleted' => 0,
                     'created_at' => now(),
@@ -1640,6 +1630,12 @@ class PurchaseController extends Controller
         if (!$purchase) {
             return response()->json([
                 'message' => 'Purchase not found!',
+                'status'  => 404
+            ]);
+        }
+        if (!$purchase->status > 1) {
+            return response()->json([
+                'message' => 'Purchase not approved!',
                 'status'  => 404
             ]);
         }
@@ -1694,5 +1690,30 @@ class PurchaseController extends Controller
             'message' => 'Payment added successfully',
             'status'  => 200,
         ], 200);
+    }
+
+    public function approved(string $id){
+        $user = auth()->user();
+        $purchase = Purchase::find($id);
+        if(empty($purchase)){
+            return response()->json([
+                'message'=> 'Purchase not found!',
+                'status'=>404
+            ],404);
+        }
+
+        $purchase->status = 1;
+        $purchase->save();
+
+        PurchaseStatus::create([
+            'purchase_id'=>$id,
+            'status'=> "approved",
+            'created_by' => $user->id
+        ]);
+
+        return response()->json([
+            'message'=>'Purchase approved successfully',
+            'status'=> 200,
+        ],200);
     }
 }

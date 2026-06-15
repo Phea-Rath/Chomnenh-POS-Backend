@@ -395,7 +395,7 @@ class DetailService {
 
         // ✅ Attach images to each order item
         $order_item->transform(function ($item) use ($images) {
-            $item->images = $images[$item->item_id] ?? [];
+            $item->image = $images[$item->item_id][0] ?? null;
             if (!empty($images[$item->item_id])) {
                 foreach($images[$item->item_id] as $image){
                     $filenameOnly = basename($image->image);
