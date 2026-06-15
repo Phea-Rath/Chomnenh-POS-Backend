@@ -325,7 +325,7 @@ class MenuController extends Controller
         $imageName = null;
         if ($request->hasFile('menu_icon')) {
             $file = $request->file('menu_icon');
-            $this->postImage->uploadSingle($file);
+            $imageName = $this->postImage->uploadSingle($file);
         }
         $menu = Menus::create([
             'menu_name' => $validated['menu_name'],
@@ -367,7 +367,7 @@ class MenuController extends Controller
         if ($request->hasFile('menu_icon')) {
             $file = $request->file('menu_icon');
 
-            $this->postImage->replaceSingle($menu->menu_icon, $file);
+            $imageName = $this->postImage->replaceSingle($menu->menu_icon, $file);
         }
         if($imageName){
             $menu->update([
