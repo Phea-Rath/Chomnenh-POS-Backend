@@ -25,7 +25,7 @@ class PaymentController extends Controller
         $apiUrl = env('BAKONG_GENERATE_QR_URL', 'https://api.bakongrelay.com/v1/generate_qr');
         // dd($apiUrl);
 
-        $amount = 100 ?? $request->input('amount', 1.00);
+        $amount = 0.01 ?? $request->input('amount', 1.00);
         $response = Http::withHeaders([
             'content-type' => 'application/json',
         ])->post($apiUrl, [
@@ -34,7 +34,7 @@ class PaymentController extends Controller
             "merchant_name" => "TEP PHEARAT",
             "merchant_city" => "Phnom Penh",
             "amount" => $amount,
-            "currency" => "KHR",
+            "currency" => "USD",
             "expiration" => 300, // QR code validity in seconds
         ]);
         if ($response->failed()) {
@@ -135,7 +135,7 @@ class PaymentController extends Controller
 
             // Send an authorized request to Bakong API
             $response = Http::withHeaders([
-                'Authorization' => $token,
+                'Authorization' => "Bearer $token",
                 'Content-Type' => 'application/json'
             ])->post($apiUrl . '/v1/check_transaction_by_md5', [
                 'md5' => $md5
@@ -156,7 +156,7 @@ class PaymentController extends Controller
                     'paid' => true,
                     'message' => 'Payment received successfully!',
                     'data' => $result['data']
-                ]);
+                ],200);
             }
 
             return response()->json([

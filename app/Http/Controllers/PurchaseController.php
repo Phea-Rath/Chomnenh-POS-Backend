@@ -106,7 +106,7 @@ class PurchaseController extends Controller
         $user = Auth::user();
         $proId = $user->profile_id;
 
-        $data = $this->formatMobilePurchase((int) $id, $proId);
+        $data = $this->formatMobilePurchase((int) $id, $proId, true);
         if (!$data) {
             return response()->json([
                 'message' => 'Purchase not found!',
@@ -122,7 +122,7 @@ class PurchaseController extends Controller
         ]);
     }
 
-    private function formatMobilePurchase(int $purchaseId, int $profileId): ?array
+    private function formatMobilePurchase(int $purchaseId, int $profileId, bool $isShow=false): ?array
     {
         $purchase = DB::table('purchases as p')
             ->join('users as u', 'p.created_by', '=', 'u.id')
@@ -136,8 +136,6 @@ class PurchaseController extends Controller
                 'p.purchase_no',
                 'p.status',
                 'p.quote_no',
-
-                'p.approved_by',
                 'p.supplier_id',
                 'p.purchase_date',
                 'p.sub_total',
@@ -192,6 +190,7 @@ class PurchaseController extends Controller
 
         $payments = $this->detailService->purchasePayment($purchaseId);
         $shippings = $this->detailService->purchaseShipping($purchaseId);
+        $status = $this->detailService->purchaseStatus($purchaseId);
 
 
         $subTotal = (float) $purchase->sub_total;
@@ -203,13 +202,11 @@ class PurchaseController extends Controller
         $discountPercent = $subTotal > 0 ? round(($discountAmount / $subTotal) * 100, 2) : 0;
         $exchangeRate = (float) $purchase->exchange_rate;
 
-        return [
+        $result = [
             'purchase_id' => $purchase->purchase_id,
             'purchase_no' => $purchase->purchase_no,
             'status' => (int) $purchase->status,
             'quote_no' => $purchase->quote_no,
-
-            'approved_by' => $purchase->approved_by,
             'supplier_id' => (int) $purchase->supplier_id,
             'purchase_date' => $purchase->created_at ?? $purchase->purchase_date,
             'subtotal' => $subTotal,
@@ -224,10 +221,16 @@ class PurchaseController extends Controller
             'exchange_rate' => $exchangeRate,
             'grand_total_khr' => round($grandTotal * $exchangeRate, 2),
             'created_by_name' => $purchase->created_by_name,
-            'items' => $items,
+            'items_count' => $items ? count($items): 0,
+        ];
+
+
+        return $isShow? [
+            ...$result,
+            'status_details'=> $status,
             'payments' => $payments,
             'shippings' => $shippings,
-        ];
+            ]: $result;
     }
 
     public function indexMobileRaw(Request $request)
@@ -307,7 +310,7 @@ class PurchaseController extends Controller
         $user = Auth::user();
         $proId = $user->profile_id;
 
-        $data = $this->formatMobileRawPurchase((int) $id, $proId);
+        $data = $this->formatMobileRawPurchase((int) $id, $proId, true);
         if (!$data) {
             return response()->json([
                 'message' => 'Purchase not found!',
@@ -323,7 +326,7 @@ class PurchaseController extends Controller
         ]);
     }
 
-    private function formatMobileRawPurchase(int $purchaseId, int $profileId): ?array
+    private function formatMobileRawPurchase(int $purchaseId, int $profileId, bool $isShow = false): ?array
     {
         $purchase = DB::table('purchases as p')
             ->join('users as u', 'p.created_by', '=', 'u.id')
@@ -343,8 +346,6 @@ class PurchaseController extends Controller
                 'p.purchase_no',
                 'p.status',
                 'p.quote_no',
-
-                'p.approved_by',
                 'p.supplier_id',
                 'p.purchase_date',
                 'p.sub_total',
@@ -394,6 +395,7 @@ class PurchaseController extends Controller
 
         $payments = $this->detailService->purchasePayment($purchaseId);
         $shippings = $this->detailService->purchaseShipping($purchaseId);
+        $status = $this->detailService->purchaseStatus($purchaseId);
 
         $subTotal = (float) $purchase->sub_total;
         $taxPercent = (float) $purchase->tax_rate;
@@ -404,13 +406,11 @@ class PurchaseController extends Controller
         $discountPercent = $subTotal > 0 ? round(($discountAmount / $subTotal) * 100, 2) : 0;
         $exchangeRate = (float) $purchase->exchange_rate;
 
-        return [
+        $result = [
             'purchase_id' => $purchase->purchase_id,
             'purchase_no' => $purchase->purchase_no,
             'status' => (int) $purchase->status,
             'quote_no' => $purchase->quote_no,
-
-            'approved_by' => $purchase->approved_by,
             'supplier_id' => (int) $purchase->supplier_id,
             'purchase_date' => $purchase->created_at ?? $purchase->purchase_date,
             'subtotal' => $subTotal,
@@ -425,10 +425,15 @@ class PurchaseController extends Controller
             'exchange_rate' => $exchangeRate,
             'grand_total_khr' => round($grandTotal * $exchangeRate, 2),
             'created_by_name' => $purchase->created_by_name,
-            'items' => $items,
+            'items_count' => $items ? count($items):0,
+        ];
+
+        return $isShow? [
+            ...$result,
+            'status_details'=> $status,
             'payments' => $payments,
             'shippings' => $shippings,
-        ];
+            ]: $result;
     }
 
     public function index(Request $request)
@@ -827,7 +832,6 @@ class PurchaseController extends Controller
                 'quote_no' => $validated['quote_no'] ?? '',
                 'status'        => 0,
                 'created_by'    => $uid,
-
                 'updated_by' => $uid,
             ]);
 
@@ -909,6 +913,7 @@ class PurchaseController extends Controller
         $details = $this->detailService->purchaseDetail($purchase->purchase_id);
         $payments = $this->detailService->purchasePayment($purchase->purchase_id);
         $shippings = $this->detailService->purchaseShipping($purchase->purchase_id);
+        $status = $this->detailService->purchaseStatus($purchase->purchase_id);
 
         // Merge purchase info with details + payments
         $data = array_merge(
@@ -916,7 +921,8 @@ class PurchaseController extends Controller
             [
                 'details'  => $details,
                 'payments' => $payments,
-                'shippings' => $shippings
+                'shippings' => $shippings,
+                '$status' => $status,
             ]
         );
 
@@ -946,6 +952,7 @@ class PurchaseController extends Controller
         $details = $this->detailService->purchaseRawDetail($purchase->purchase_id);
         $payments = $this->detailService->purchasePayment($purchase->purchase_id);
         $shippings = $this->detailService->purchaseShipping($purchase->purchase_id);
+        $status = $this->detailService->purchaseStatus($purchase->purchase_id);
 
         // Merge purchase info with details + payments
         $data = array_merge(
@@ -953,7 +960,8 @@ class PurchaseController extends Controller
             [
                 'details'  => $details,
                 'payments' => $payments,
-                'shippings' => $shippings
+                'shippings' => $shippings,
+                '$status' => $status
             ]
         );
 
@@ -968,10 +976,16 @@ class PurchaseController extends Controller
     public function update(Request $request, $id)
     {
         $purchase = Purchase::find($id);
-        if($purchase->status == 1){
+        if($purchase->status == 2){
             return response()->json([
                 'message' => 'Purchase is already completed!',
                 'status'  => 400
+            ]);
+        }
+        if ($purchase->status == 1) {
+            return response()->json([
+                'message' => 'Purchase is already approved!',
+                'status'  => 404
             ]);
         }
         $user = Auth::user();
@@ -1046,7 +1060,7 @@ class PurchaseController extends Controller
                 'balance'       => $balance,
                 'description'       => $validated['description'] ?? null,
                 'quote_no' => $validated['quote_no'] ?? $purchase->quote_no,
-                'seller' => $validated['seller'] ?? $purchase->seller,
+
                 'updated_by' => $uid,
             ]);
 
@@ -1085,6 +1099,7 @@ class PurchaseController extends Controller
                 // return response()->json($shipping, 404);
                 if(!empty($shippingData)){
                     foreach ($shippings as $shipping) {
+                        // dd($shipping['via']);
                         $shippingData->update([
                             'fee' => $shipping['fee'] ?? 0,
                             'carrier' => $shipping['carrier'] ?? null,
@@ -1123,10 +1138,16 @@ class PurchaseController extends Controller
     public function updateRaw(Request $request, $id)
     {
         $purchase = Purchase::find($id);
-        if($purchase->status == 1){
+        if($purchase->status == 2){
             return response()->json([
                 'message' => 'Purchase is already completed!',
                 'status'  => 400
+            ]);
+        }
+        if ($purchase->status == 1) {
+            return response()->json([
+                'message' => 'Purchase is already approved!',
+                'status'  => 404
             ]);
         }
         $user = Auth::user();
@@ -1195,7 +1216,7 @@ class PurchaseController extends Controller
                 'balance'       => $balance,
                 'description'       => $validated['description'] ?? null,
                 'quote_no' => $validated['quote_no'] ?? $purchase->quote_no,
-                'seller' => $validated['seller'] ?? $purchase->seller,
+
                 'updated_by' => $uid,
             ]);
 
@@ -1271,10 +1292,16 @@ class PurchaseController extends Controller
     {
         $purchase = Purchase::find($id);
 
-        if($purchase->status == 1){
+        if($purchase->status == 2){
             return response()->json([
                 'message' => 'Purchase is already completed!',
                 'status'  => 400
+            ]);
+        }
+        if ($purchase->status == 1) {
+            return response()->json([
+                'message' => 'Purchase is already approved!',
+                'status'  => 404
             ]);
         }
 
@@ -1300,10 +1327,16 @@ class PurchaseController extends Controller
     public function destroyRaw($id)
     {
         $purchase = Purchase::find($id);
-        if($purchase->status == 1){
+        if($purchase->status == 2){
             return response()->json([
                 'message' => 'Purchase is already completed!',
                 'status'  => 400
+            ]);
+        }
+        if ($purchase->status == 1) {
+            return response()->json([
+                'message' => 'Purchase is already approved!',
+                'status'  => 404
             ]);
         }
         if (!$purchase) {
@@ -1329,10 +1362,16 @@ class PurchaseController extends Controller
         $user = Auth::user();
         $uid = $user->id;
         $purchase = Purchase::find($id);
-        if($purchase->status == 1){
+        if($purchase->status == 2){
             return response()->json([
                 'message' => 'Purchase is already completed!',
                 'status'  => 400
+            ]);
+        }
+        if ($purchase->status == 1) {
+            return response()->json([
+                'message' => 'Purchase is already approved!',
+                'status'  => 404
             ]);
         }
         if (!$purchase) {
@@ -1381,10 +1420,16 @@ class PurchaseController extends Controller
     public function purchaseConfirm($id)
     {
         $purchaseDB = Purchase::find($id);
-        if($purchaseDB->status == 1){
+        if($purchaseDB->status == 2){
             return response()->json([
                 'message' => 'Purchase is already completed!',
                 'status'  => 400
+            ]);
+        }
+        if ($purchaseDB->status < 1) {
+            return response()->json([
+                'message' => 'Purchase not approved!',
+                'status'  => 404
             ]);
         }
         $purchase = $this->show($id)->original['data'];
@@ -1392,12 +1437,6 @@ class PurchaseController extends Controller
         if (!$purchase) {
             return response()->json([
                 'message' => 'Purchase not found!',
-                'status'  => 404
-            ]);
-        }
-        if (!$purchase->status > 1) {
-            return response()->json([
-                'message' => 'Purchase not approved!',
                 'status'  => 404
             ]);
         }
@@ -1483,16 +1522,13 @@ class PurchaseController extends Controller
                 'status' => 'confirmed',
                 'created_by' => $uid,
             ]);
-            $purchaseDB->update(['status' => 1]);
+            $purchaseDB->update(['status' => 2]);
 
+            DB::commit();
             return response()->json([
                 'message' => 'Purchase confirmed and items inserted into stock successfully',
                 'status' => 200,
-                'data' => $purchase,
-                'stock_master_id' => $stockMasterId,
-                'stock_items' => $stockItems
                 ]);
-                DB::commit();
         } catch (\Exception $e) {
             DB::rollBack();
             return response()->json([
@@ -1506,10 +1542,16 @@ class PurchaseController extends Controller
     public function purchaseConfirmRaw($id)
     {
         $purchaseDB = Purchase::find($id);
-        if($purchaseDB->status == 1){
+        if($purchaseDB->status == 2){
             return response()->json([
                 'message' => 'Purchase is already completed!',
                 'status'  => 400
+            ]);
+        }
+        if ($purchaseDB->status < 1) {
+            return response()->json([
+                'message' => 'Purchase not approved!',
+                'status'  => 404
             ]);
         }
         $purchase = $this->showRaw($id)->original['data'];
@@ -1517,12 +1559,6 @@ class PurchaseController extends Controller
         if (!$purchase) {
             return response()->json([
                 'message' => 'Purchase not found!',
-                'status'  => 404
-            ]);
-        }
-        if (!$purchase->status > 1) {
-            return response()->json([
-                'message' => 'Purchase not approved!',
                 'status'  => 404
             ]);
         }
@@ -1564,16 +1600,10 @@ class PurchaseController extends Controller
                 'updated_at' => now(),
             ]);
             $stockMasterId = $newStockId;
-            // Get purchase details
-            // $details = PurchaseDetail::where('purchase_id', $purchase["purchase_id"])->where('is_deleted', 0)->get();
             $details = $purchase['details'];
 
-            if( count($details) <= 0){
-                return response()->json([
-                    'message' => 'Purchase confirmed cannot confirm, This purchase not have items',
-                    'status' => 304,
-                    'data' => $details,
-                ],400);
+            if(!count($details)){
+                return $details->getData(true);
             }
             // Preload all items in one query for efficiency
             $itemIds = $details->pluck('raw_material_id')->unique()->toArray();
@@ -1604,15 +1634,12 @@ class PurchaseController extends Controller
                 'status' => 'confirmed',
                 'created_by' => $uid,
             ]);
-            $purchaseDB->update(['status' => 1]);
+            $purchaseDB->update(['status' => 2]);
 
             DB::commit();
             return response()->json([
                 'message' => 'Purchase confirmed and items inserted into stock successfully',
                 'status' => 200,
-                'data' => $purchase,
-                'stock_master_id' => $stockMasterId,
-                'stock_items' => $stockItems
             ]);
         } catch (\Exception $e) {
             DB::rollBack();

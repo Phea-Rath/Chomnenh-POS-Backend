@@ -119,15 +119,13 @@ class OrderMasterController extends Controller
         return response()->json([
             'message' => 'Orders retrieved successfully',
             'status' => 200,
-            'data' => [
-                'orders' => $orders,
-                'pagination' => [
+            'data' =>  $orders,
+            'pagination' => [
                     'current_page' => $rawOrders->currentPage(),
                     'per_page' => $rawOrders->perPage(),
                     'total' => $rawOrders->total(),
                     'last_page' => $rawOrders->lastPage(),
                 ],
-            ],
         ]);
     }
     public function showMobile($id)
@@ -135,7 +133,7 @@ class OrderMasterController extends Controller
         $user = Auth::user();
         $proId = $user->profile_id;
 
-        $data = $this->formatMobileOrder((int) $id, $proId);
+        $data = $this->formatMobileOrder((int) $id, $proId, true);
         if (!$data) {
             return response()->json([
                 'message' => 'Order not found',
@@ -152,7 +150,7 @@ class OrderMasterController extends Controller
 
     }
 
-    private function formatMobileOrder(int $orderId, int $profileId): ?array
+    private function formatMobileOrder(int $orderId, int $profileId, bool $isShow=false): ?array
     {
         $order = DB::table('order_masters as om')
             ->join('users as u', 'om.created_by', '=', 'u.id')
@@ -229,12 +227,13 @@ class OrderMasterController extends Controller
         $grandTotalUsd = (float) $order->order_total;
         $exchangeRate = (float) $order->exchange_rate;
         $payments = $this->detailService->orderPayment($order->order_id);
+        $status = $this->detailService->orderStatus($order->order_id);
 
         // dd($payments);
 
         $amount = $payments->sum('amount');
 
-        return [
+        $result = [
             'order_header' => [
                 'id' => (int) $order->order_id,
                 'online' => (bool) $order->online,
@@ -242,7 +241,6 @@ class OrderMasterController extends Controller
                 'order_no' => $order->order_no,
                 'sale_type' => $order->sale_type,
                 'exchange_rate' => $exchangeRate,
-                'payment_method' => $payments[count($payments) - 1]->payment_method,
                 'created_by_name' => $order->created_by_name,
                 'date' => $order->created_at,
             ],
@@ -259,22 +257,16 @@ class OrderMasterController extends Controller
                 'grand_total_khr' => round($grandTotalUsd * $exchangeRate, 2),
                 'order_payment_status' => $order->order_payment_status,
             ],
-            'items' => $items,
+            'items_count' => $items? count($items):0,
             'customer_id' => $order->customer_id ? (int) $order->customer_id : null,
-            // 'customer' => [
-            //     'id' => $order->customer_id ? (int) $order->customer_id : null,
-            //     'name' => $order->customer_name,
-            //     'email' => $order->customer_email,
-            //     'phone' => $order->customer_tel ?? $order->order_tel,
-            //     'address' => $order->customer_address ?? $order->order_address,
-            // ],
             'delivery_id' => $order->deliver_id ? (int) $order->deliver_id : null,
-            // 'delivery' => [
-            //     'id' => $order->deliver_id ? (int) $order->deliver_id : null,
-            //     'deliver_name' => $order->deliver_name,
-            //     'image' => $deliveryImage,
-            // ],
         ];
+        return $isShow?[
+            ...$result,
+            'payments'=>$payments,
+            'status_details'=>$status,
+            'items' => $items,
+        ]: $result;
     }
 
     public function index(Request $request)
@@ -293,6 +285,7 @@ class OrderMasterController extends Controller
         ->join('profiles as p', 'u.profile_id', '=', 'p.id')
         ->where('om.is_deleted', 0)
         ->where('om.is_active', 1)
+        ->where('om.sale_type', 'sale')
         ->whereNull('om.reference_no')
         ->where('p.id', $proId)
 
@@ -375,6 +368,7 @@ class OrderMasterController extends Controller
     $ordersWithItems = collect($orderMasters->items())->map(function ($order) {
         $order->items = $this->detailService->orderDetailById($order->order_id);
         $order->payments = $this->detailService->orderPayment($order->order_id);
+        // $order->status_details = $this->detailService->orderStatus($order->order_id);
         return $order;
     });
 
@@ -478,6 +472,7 @@ class OrderMasterController extends Controller
         $ordersWithItems = collect($orderMasters->items())->map(function ($order) {
             $order->items = $this->detailService->orderDetailById($order->order_id);
             $order->payments = $this->detailService->orderPayment($order->order_id);
+            $order->status_details = $this->detailService->orderStatus($order->order_id);
             return $order;
         });
 
@@ -896,7 +891,7 @@ class OrderMasterController extends Controller
             return response()->json([
                 'message' => 'order master created successfully!',
                 'status' => 200,
-                "data" => $order_masters->order_id,
+                "id" => $order_masters->order_id,
             ]);
         }catch (\Exception $e) {
             DB::rollBack();
@@ -956,7 +951,7 @@ class OrderMasterController extends Controller
             $order_masters = OrderMaster::create([
                 'order_no' => $order_no,
                 'order_customer_id' => 1,
-                'sale_type' => 'wholesale',
+                'sale_type' => 'sale',
                 'online' => 0,
                 'status' => 1,
                 'reference_no' => null,
@@ -1035,7 +1030,7 @@ class OrderMasterController extends Controller
             return response()->json([
                 'message' => 'order master created successfully!',
                 'status' => 200,
-                "data" => $order_masters->order_id,
+                "id" => $order_masters->order_id,
             ]);
         }catch (\Exception $e) {
             DB::rollBack();
@@ -1133,6 +1128,7 @@ class OrderMasterController extends Controller
         $ordersWithItems = $orderMasters->map(function ($order) {
             $order->items = $this->detailService->orderDetailById($order->order_id);
             $order->payments = $this->detailService->orderPayment($order->order_id);
+            $order->status_details = $this->detailService->orderStatus($order->order_id);
             // Show new fields
             $order->order_customer_id = $order->order_customer_id ?? null;
             $order->sale_type = $order->sale_type ?? null;
@@ -1569,6 +1565,7 @@ class OrderMasterController extends Controller
     }
     public function receiveOrder(string $id)
     {
+        $user = auth()->user();
         $orders = OrderMaster::where('order_id', $id);
         $orderItems = OrderItems::where('order_id', $id);
         if (!$orders) {
@@ -1577,16 +1574,28 @@ class OrderMasterController extends Controller
                 'status' => 404,
             ]);
         }
-        $orders->update([
-            'status' => 5,
+        $status_code = [
+            1 => 'pending',
+            2 => 'editing',
+            3 => 'packaged',
+            4 => 'pickup',
+            5 => 'delivering',
+            6 => 'completed',
+        ];
+
+        $track = OrderTracking::create([
+            'order_id'=> $id,
+            'status' =>$status_code[6],
+            'created_by' => $user->id
         ]);
-        if (!$orderItems->isEmpty()) {
-            foreach ($orderItems as $item) {
-                $item->update([
-                    'status' => 5,
-                ]);
-            }
+
+        if (!empty($track)) {
+            $orders->update([
+                'status' => 6,
+            ]);
         }
+
+
         return response()->json([
             'message' => 'order cancelled successfully!',
             'status' => 200,

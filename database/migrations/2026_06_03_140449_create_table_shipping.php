@@ -17,7 +17,7 @@ return new class extends Migration
             $table->string('tracking_number')->nullable();
             $table->string('carrier')->nullable();
             $table->string('fee')->default('0');
-            $table->enum('vai', ['truck', 'air', 'sea'])->default('truck');
+            $table->enum('via', ['truck', 'air', 'sea'])->default('truck');
             $table->text('remark')->nullable();
             $table->string('term', 100)->nullable();
             $table->date('date')->nullable();

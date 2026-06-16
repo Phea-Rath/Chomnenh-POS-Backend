@@ -13,7 +13,7 @@ class Sipping extends Model
         'tracking_number',
         'carrier',
         'fee',
-        'vai',
+        'via',
         'remark',
         'term',
         'date',

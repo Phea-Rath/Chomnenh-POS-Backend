@@ -1,5 +1,7 @@
 <?php
 namespace App\Services;
+
+use App\Models\PurchaseStatus;
 use App\Models\StockDetails;
 use App\Services\AttributeService;
 
@@ -216,6 +218,18 @@ class DetailService {
         return $purchase_detail;
     }
 
+    public function purchaseStatus(string $purchaseId){
+        $query = DB::table("purchase_status as ps")
+            ->join("users as u", 'u.id', '=', 'ps.created_by')
+            ->where('ps.purchase_id',$purchaseId)
+            ->select('u.username as created_by_name','ps.*')->get();
+        if(empty($query)){
+            return null;
+        }
+
+        return $query;
+    }
+
     public function purchaseDetailById($id) {
         // $user = Auth::user();
         // $uid = $user->id;
@@ -308,12 +322,13 @@ class DetailService {
         return $payments;
     }
 
+
     public function purchaseShipping(string $id){
         $shippings = DB::table('shipping')
             ->select(
                 'shipping.purchase_id',
                 'shipping.carrier',
-                'shipping.vai',
+                'shipping.via',
                 'shipping.fee',
                 'tracking_number'
             )
@@ -337,6 +352,18 @@ class DetailService {
                 ->get();
 
         return $payments;
+    }
+
+    public function orderStatus(string $orderId){
+        $query = DB::table('order_tracking as ot')
+            ->join("users as u", 'u.id', '=', 'ot.created_by')
+            ->where('ot.order_id',$orderId)
+            ->select('u.username as created_by_name','ot.*')->get();
+        if(empty($query)){
+            return null;
+        }
+
+        return $query;
     }
 
     public function orderDetailById($id) {
