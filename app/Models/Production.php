@@ -19,7 +19,8 @@ class Production extends Model
         'created_by',
         'exchange_rate',
         'status',
-        'waste_quantity'
+        'waste_quantity',
+        'updated_by'
     ];
 
     public function productionDetails()

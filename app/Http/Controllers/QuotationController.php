@@ -65,8 +65,11 @@ class QuotationController extends Controller
 
         $quotationIds = $quotationRows->pluck('quotation_id')->toArray();
 
-        $detailRows = DB::table('quotation_details')
-            ->whereIn('quotation_id', $quotationIds ?: [0])
+        $detailRows = DB::table('quotation_details as qd')
+            ->join('items as i', 'i.item_id', '=', 'qd.item_id')
+            ->join('scales as s', 's.scale_id', '=', 'i.scale_id')
+            ->whereIn('qd.quotation_id', $quotationIds ?: [0])
+            ->select('s.scale_name', 'qd.*')
             ->get()
             ->groupBy('quotation_id');
 
@@ -111,8 +114,11 @@ class QuotationController extends Controller
             ], 404);
         }
 
-        $details = DB::table('quotation_details')
-            ->where('quotation_id', $id)
+        $details = DB::table('quotation_details as qd')
+            ->join('items as i', 'i.item_id', '=', 'qd.item_id')
+            ->join('scales as s', 's.scale_id', '=', 'i.scale_id')
+            ->where('qd.quotation_id', $id)
+            ->select('s.scale_name', 'qd.*')
             ->get()
             ->map(function ($d) {
                 $detail = (array) $d;
@@ -159,35 +165,39 @@ class QuotationController extends Controller
         $request->validate([
             'customer_id' => 'required|integer',
             'date' => 'required|date',
-            'credit_term' => 'nullable|integer',
             'date_term' => 'nullable|date',
-            'order_total' => 'required|numeric',
             'tax' => 'required|numeric',
             'delivery_fee' => 'nullable|numeric',
-            'total_discount' => 'nullable|numeric',
-            'grand_total' => 'required|numeric',
-            'status' => 'required|string',
             'items' => 'required|array|min:1',
             'items.*.item_id' => 'required|integer',
-            'items.*.item_name' => 'required|string',
             'items.*.quantity' => 'required|numeric',
+            'items.*.discount' => 'nullable|numeric',
             'items.*.price' => 'required|numeric',
         ]);
 
         $outOfStockItems = [];
-        $messages = '';
+        $messages = 'Stock is not enough for item:';
         foreach ($request->items as $item) {
             $inStock = (double)($this->detailService->quanItems($item['item_id'])[0]->in_stock ?? 0);
             $requiredQty = (double)($item['quantity'] ?? 0);
 
+            $itemData = DB::table('items')
+                ->where('item_id', $item['item_id'])
+                ->first();
+            if(!$itemData){
+                return response()->json([
+                    'message'=> 'Item not found!',
+                    'status'=>404
+                ],404);
+            }
             if ($requiredQty > $inStock) {
                 $outOfStockItems[] = [
                     'item_id' => $item['item_id'],
-                    'item_name' => $item['item_name'],
+                    'item_name' => $itemData->item_name,
                     'required_quantity' => $requiredQty,
                     'available_quantity' => $inStock,
                 ];
-                $messages .= "Stock is not enough for item: {$item['item_name']}. Missing: " . ($requiredQty - $inStock) . ", Available: {$inStock}. ";
+                $messages .= " {$itemData->item_name}. Missing: " . ($requiredQty - $inStock) . ", Available: {$inStock}. ";
             }
         }
 
@@ -200,21 +210,26 @@ class QuotationController extends Controller
         }
 
         DB::beginTransaction();
-
+        $date = Carbon::parse($request->date);
+        $date_term = $date->copy()->addDays($request->credit_term);
+        $total_discount = empty($request->items)?0:collect($request->items)->sum(fn($item)=>($item['price'] * $item['quantity'])* ($item['discount']/100));
+        $order_total = empty($request->items)?0:collect($request->items)->sum(fn($item)=>($item['price'] * $item['quantity']));
+        $tax_amount = $order_total * ((float)$request->tax/100);
+        $grand_total = $order_total - $total_discount + $request->delivery_fee + $tax_amount;
         try {
             // Ã¢Å“â€¦ Save quotation (master)
             $quotation = Quotation::create([
                 'quotation_number' => $code,
                 'customer_id' => $request->customer_id,
                 'date' => $request->date,
+                'date_term' => $date_term,
                 'credit_term' => $request->credit_term,
-                'date_term' => $request->date_term,
-                'order_total' => $request->order_total,
+                'order_total' => $order_total,
                 'tax' => $request->tax,
                 'delivery_fee' => $request->delivery_fee ?? 0,
-                'total_discount' => $request->total_discount ?? 0,
-                'grand_total' => $request->grand_total,
-                'status' => $request->status,
+                'total_discount' => $total_discount ?? 0,
+                'grand_total' => $grand_total ,
+                'status' => 'draft',
                 'notes' => $request->notes,
                 'profile_id' => $user->profile_id,
                 'created_by' => auth()->id(),
@@ -223,17 +238,15 @@ class QuotationController extends Controller
             // Ã¢Å“â€¦ Save quotation details
             foreach ($request->items as $item) {
                 $totalPrice =
-                    ($item['quantity'] * $item['price']) - ($item['discount'] ?? 0);
+                    ($item['quantity'] * $item['price']) - (($item['quantity'] * $item['price'])*($item['discount']/100 )?? 0);
 
                 QuotationDetail::create([
                     'quotation_id' => $quotation->quotation_id,
                     'item_id' => $item['item_id'],
-                    'item_name' => $item['item_name'],
                     'quantity' => $item['quantity'],
                     'price' => $item['price'],
                     'discount' => $item['discount'] ?? 0,
                     'total_price' => $totalPrice,
-                    'scale' => $item['scale'] ?? null,
                 ]);
             }
 
@@ -261,16 +274,11 @@ class QuotationController extends Controller
             'customer_id' => 'required|integer',
             'date' => 'required|date',
             'credit_term' => 'nullable|integer',
-            'date_term' => 'nullable|date',
-            'order_total' => 'required|numeric',
             'tax' => 'required|numeric',
             'delivery_fee' => 'nullable|numeric',
-            'total_discount' => 'nullable|numeric',
-            'grand_total' => 'required|numeric',
-            'status' => 'required|string',
             'items' => 'required|array|min:1',
             'items.*.item_id' => 'required|integer',
-            'items.*.item_name' => 'required|string',
+            'items.*.discount' => 'nullable|numeric',
             'items.*.quantity' => 'required|numeric',
             'items.*.price' => 'required|numeric',
         ]);
@@ -301,7 +309,12 @@ class QuotationController extends Controller
         }
 
         DB::beginTransaction();
-
+        $date = Carbon::parse($request->date);
+        $date_term = $date->copy()->addDays($request->credit_term);
+        $total_discount = empty($request->items)?0:collect($request->items)->sum(fn($item)=>($item['price'] * $item['quantity'])* ($item['discount']/100));
+        $order_total = empty($request->items)?0:collect($request->items)->sum(fn($item)=>($item['price'] * $item['quantity']));
+        $tax_amount = $order_total * ((float)$request->tax/100);
+        $grand_total = $order_total - $total_discount + $request->delivery_fee + $tax_amount;
         try {
             $quotation = Quotation::findOrFail($id);
 
@@ -310,13 +323,12 @@ class QuotationController extends Controller
                 'customer_id' => $request->customer_id,
                 'date' => $request->date,
                 'credit_term' => $request->credit_term,
-                'date_term' => $request->date_term,
-                'order_total' => $request->order_total,
+                'date_term' => $date_term,
+                'order_total' => $order_total,
                 'tax' => $request->tax,
                 'delivery_fee' => $request->delivery_fee ?? 0,
-                'total_discount' => $request->total_discount ?? 0,
-                'grand_total' => $request->grand_total,
-                'status' => $request->status,
+                'total_discount' => $total_discount ?? 0,
+                'grand_total' => $grand_total,
                 'notes' => $request->notes,
             ]);
 
@@ -326,17 +338,15 @@ class QuotationController extends Controller
             // Ã¢Å“â€¦ Insert new details
             foreach ($request->items as $item) {
                 $totalPrice =
-                    ($item['quantity'] * $item['price']) - ($item['discount'] ?? 0);
+                    ($item['quantity'] * $item['price']) - (($item['quantity'] * $item['price'])*($item['discount']/100 )?? 0);
 
                 QuotationDetail::create([
                     'quotation_id' => $quotation->quotation_id,
                     'item_id' => $item['item_id'],
-                    'item_name' => $item['item_name'],
                     'quantity' => $item['quantity'],
                     'price' => $item['price'],
                     'discount' => $item['discount'] ?? 0,
                     'total_price' => $totalPrice,
-                    'scale' => $item['scale'] ?? null,
                 ]);
             }
 
@@ -397,6 +407,12 @@ class QuotationController extends Controller
             ], 404);
         }
 
+        if($status < $quote->status){
+            return response()->json([
+                'message'=>'Cannot back status',
+                'status'=>422,
+            ],422);
+        }
         if($status == 'approved'){
             return $this->approved($id);
         }
@@ -418,15 +434,13 @@ class QuotationController extends Controller
         $now = now();
         $month = $now->format('m');
         $year = $now->format('y');
-
-
         $quote = Quotation::with([
                 'customer:customer_id,customer_name',
                 'details.item:item_id,item_name,item_cost'
             ])->findOrFail($id);
 
         $outOfStockItems = [];
-        $messages = '';
+        $messages = 'Stock is not enough for item:';
         foreach ($quote->details as $item) {
             $inStock = (double)($this->detailService->quanItems($item->item_id)[0]->in_stock ?? 0);
             $requiredQty = (double)($item->quantity ?? 0);
@@ -438,11 +452,10 @@ class QuotationController extends Controller
                 $outOfStockItems[] = [
                     'item_id' => $item->item_id,
                     'item_name' => $itemData->item_name,
-                    'item_name' => $item->item_name,
                     'required_quantity' => $requiredQty,
                     'available_quantity' => $inStock,
                 ];
-                $messages .= "Stock is not enough for item: {$item->item_name}. Missing: " . ($requiredQty - $inStock) . ", Available: {$inStock}. ";
+                $messages .= " {$item->item_name}. Missing: " . ($requiredQty - $inStock) . ", Available: {$inStock}. ";
             }
         }
 
@@ -493,13 +506,10 @@ class QuotationController extends Controller
                 $order_items[] = OrderItems::create([
                     'order_id' => $order_id,
                     'item_id' => $item['item_id'],
-                    'item_name' => $item['item_name'],
                     'item_price' => $item['price'],
                     'discount' => $item['discount'],
                     'price' => $item['total_price'],
                     'quantity' => $item['quantity'],
-                    // 'item_cost' => $item['item']->item_cost ?? 0,
-                    'item_wholesale_price' => $item['price'] ?? 0,
                     'exchange_rate' => (double)($exchange_rate->usd_to_khr ?? 0),
                 ]);
             }

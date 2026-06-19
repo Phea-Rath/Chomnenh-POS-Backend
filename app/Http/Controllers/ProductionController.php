@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use App\Services\ItemService;
 use App\Services\DetailService;
+use Exception;
 
 class ProductionController extends Controller
 {
@@ -38,6 +39,7 @@ class ProductionController extends Controller
 
         $query = DB::table('productions as prod')
             ->join('users as u', 'prod.created_by', '=', 'u.id')
+            ->join('users as up', 'prod.updated_by', '=', 'up.id')
             ->join('profiles as pr', 'u.profile_id', '=', 'pr.id')
             ->join('items as i', 'prod.item_id', '=', 'i.item_id')
             ->select(
@@ -45,8 +47,8 @@ class ProductionController extends Controller
                 'i.item_name',
                 'i.item_code',
                 'u.username as created_by_name',
+                'up.username as updated_by_name',
                 DB::raw('0 as image'),
-                DB::raw('0 as images'),
             )
             ->where('prod.is_deleted', 0)
             // ->where('u.id', $uid)
@@ -73,7 +75,6 @@ class ProductionController extends Controller
         foreach($productions as $pro){
             $images = $this->itemService->getImage($pro->item_id);
             $pro->image = $images[0]??null;
-            $pro->images = $images;
         }
 
         if ($productions->total() == 0) {
@@ -167,7 +168,7 @@ class ProductionController extends Controller
             'production_date' => 'required|date',
             'item_id' => 'required|integer|exists:items,item_id',
             'quantity' => 'required|integer|min:1',
-            'waste_quantity' => 'nullable|integer|min:1',
+            'waste_quantity' => 'nullable|integer|min:0',
             'total_cost' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
             'raw_materials' => 'required|array|min:1',
             'raw_materials.*.raw_material_id' => 'required|integer|exists:raw_materials,id',
@@ -212,6 +213,7 @@ class ProductionController extends Controller
                 'waste_quantity' => $validated['waste_quantity']??0,
                 'exchange_rate' => $exchange_rate->usd_to_khr ?? 4000,
                 'created_by' => $uid,
+                'updated_by' => $uid,
             ]);
 
             $details = [];
@@ -252,80 +254,105 @@ class ProductionController extends Controller
             return response()->json([
                 'message' => 'Production not found!',
                 'status' => 404
-            ]);
+            ],404);
         }
-        $production->update(['status' => 'confirmed']);
-        $user = Auth::user();
-        $uid = $user->id;
-        $proId = $user->profile_id;
-        $exchange_rate = ExchangeRate::find($proId);
-        $stock_date = now()->format('Y-m-d');
-
-            // Generate stock_no safely
-            $maxStockId = DB::table('stock_masters')->max('stock_id');
-            $newStockId = ($maxStockId ?? 0) + 1;
-            $now = now();
-
-            $count = StockMaster::join('users as u', 'stock_masters.stock_created_by', '=', 'u.id')
-                ->join('profiles as pr', 'u.profile_id', '=', 'pr.id')
-                ->where('pr.id', $proId)
-                ->whereYear('stock_masters.created_at', $now->year)
-                ->whereMonth('stock_masters.created_at', $now->month)
-                ->count();
-            $stock_no = 'IN-' . now()->format('Ymd') . '-' . str_pad($count + 1, 5, '0', STR_PAD_LEFT);
-            // Create stock master
-            DB::table('stock_masters')->insert([
-                'stock_id' => $newStockId,
-                'stock_no' => $stock_no,
-                'stock_type_id' => 2, // 2 = stock in
-                'from_warehouse' => 2, // Default or set as needed
-                'warehouse_id' => 1, // Default or set as needed
-                'stock_date' => $stock_date,
-                'quantity' => $production->quantity,
-                'stock_remark' => 'Production Completed from No: ' . $production->production_no,
-                'stock_created_by' => $uid,
-                'exchange_rate' => $exchange_rate->usd_to_khr ?? 4000,
-                'is_deleted' => 0,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
-            $stockMasterId = $newStockId;
-            $item = Items::find($production->item_id);
-
+        if ($production->status == 'confirmed') {
+            return response()->json([
+                'message' => 'Production is ready confirmed to stock!',
+                'status' => 200
+            ],200);
+        }
+        try{
+            DB::beginTransaction();
+            $user = Auth::user();
+            $uid = $user->id;
+            $proId = $user->profile_id;
             $exchange_rate = ExchangeRate::find($proId);
-            $stockItems = StockDetails::create([
-                'stock_id' => (int)$stockMasterId,
-                'item_id' => $item->item_id,
-                'quantity' => (int)$production->quantity,
-                'item_cost' => (float)$production->total_cost / (int)$production->quantity ?? 0,
-                'expire_date' => null, // Set if available
-                'transection_date' => $stock_date,
-                'is_deleted' => 0,
-                'created_at' => now(),
-                'updated_at' => now(),
+            $stock_date = now()->format('Y-m-d');
+            $production->update([
+                'status' => 'confirmed',
+                'updated_by' => $uid,
             ]);
+
+                // Generate stock_no safely
+                $maxStockId = DB::table('stock_masters')->max('stock_id');
+                $newStockId = ($maxStockId ?? 0) + 1;
+                $now = now();
+
+                $count = StockMaster::join('users as u', 'stock_masters.stock_created_by', '=', 'u.id')
+                    ->join('profiles as pr', 'u.profile_id', '=', 'pr.id')
+                    ->where('pr.id', $proId)
+                    ->whereYear('stock_masters.created_at', $now->year)
+                    ->whereMonth('stock_masters.created_at', $now->month)
+                    ->count();
+                $stock_no = 'IN-' . now()->format('Ymd') . '-' . str_pad($count + 1, 5, '0', STR_PAD_LEFT);
+                // Create stock master
+                DB::table('stock_masters')->insert([
+                    'stock_id' => $newStockId,
+                    'stock_no' => $stock_no,
+                    'stock_type_id' => 2, // 2 = stock in
+                    'from_warehouse' => 2, // Default or set as needed
+                    'warehouse_id' => 1, // Default or set as needed
+                    'stock_date' => $stock_date,
+                    'quantity' => $production->quantity,
+                    'stock_remark' => 'Production Completed from No: ' . $production->production_no,
+                    'stock_created_by' => $uid,
+                    'approved_by' => $uid,
+                    'received_by' =>  $production->created_by,
+                    'reference_no' =>  $production->production_no,
+                    'exchange_rate' => $exchange_rate->usd_to_khr ?? 4000,
+                    'is_deleted' => 0,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+                $stockMasterId = $newStockId;
+                $item = Items::find($production->item_id);
+
+                $exchange_rate = ExchangeRate::find($proId);
+                $stockItems = StockDetails::create([
+                    'stock_id' => (int)$stockMasterId,
+                    'item_id' => $item->item_id,
+                    'quantity' => (int)$production->quantity,
+                    'item_cost' => (float)$production->total_cost / (int)$production->quantity ?? 0,
+                    'expire_date' => null, // Set if available
+                    'transection_date' => $stock_date,
+                    'is_deleted' => 0,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            DB::commit();
+            return response()->json([
+                'message'=> 'Production confirm to stock successfully',
+                'status'=>200,
+            ]);
+        }catch(\Exception $err){
+            DB::rollBack();
+            return response()->json([
+                'message'=> 'Production Confirm Error: '. $err->getMessage(),
+                'status'=> 500,
+            ],500);
+        }
+
+
     }
 
     public function show($id)
     {
-        // $user = Auth::user();
-        // $uid = $user->id;
-        // $proId = $user->profile_id;
 
         $production = DB::table('productions as prod')
             ->join('users as u', 'prod.created_by', '=', 'u.id')
+            ->join('users as up', 'prod.updated_by', '=', 'up.id')
             ->join('profiles as pr', 'u.profile_id', '=', 'pr.id')
             ->join('items as i', 'prod.item_id', '=', 'i.item_id')
             ->select(
                 'prod.*',
                 'i.item_name',
                 'i.item_code',
-                'u.username as created_by_name'
+                'u.username as created_by_name',
+                'up.username as updated_by_name'
             )
             ->where('prod.id', $id)
             ->where('prod.is_deleted', 0)
-            // ->where('u.id', $uid)
-            // ->where('pr.id', $proId)
             ->first();
 
         if (!$production) {
@@ -357,6 +384,11 @@ class ProductionController extends Controller
             (array)$production,
             ['details' => $details]
         );
+        foreach($details as $item){
+            if($item->material_image){
+                $item->material_image = url('storage/images', $item->material_image);
+            }
+        }
 
         return response()->json([
             'message' => 'Production fetched successfully!',
@@ -383,7 +415,7 @@ class ProductionController extends Controller
             'production_date' => 'required|date',
             'item_id' => 'required|integer|exists:items,item_id',
             'quantity' => 'required|integer|min:1',
-            'waste_quantity' => 'nullable|integer|min:1',
+            'waste_quantity' => 'nullable|integer|min:0',
             'total_cost' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
             'raw_materials' => 'required|array|min:1',
             'raw_materials.*.raw_material_id' => 'required|integer|exists:raw_materials,id',
@@ -398,6 +430,8 @@ class ProductionController extends Controller
                 'item_id' => $validated['item_id'],
                 'quantity' => $validated['quantity'],
                 'total_cost' => $validated['total_cost'],
+                'waste_quantity' => $validated['waste_quantity']??0,
+                'updated_by' => $uid,
             ]);
 
             // Delete existing details
@@ -412,7 +446,6 @@ class ProductionController extends Controller
                     'production_id' => $id,
                     'raw_material_id' => $material['raw_material_id'],
                     'quantity' => $material['quantity'],
-                    'waste_quantity' => $validated['waste_quantity']??0,
                     'cost_per_unit' => $material['cost_per_unit'],
                     'total_cost' => $totalMaterialCost,
                     'created_by' => $uid,

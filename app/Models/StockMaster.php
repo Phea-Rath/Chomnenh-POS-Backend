@@ -20,6 +20,7 @@ class StockMaster extends Model
         'approved_by',
         'quantity',
         'reference_no',
-        'stock_detail_id'
+        'stock_detail_id',
+        'updated_by'
     ];
 }

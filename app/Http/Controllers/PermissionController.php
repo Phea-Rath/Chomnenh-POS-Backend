@@ -11,51 +11,29 @@ use Illuminate\Support\Collection;
 class PermissionController extends Controller
 {
     // List all permissions
-    // public function index()
-    // {
-    //     $user = Auth::user();
-    //     if (!$user || !$user->profile_id) {
-    //         return response()->json([
-    //             'message' => 'User or profile not found',
-    //             'status' => 200,
-    //             'data' => []
-    //         ], 200);
-    //     }
-    //     $proId = $user->profile_id;
-    //     $role = $user->role_id;
-    //     $permissions = collect();
-    //     $query = Permission::join('users', 'users.id', '=', 'permission.user_id')
-    //         ->join('profiles', 'profiles.id', '=', 'users.profile_id')
-    //         ->join('menus', 'permission.menu_id', '=', 'menus.menu_id')
-    //         // ->where('profile_id', $proId)
-    //         ->select(
-    //             'permission.user_id',
-    //             'permission.menu_id',
-    //             'menus.menu_name',
-    //             'menus.menu_type',
-    //             'menus.menu_icon',
-    //             'menus.menu_path',
-    //             'menus.parent_menu',
-    //             'menus.order_menu'
-    //         );
-    //     if ($role === 1) {
-    //         $permissions = $query->get();
-    //     } else if ($role === 3) {
-    //         // filter by profile_id
-    //         $permissions = $query->where('profile_id', $proId)->get();
-    //     } else {
-    //         // default: no result
-    //         $permissions = collect();
-    //     }
-
-    //     $permissions = $this->formatPermissionMenus($permissions);
-
-    //     return response()->json([
-    //         'message' => 'permission get successfully',
-    //         'status' => 200,
-    //         'data' => $permissions
-    //     ]);
-    // }
+    public function index()
+    {
+        $user = Auth::user();
+        if (!$user || !$user->profile_id) {
+            return response()->json([
+                'message' => 'User or profile not found',
+                'status' => 200,
+                'data' => []
+            ], 200);
+        }
+        $proId = $user->profile_id;
+        $role = $user->role_id;
+        $permissions = collect();
+        $query = Permission::join('users', 'users.id', '=', 'permission.user_id')
+            ->join('profiles', 'profiles.id', '=', 'users.profile_id')
+            ->join('menus', 'permission.menu_id', '=', 'menus.menu_id')
+            ->where('users.id', $user->id)->select('permission.*')->get();
+        return response()->json([
+            'message' => 'permission get successfully',
+            'status' => 200,
+            'data' => $query
+        ]);
+    }
 
     // // Show permissions for a specific user
     // public function show($user_id)
@@ -90,57 +68,6 @@ class PermissionController extends Controller
     //     ]);
     // }
 
-    public function index()
-    {
-        $user = Auth::user();
-        if (!$user || !$user->profile_id) {
-            return response()->json([
-                'message' => 'User or profile not found',
-                'status' => 200,
-                'data' => []
-            ], 200);
-        }
-        $proId = $user->profile_id;
-        $role = $user->role_id;
-        $permissions = collect();
-        $query = Permission::join('users', 'users.id', '=', 'permission.user_id')
-            ->join('profiles', 'profiles.id', '=', 'users.profile_id')
-            ->join('menus', 'permission.menu_id', '=', 'menus.menu_id')
-            // ->where('profile_id', $proId)
-            ->select(
-                'permission.user_id',
-                'permission.menu_id',
-                'menus.menu_name',
-                'menus.menu_name_km',
-                'menus.menu_type',
-                'menus.menu_icon',
-                'menus.menu_path',
-                'menus.parent_menu',
-                'menus.order_menu',
-                'permission.is_view',
-                'permission.is_modify',
-                'permission.is_drop',
-                'permission.is_execute'
-            )
-            ->orderBy('menus.order_menu', 'asc');
-        if ($role === 1) {
-            $permissions = $query->get();
-        } else if ($role === 3) {
-            // filter by profile_id
-            $permissions = $query->where('profile_id', $proId)->get();
-        } else {
-            // default: no result
-            $permissions = collect();
-        }
-
-        $permissions = $this->formatPermissionMenus($permissions);
-
-        return response()->json([
-            'message' => 'permission get successfully',
-            'status' => 200,
-            'data' => $permissions
-        ]);
-    }
 
     // Show permissions for a specific user
     public function show($user_id)
@@ -480,7 +407,8 @@ class PermissionController extends Controller
         }
 
         $query = DB::table('menus as m')
-            ->whereIn('m.only', ['all', 'website']);
+            ->whereIn('m.only', ['all', 'website'])
+            ->where('m.base_on', '!=', 'function');
 
         if ($user->role_id !== 1) {
             // For non-superadmins, only show menus they actually have permission for

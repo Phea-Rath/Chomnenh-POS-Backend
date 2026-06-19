@@ -41,6 +41,7 @@ class StockMasterController extends Controller
             ->join('stock_types as st', 'sm.stock_type_id', '=', 'st.stock_type_id')
             ->join('users as s', 'sm.stock_created_by', '=', 's.id')
             ->join('profiles as p', 's.profile_id', '=', 'p.id')
+            ->where('sm.warehouse_id', $isRaw?5:1)
             ->where('sm.is_deleted', 0)
             ->where('p.id', $proId);
 
@@ -138,6 +139,10 @@ class StockMasterController extends Controller
                 'sm.stock_date',
                 'sm.created_at',
                 'sm.from_warehouse',
+                'sm.received_by',
+                'sm.approved_by',
+                'sm.stock_created_by',
+                'sm.reference_no',
                 'sm.warehouse_id',
                 'sm.stock_type_id',
                 'from_w.warehouse_name as from_warehouse_name',
@@ -202,6 +207,10 @@ class StockMasterController extends Controller
         return [
             'stock_id' => (int) $stock->stock_id,
             'stock_no' => $stock->stock_no,
+            'received_by' => $stock->received_by,
+            'approved_by' => $stock->approved_by,
+            'created_by' => $stock->stock_created_by,
+            'reference_no' => $stock->reference_no,
             'from_warehouse' => [
                 'id' => (int) $stock->from_warehouse,
                 'name' => $stock->from_warehouse_name,
@@ -215,7 +224,7 @@ class StockMasterController extends Controller
                 'name' => strtoupper($stock->stock_type_name),
             ],
             'items' => $items,
-            'created_by_name' => $stock->created_by_name,
+            // 'created_by_name' => $stock->created_by_name,
             'stock_date' => $stock->created_at ?? $stock->stock_date,
         ];
     }
@@ -1102,7 +1111,6 @@ class StockMasterController extends Controller
         $stock_date = now()->format('Y-m-d');
         $validated = $request->validate([
             'stock_type_id' => 'required|integer',
-            // 'from_warehouse' => 'required|integer',
             'warehouse_id' => 'required|integer|exists:warehouses,warehouse_id',
             'stock_remark' => 'nullable|string|max:255',
             'reference_no' => 'nullable|string|max:255',
@@ -1141,12 +1149,13 @@ class StockMasterController extends Controller
             'stock_type_id' => 2,
             'from_warehouse' => 2,
             'warehouse_id' => $validated['warehouse_id'],
-            'referwnce_no' => $validated['reference_no'],
+            'reference_no' => $validated['reference_no'],
             'quantity' => array_sum(array_column($validated['items'], 'quantity')),
             'stock_date' => $stock_date,
             'stock_remark' => $validated['stock_remark'],
             'exchange_rate' => $exchange_rate->usd_to_khr ?? 4000,
             'stock_created_by' => $uid,
+            'updated_by' => $uid,
             'received_by' => $validated['received_by'] ?? null,
             'approved_by' => $validated['approved_by'] ?? null,
         ]);
@@ -1190,6 +1199,7 @@ class StockMasterController extends Controller
             'from_warehouse' => 'required|integer',
             'warehouse_id' => 'required|integer|exists:warehouses,warehouse_id',
             'stock_remark' => 'nullable|string|max:255',
+            'reference_no' => 'nullable|string|max:255',
             'received_by' => 'nullable|integer|exists:users,id',
             'approved_by' => 'nullable|integer|exists:users,id',
             'items' => 'array||min:1',
@@ -1228,8 +1238,10 @@ class StockMasterController extends Controller
             'stock_remark' => $validated['stock_remark'],
             'exchange_rate' => $exchange_rate->usd_to_khr ?? 4000,
             'stock_created_by' => $uid,
+            'updated_by' => $uid,
             'received_by' => $validated['received_by'] ?? null,
             'approved_by' => $validated['approved_by'] ?? null,
+            'reference_no' => $validated['reference_no'] ?? null,
         ]);
         $items = [];
         foreach ($validated['items'] as $item) {
@@ -1255,6 +1267,7 @@ class StockMasterController extends Controller
         return response()->json([
             'message' => 'StockMaster created successfully!',
             'status' => 200,
+            'id' => $data->id
         ], 201);
     }
 
@@ -1268,9 +1281,9 @@ class StockMasterController extends Controller
         $stock_date = now()->format('Y-m-d');
         $validated = $request->validate([
             'stock_type_id' => 'required|integer',
-            // 'from_warehouse' => 'required|integer',
             'warehouse_id' => 'required|integer',
             'stock_remark' => 'nullable|string|max:255',
+            'reference_no' => 'nullable|string|max:255',
             'received_by' => 'nullable|integer|exists:users,id',
             'approved_by' => 'nullable|integer|exists:users,id',
             'exchange_rate' => 'nullable|numeric',
@@ -1320,8 +1333,10 @@ class StockMasterController extends Controller
             'stock_remark' => $validated['stock_remark'],
             'exchange_rate' => $validated['exchange_rate'] ?? $exchange_rate->usd_to_khr,
             'stock_created_by' => $uid,
+            'updated_by' => $uid,
             'received_by' => $validated['received_by'] ?? null,
             'approved_by' => $validated['approved_by'] ?? null,
+            'reference_no' => $validated['reference_no'] ?? null,
         ]);
         $items = [];
         foreach ($validated['items'] as $item) {
@@ -1341,6 +1356,7 @@ class StockMasterController extends Controller
         return response()->json([
             'message' => 'StockMaster created successfully!',
             'status' => 200,
+            'id' => $data->stock_id
         ], 201);
     }
 
@@ -1489,6 +1505,7 @@ class StockMasterController extends Controller
             'warehouse_id' => 'required|integer|exists:warehouses,warehouse_id',
             'stock_date' => 'required|date',
             'stock_remark' => 'nullable|string|max:255',
+            'reference_no' => 'nullable|string|max:255',
             'received_by' => 'nullable|integer|exists:users,id',
             'approved_by' => 'nullable|integer|exists:users,id',
             'items' => 'array||min:1',
@@ -1514,6 +1531,7 @@ class StockMasterController extends Controller
             'stock_remark' => $validated['stock_remark'],
             'received_by' => $validated['received_by'] ?? null,
             'approved_by' => $validated['approved_by'] ?? null,
+            'reference_no' => $validated['reference_no'] ?? null,
             // 'stock_created_by'=> $validated['stock_created_by'],
         ]);
 
@@ -1561,6 +1579,7 @@ class StockMasterController extends Controller
             'warehouse_id' => 'required|integer|exists:warehouses,warehouse_id',
             'stock_date' => 'required|date',
             'stock_remark' => 'nullable|string|max:255',
+            'reference_no' => 'nullable|string|max:255',
             'received_by' => 'nullable|integer|exists:users,id',
             'approved_by' => 'nullable|integer|exists:users,id',
             'items' => 'array||min:1',
@@ -1585,6 +1604,7 @@ class StockMasterController extends Controller
             'stock_remark' => $validated['stock_remark'],
             'received_by' => $validated['received_by'] ?? null,
             'approved_by' => $validated['approved_by'] ?? null,
+            'reference_no' => $validated['reference_no'] ?? null,
             // 'stock_created_by'=> $validated['stock_created_by'],
         ]);
 
@@ -1634,6 +1654,7 @@ class StockMasterController extends Controller
             'warehouse_id' => 'required|integer',
             'stock_date' => 'required|date',
             'stock_remark' => 'required|string|max:255',
+            'reference_no' => 'required|string|max:255',
             'received_by' => 'nullable|integer|exists:users,id',
             'approved_by' => 'nullable|integer|exists:users,id',
             'exchange_rate' => 'nullable|numeric',
@@ -1662,6 +1683,7 @@ class StockMasterController extends Controller
             'stock_remark' => $validated['stock_remark'],
             'received_by' => $validated['received_by'] ?? null,
             'approved_by' => $validated['approved_by'] ?? null,
+            'reference_no' => $validated['reference_no'] ?? null,
         ]);
 
 

@@ -20,6 +20,7 @@ return new class extends Migration
             $table->decimal('total_cost', 15, 2)->nullable();
             $table->decimal('exchange_rate', 15, 2)->default(4000);
             $table->integer('created_by');
+            $table->integer('updated_by');
             $table->integer('waste_quantity')->default(0);
             $table->enum('status', ['pending', 'confirmed'])->default('pending');
             $table->boolean('is_deleted')->default(0);

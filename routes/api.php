@@ -242,6 +242,7 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
 
     //Q
     Route::put('/quotation_approved/{id}',[QuotationController::class, 'approved']);
+    Route::put('/order_approved/{id}',[OrderMasterController::class, 'approved']);
     Route::apiResource('quotations', QuotationController::class);
     Route::put("/quote_status/{id}/{status}", [QuotationController::class, "updateStatusQuote"]);
 
@@ -308,5 +309,6 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::post('/wholesale',[OrderMasterController::class, 'storeWholesale']);
     Route::put('/wholesale/{id}',[OrderMasterController::class, 'updateWholesale']);
     Route::post('/retail',[OrderMasterController::class, 'storeRetail']);
+    Route::get('/wholesale-list',[OrderMasterController::class, 'indexWholesaleMobile']);
 
 });

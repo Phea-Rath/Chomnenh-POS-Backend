@@ -56,6 +56,95 @@ class OrderMasterController extends Controller
             ->leftJoin('customers as cu', 'om.order_customer_id', '=', 'cu.customer_id')
             ->leftJoin('delivers as dl', 'om.deliver_id', '=', 'dl.deliver_id')
             ->where('om.is_deleted', 0)
+            ->where('om.sale_type', 'sale')
+            ->where('om.is_active', 1)
+            ->where('p.id', $proId);
+
+        if (!empty($search)) {
+            $query->where(function ($q) use ($search) {
+                $q->where('om.order_no', 'LIKE', "%{$search}%")
+                    ->orWhere('cu.customer_name', 'LIKE', "%{$search}%")
+                    ->orWhere('cu.customer_email', 'LIKE', "%{$search}%")
+                    ->orWhere('cu.customer_tel', 'LIKE', "%{$search}%")
+                    ->orWhere('dl.deliver_name', 'LIKE', "%{$search}%");
+            });
+        }
+
+        if ($request->filled('customer_id')) {
+            $query->where('om.order_customer_id', $request->customer_id);
+        }
+        if ($request->filled('deliver_id')) {
+            $query->where('om.deliver_id', $request->deliver_id);
+        }
+        if ($request->filled('user_id')) {
+            $query->where('om.created_by', $request->user_id);
+        }
+        if ($request->filled('status')) {
+            $query->where('om.status', $request->status);
+        }
+        if ($request->filled('start_date')) {
+            $query->whereDate('om.order_date', '>=', $request->start_date);
+        }
+        if ($request->filled('end_date')) {
+            $query->whereDate('om.order_date', '<=', $request->end_date);
+        }
+
+        $rawOrders = $query->select('om.order_id')
+            ->orderBy('om.order_id', 'DESC')
+            ->paginate($limit, ['*'], 'page', $page);
+
+        if ($rawOrders->total() === 0) {
+            return response()->json([
+                'success' => false,
+                'status_code' => 404,
+                'data' => [
+                    'orders' => [],
+                    'pagination' => [
+                        'current_page' => $rawOrders->currentPage(),
+                        'per_page' => $rawOrders->perPage(),
+                        'total' => $rawOrders->total(),
+                        'last_page' => $rawOrders->lastPage(),
+                    ],
+                ],
+            ], 404);
+        }
+
+        $orders = [];
+        foreach ($rawOrders as $row) {
+            $formatted = $this->formatMobileOrder((int) $row->order_id, $proId);
+            if ($formatted) {
+                $orders[] = $formatted;
+            }
+        }
+
+        return response()->json([
+            'message' => 'Orders retrieved successfully',
+            'status' => 200,
+            'data' =>  $orders,
+            'pagination' => [
+                    'current_page' => $rawOrders->currentPage(),
+                    'per_page' => $rawOrders->perPage(),
+                    'total' => $rawOrders->total(),
+                    'last_page' => $rawOrders->lastPage(),
+                ],
+        ]);
+    }
+
+    public function indexWholesaleMobile(Request $request)
+    {
+        $user = Auth::user();
+        $proId = $user->profile_id;
+        $limit = (int) $request->input('limit', 10);
+        $page = (int) $request->input('page', 1);
+        $search = $request->input('search');
+
+        $query = DB::table('order_masters as om')
+            ->join('users as u', 'om.created_by', '=', 'u.id')
+            ->join('profiles as p', 'u.profile_id', '=', 'p.id')
+            ->leftJoin('customers as cu', 'om.order_customer_id', '=', 'cu.customer_id')
+            ->leftJoin('delivers as dl', 'om.deliver_id', '=', 'dl.deliver_id')
+            ->where('om.is_deleted', 0)
+            ->where('om.sale_type', 'wholesale')
             ->where('om.is_active', 1)
             ->where('p.id', $proId);
 
@@ -833,25 +922,6 @@ class OrderMasterController extends Controller
                 'updated_by' => $uid,
             ]);
 
-            // if(!empty($validated['payments'])){
-            //     foreach($validated['payments'] as $payment){
-            //         $paymented = Payment::create([
-            //             'payment_method'=>$payment['payment_method'],
-            //             'transection_id'=> $payment['payment_method']!='cash'?$payment['transection_id']??null:null,
-            //             'amount'=> $payment['amount'],
-            //             'remark' => $payment['remark']??null,
-            //             'paid_at' => $payment['paid_at']??now(),
-            //             'created_by'=> $uid
-            //         ]);
-            //         if(!empty($paymented)){
-            //             OrderPayment::create([
-            //                 'order_id'=> $order_masters->order_id,
-            //                 'payment_id'=> $paymented->payment_id,
-            //             ]);
-            //         }
-            //     }
-            // }
-
             $order_id = $order_masters->order_id;
             $order_items = [];
             // $order_details = [];
@@ -876,12 +946,12 @@ class OrderMasterController extends Controller
 
                 $message = $this->formatMessage($order_masters, $validated, $user);
                 $init_keyboard = [
-                    [
-                        [
-                            'text' => '🧾Invoice',
-                            'url'  => 'https://www.chomnenhapp.com/invoice/' . $order_id
-                        ]
-                    ]
+                    // [
+                    //     [
+                    //         'text' => '🧾Invoice',
+                    //         'url'  => 'https://www.chomnenhapp.com/invoice/' . $order_id
+                    //     ]
+                    // ]
                 ];
                 TelegramService::sendMessage($message, $proId, $init_keyboard, $profile->chat_id);
 
@@ -953,7 +1023,7 @@ class OrderMasterController extends Controller
                 'order_customer_id' => 1,
                 'sale_type' => 'sale',
                 'online' => 0,
-                'status' => 1,
+                'status' => 6,
                 'reference_no' => null,
                 'due_date' => $order_date,
                 'deliver_id' => 1,
@@ -1505,6 +1575,7 @@ class OrderMasterController extends Controller
             4 => 'pickup',
             5 => 'delivering',
             6 => 'completed',
+            7 => 'cancelled',
         ];
 
         $track = OrderTracking::create([
@@ -1563,6 +1634,32 @@ class OrderMasterController extends Controller
             'status' => 200,
         ]);
     }
+
+    public function approved(string $id){
+        $user = auth()->user();
+        $purchase = OrderMaster::find($id);
+        if(empty($purchase)){
+            return response()->json([
+                'message'=> 'Purchase not found!',
+                'status'=>404
+            ],404);
+        }
+
+        $purchase->status = 2;
+        $purchase->save();
+
+        OrderTracking::create([
+            'order_id'=>$id,
+            'status'=> "approved",
+            'created_by' => $user->id
+        ]);
+
+        return response()->json([
+            'message'=>'Purchase approved successfully',
+            'status'=> 200,
+        ],200);
+    }
+
     public function receiveOrder(string $id)
     {
         $user = auth()->user();
