@@ -1491,7 +1491,10 @@ class StockMasterController extends Controller
     {
         $user = Auth::user();
         $proId = $user->profile_id;
-        $stock_masters = StockMaster::find($id);
+        $stock_masters = DB::table('stock_masters as sm')
+            ->join('users as u', 'u.id', '=', 'sm.stock_created_by')
+            ->join('profiles as p', 'p.id', '=', 'u.profile_id')
+            ->where('p.id', $proId)->where('sm.stock_id', $id)->first();
         $stock_date = now()->format('Y-m-d');
 
         if (!$stock_masters) {

@@ -1217,7 +1217,10 @@ class OrderMasterController extends Controller
         $user = Auth::user();
         $uid = $user->id;
         $proId = $user->profile_id;
-        $order_masters = OrderMaster::find($id);
+        $order_masters = DB::table('order_masters as om')
+            ->join('users as u', 'u.id', '=', 'om.created_by')
+            ->join('profiles as p', 'p.id', '=', 'u.profile_id')
+            ->where('p.id', $proId)->where('om.order_id', $id)->first();
         if (!$order_masters) {
             return response()->json([
                 'message' => 'order master not found!',
@@ -1374,7 +1377,10 @@ class OrderMasterController extends Controller
         $user = Auth::user();
         $uid = $user->id;
         $proId = $user->profile_id;
-        $order_masters = OrderMaster::find($id);
+        $order_masters = DB::table('order_masters as om')
+            ->join('users as u', 'u.id', '=', 'om.created_by')
+            ->join('profiles as p', 'p.id', '=', 'u.profile_id')
+            ->where('p.id', $proId)->where('om.order_id', $id)->first();
         if (!$order_masters) {
             return response()->json([
                 'message' => 'order master not found!',
