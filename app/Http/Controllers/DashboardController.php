@@ -515,24 +515,26 @@ class DashboardController extends Controller
         $query = match ($operation) {
             'sale' => DB::table('order_items as oi')
                 ->join('order_masters as om', 'oi.order_id', '=', 'om.order_id')
+                ->join('items as i', 'i.item_id', '=', 'oi.item_id')
                 ->join('users as u', 'om.created_by', '=', 'u.id')
                 ->where('oi.is_deleted', 0)
                 ->where('om.is_deleted', 0)
                 ->whereIn('om.status', self::SALE_STATUSES)
                 ->where('u.profile_id', $proId)
                 ->when($startDate && $endDate, fn($q) => $q->whereBetween('om.order_date', [$startDate->format('Y-m-d H:i:s'), $endDate->format('Y-m-d H:i:s')]))
-                ->select('oi.item_id', 'oi.item_name', DB::raw('SUM(oi.quantity) as quantity'), DB::raw('SUM(oi.price) as price'))
-                ->groupBy('oi.item_id', 'oi.item_name'),
+                ->select('oi.item_id', 'i.item_name', DB::raw('SUM(oi.quantity) as quantity'), DB::raw('SUM(oi.price) as price'))
+                ->groupBy('oi.item_id', 'i.item_name'),
 
             'purchase' => DB::table('purchase_details as pd')
                 ->join('purchases as p', 'pd.purchase_id', '=', 'p.purchase_id')
+                ->join('items as i', 'i.item_id', '=', 'pd.item_id')
                 ->join('users as u', 'p.created_by', '=', 'u.id')
                 ->where('pd.is_deleted', 0)
                 ->where('p.is_deleted', 0)
                 ->where('u.profile_id', $proId)
                 ->when($startDate && $endDate, fn($q) => $q->whereBetween('p.purchase_date', [$startDate->format('Y-m-d H:i:s'), $endDate->format('Y-m-d H:i:s')]))
-                ->select('pd.item_id', 'pd.item_name', DB::raw('SUM(pd.quantity) as quantity'), DB::raw('SUM(pd.subtotal) as price'))
-                ->groupBy('pd.item_id', 'pd.item_name'),
+                ->select('pd.item_id', 'i.item_name', DB::raw('SUM(pd.quantity) as quantity'), DB::raw('SUM(pd.subtotal) as price'))
+                ->groupBy('pd.item_id', 'i.item_name'),
 
             'stock' => DB::table('stock_details as sd')
                 ->join('stock_masters as sm', 'sd.stock_id', '=', 'sm.stock_id')
