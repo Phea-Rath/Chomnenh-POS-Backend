@@ -38,8 +38,6 @@ class DetailService {
                 'stock_masters.stock_created_by as created_by'
             )
             // ->where('stock_masters.stock_created_by', $uid)
-            ->where('stock_details.is_deleted', 0)
-            ->where('items.is_deleted', 0)
             ->where('stock_details.stock_id', $id)
             ->get();
 
@@ -96,9 +94,7 @@ class DetailService {
                 'stock_masters.stock_created_by as created_by'
             )
             // ->where('stock_masters.stock_created_by', $uid)
-            ->where('stock_raw_details.is_deleted', 0)
             ->where('stock_raw_details.stock_id', $id)
-            ->where('raw_materials.is_deleted', 0)
             ->get();
 
         if ($stock_detail->isEmpty()) {
@@ -447,9 +443,7 @@ class DetailService {
             ->join('items as i', 'sd.item_id', '=', 'i.item_id')
             ->join('users as u', 'sm.stock_created_by', '=', 'u.id')
             ->join('profiles as p', 'u.profile_id', '=', 'p.id')
-            ->where('sd.is_deleted', 0)
             ->where('sm.is_deleted', 0)
-            ->where('i.is_deleted', 0)
             ->where('i.item_id', $item_id);
         if($proId){
             $query->where('p.id', $proId);
@@ -476,7 +470,6 @@ class DetailService {
             ->join('profiles as p', 'u.profile_id', '=', 'p.id')
             ->where('p.id', $proId)
             ->where('oi.item_id', $item_id)
-            ->where('oi.is_deleted', 0)
             ->where('om.is_deleted', 0)
             ->whereIn('om.status', [4,5,6])
             ->sum('oi.quantity');
@@ -506,9 +499,7 @@ class DetailService {
             ->join('raw_materials as i', 'sd.raw_material_id', '=', 'i.id')
             ->join('users as u', 'sm.stock_created_by', '=', 'u.id')
             ->join('profiles as p', 'u.profile_id', '=', 'p.id')
-            ->where('sd.is_deleted', 0)
             ->where('sm.is_deleted', 0)
-            ->where('i.is_deleted', 0)
             ->where('i.id', $item_id)
             ->where('p.id', $proId);
 
@@ -535,7 +526,6 @@ class DetailService {
             ->join('profiles as p', 'u.profile_id', '=', 'p.id')
             ->where('p.id', $proId)
             ->where('oi.raw_material_id', $item_id)
-            ->where('oi.is_deleted', 0)
             ->where('om.is_deleted', 0)
             ->sum('oi.quantity');
             if(!$totalOrdered){

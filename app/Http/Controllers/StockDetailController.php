@@ -280,4 +280,13 @@ class StockDetailController extends Controller
         ], 200);
     }
 
+    public function TotalItemCost($quan, $id){
+        $data = $this->detailService->calculateTotalCost('stock_details','item_id',$id,$quan);
+        return response()->json([
+            'message' => 'Data select successfully',
+            'status' => 200,
+            'data' => $data,
+        ], 200);
+    }
+
 }
