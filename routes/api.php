@@ -142,8 +142,6 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::post('/menus/{id}', [MenuController::class, 'update']);
     Route::get('/menusByCurrentUser', [PermissionController::class, 'getPermissionMenuByCurrentUser']);
     Route::get('/menusByUser/{id}', [PermissionController::class, 'getPermissionMenuByUser']);
-    Route::get('/menusByCurrentUser', [PermissionController::class, 'getPermissionMenuByCurrentUser']);
-    Route::get('/menusByUser/{id}', [PermissionController::class, 'getPermissionMenuByUser']);
     Route::get('/order_persent_montly', [OrderItemController::class, 'monthlyOrderPercentCompare']);
     //O
     Route::resource('order_masters', OrderMasterController::class)->only(['index', 'store', 'update', 'destroy']);
@@ -154,7 +152,7 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::put('/edit_delivery_fee/{id}/{delivery_fee}', [OrderMasterController::class, 'addDeliveryFee']);
     Route::resource('order_items', OrderItemController::class)->only(['index', 'show']);
     Route::put('/order_uncancel/{id}', [OrderMasterController::class, 'uncancel']);
-    Route::put('/order_payment/{id}/{payment}', [OrderMasterController::class, 'addPayment']);
+    Route::put('/order_payment/{id}', [OrderMasterController::class, 'addPayment']);
     Route::get('/order-list', [OrderMasterController::class, 'indexMobile']);
     Route::get('/order-by-id/{id}', [OrderMasterController::class, 'showMobile']);
     Route::get('/quan_order_by_attr', [OrderItemController::class, 'quantityInOrderByItemId']);
@@ -258,6 +256,7 @@ Route::group(['middleware' => ['auth:sanctum']], function () {
     Route::get('/stock_sale_pagination', [orderPageController::class, 'salesPagination']);
     Route::get('/stock_details_items', [StockDetailController::class, 'groupByItems']);
     Route::resource('stock_details', StockDetailController::class)->only(['index', 'show']);
+    Route::get('/stock_filter', [StockMasterController::class, 'getStockFilter']);
     //U
     Route::get("/user_login", [UserController::class, "userLogin"]);
     Route::get("/user_by_profile/{id}", [UserController::class, "showByProId"]);

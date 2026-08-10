@@ -436,7 +436,7 @@ class DetailService {
 
 
     public function quanItems($item_id) {
-        $user = auth()->user();
+        $user = Auth::user();
         $proId = $user->profile_id ?? 0;
         $query = DB::table('stock_details as sd')
             ->join('stock_masters as sm', 'sd.stock_id', '=', 'sm.stock_id')

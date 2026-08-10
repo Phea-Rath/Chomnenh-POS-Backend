@@ -66,15 +66,15 @@ class SupplierController extends Controller
 
         $validated = $request->validate([
             'supplier_name' => 'required|string|max:255',
-            'supplier_address' => 'required|string|max:500',
-            'communes' => 'required|string|max:500',
-            'districts' => 'required|string|max:500',
-            'provinces' => 'required|string|max:500',
-            'villages' => 'required|string|max:500',
-            'commune_id' => 'required|integer',
-            'district_id' => 'required|integer',
-            'province_id' => 'required|integer',
-            'village_id' => 'required|integer',
+            'supplier_address' => 'nullable|string|max:500',
+            'communes' => 'nullable|string|max:500',
+            'districts' => 'nullable|string|max:500',
+            'provinces' => 'nullable|string|max:500',
+            'villages' => 'nullable|string|max:500',
+            'commune_id' => 'nullable|integer',
+            'district_id' => 'nullable|integer',
+            'province_id' => 'nullable|integer',
+            'village_id' => 'nullable|integer',
             'supplier_tel' => 'nullable|string|max:20',
             'supplier_email' => 'nullable|email|max:255',
             'description' => 'nullable|string|max:255',
@@ -85,23 +85,21 @@ class SupplierController extends Controller
         if ($request->hasFile('image')) {
             $file = $request->file('image');
             $imageName = $this->postImage->uploadSingle($file);
-            // $imageName = time() . '.' . $file->getClientOriginalExtension();
-            // $file->storeAs('public/images', $imageName);
         }
         $data = Suppliers::create([
             'supplier_name' => $validated['supplier_name'],
-            'supplier_address' => $validated['supplier_address'],
-            'communes' => $validated['communes'],
-            'districts' => $validated['districts'],
-            'provinces' => $validated['provinces'],
-            'villages' => $validated['villages'],
-            'commune_id' => $validated['commune_id'],
-            'district_id' => $validated['district_id'],
-            'province_id' => $validated['province_id'],
-            'village_id' => $validated['village_id'],
-            'supplier_tel' => $validated['supplier_tel'],
-            'supplier_email' => $validated['supplier_email'],
-            'description' => $validated['description'],
+            'supplier_address' => $validated['supplier_address'] ?? null,
+            'communes' => $validated['communes'] ?? null,
+            'districts' => $validated['districts'] ?? null,
+            'provinces' => $validated['provinces'] ?? null,
+            'villages' => $validated['villages'] ?? null,
+            'commune_id' => $validated['commune_id'] ?? null,
+            'district_id' => $validated['district_id'] ?? null,
+            'province_id' => $validated['province_id'] ?? null,
+            'village_id' => $validated['village_id'] ?? null,
+            'supplier_tel' => $validated['supplier_tel'] ?? null,
+            'supplier_email' => $validated['supplier_email'] ?? null,
+            'description' => $validated['description'] ?? null,
             'created_by' => $uid,
             'image'        => $imageName,
         ]);
@@ -168,59 +166,58 @@ class SupplierController extends Controller
 
         $validated = $request->validate([
             'supplier_name' => 'required|string|max:255',
-            'supplier_address' => 'required|string|max:500',
-            'communes' => 'required|string|max:500',
-            'districts' => 'required|string|max:500',
-            'provinces' => 'required|string|max:500',
-            'villages' => 'required|string|max:500',
-            'commune_id' => 'required|integer',
-            'district_id' => 'required|integer',
-            'province_id' => 'required|integer',
-            'village_id' => 'required|integer',
+            'supplier_address' => 'nullable|string|max:500',
+            'communes' => 'nullable|string|max:500',
+            'districts' => 'nullable|string|max:500',
+            'provinces' => 'nullable|string|max:500',
+            'villages' => 'nullable|string|max:500',
+            'commune_id' => 'nullable|integer',
+            'district_id' => 'nullable|integer',
+            'province_id' => 'nullable|integer',
+            'village_id' => 'nullable|integer',
             'supplier_tel' => 'nullable|string|max:20',
             'supplier_email' => 'nullable|email|max:255',
             'description' => 'nullable|string|max:255',
             'image'       => '',
         ]);
         $imageName = null;
-        if ($request->hasFile('image')&&!empty($validated["image"])) {
+        if ($request->hasFile('image')) {
             $file = $request->file('image');
             $imageName = $this->postImage->replaceSingle($supplier->image, $file);
         }
 
-
         if($imageName){
           $supplier->update([
             'supplier_name' => $validated['supplier_name'],
-            'supplier_address' => $validated['supplier_address'],
-            'communes' => $validated['communes'],
-            'districts' => $validated['districts'],
-            'provinces' => $validated['provinces'],
-            'villages' => $validated['villages'],
-            'commune_id' => $validated['commune_id'],
-            'district_id' => $validated['district_id'],
-            'province_id' => $validated['province_id'],
-            'village_id' => $validated['village_id'],
-            'supplier_tel' => $validated['supplier_tel'],
-            'supplier_email' => $validated['supplier_email'],
-            'description' => $validated['description'],
+            'supplier_address' => $validated['supplier_address'] ?? $supplier->supplier_address,
+            'communes' => $validated['communes'] ?? $supplier->communes,
+            'districts' => $validated['districts'] ?? $supplier->districts,
+            'provinces' => $validated['provinces'] ?? $supplier->provinces,
+            'villages' => $validated['villages'] ?? $supplier->villages,
+            'commune_id' => $validated['commune_id'] ?? $supplier->commune_id,
+            'district_id' => $validated['district_id'] ?? $supplier->district_id,
+            'province_id' => $validated['province_id'] ?? $supplier->province_id,
+            'village_id' => $validated['village_id'] ?? $supplier->village_id,
+            'supplier_tel' => $validated['supplier_tel'] ?? $supplier->supplier_tel,
+            'supplier_email' => $validated['supplier_email'] ?? $supplier->supplier_email,
+            'description' => $validated['description'] ?? $supplier->description,
             'image' => $imageName,
         ]);
         }else{
             $supplier->update([
             'supplier_name' => $validated['supplier_name'],
-            'supplier_address' => $validated['supplier_address'],
-            'communes' => $validated['communes'],
-            'districts' => $validated['districts'],
-            'provinces' => $validated['provinces'],
-            'villages' => $validated['villages'],
-            'commune_id' => $validated['commune_id'],
-            'district_id' => $validated['district_id'],
-            'province_id' => $validated['province_id'],
-            'village_id' => $validated['village_id'],
-            'supplier_tel' => $validated['supplier_tel'],
-            'supplier_email' => $validated['supplier_email'],
-            'description' => $validated['description'],
+            'supplier_address' => $validated['supplier_address'] ?? $supplier->supplier_address,
+            'communes' => $validated['communes'] ?? $supplier->communes,
+            'districts' => $validated['districts'] ?? $supplier->districts,
+            'provinces' => $validated['provinces'] ?? $supplier->provinces,
+            'villages' => $validated['villages'] ?? $supplier->villages,
+            'commune_id' => $validated['commune_id'] ?? $supplier->commune_id,
+            'district_id' => $validated['district_id'] ?? $supplier->district_id,
+            'province_id' => $validated['province_id'] ?? $supplier->province_id,
+            'village_id' => $validated['village_id'] ?? $supplier->village_id,
+            'supplier_tel' => $validated['supplier_tel'] ?? $supplier->supplier_tel,
+            'supplier_email' => $validated['supplier_email'] ?? $supplier->supplier_email,
+            'description' => $validated['description'] ?? $supplier->description,
         ]);
         }
 

@@ -8,6 +8,8 @@ use App\Models\StockRawDetail;
 use App\Models\StockMaster;
 use App\Models\Items;
 use App\Models\ExchangeRate;
+use App\Models\OrderItems;
+use App\Models\OrderMaster;
 use App\Models\StockAttribute;
 use App\Services\DetailService;
 use App\Services\ItemService;
@@ -43,7 +45,7 @@ class StockMasterController extends Controller
             ->join('stock_types as st', 'sm.stock_type_id', '=', 'st.stock_type_id')
             ->join('users as s', 'sm.stock_created_by', '=', 's.id')
             ->join('profiles as p', 's.profile_id', '=', 'p.id')
-            ->where('sm.warehouse_id', $isRaw?5:1)
+            ->where('sm.warehouse_id', $isRaw ? 5 : 1)
             ->where('sm.is_deleted', 0)
             ->where('p.id', $proId);
 
@@ -1019,8 +1021,8 @@ class StockMasterController extends Controller
     {
         $user = Auth::user();
         $proId = $user->profile_id;
-        // $limit = $request->input('limit', 10);
-        // $page = $request->input('page', 1);
+        $limit = $request->input('limit', 10);
+        $page = $request->input('page', 1);
 
         // Paginated stock details summary
         $stock_masters = DB::table('stock_details as sd')
@@ -1051,7 +1053,8 @@ class StockMasterController extends Controller
                 // 'sm.created_at'
             )
             ->where('p.id', $proId)
-            ->where('sd.is_deleted', 0)
+            ->where('sm.is_deleted', 0)
+            // ->where('i.is_deleted', 0)
             ->whereIn('sm.stock_type_id', [1, 2]) // stock in
             ->where('sm.warehouse_id', $warehouseId)
             ->groupBy(
@@ -1068,8 +1071,7 @@ class StockMasterController extends Controller
                 'b.brand_name',
                 'i.is_deleted',
             )
-            ->orderBy('i.item_id')->get();
-        // ->paginate($limit, ['*'], 'page', $page);
+            ->orderBy('i.item_id')->paginate($limit, ['*'], 'page', $page);
         foreach ($stock_masters as $stock_master) {
             $imagelist = $this->itemService->getImage($stock_master->item_id);
             $stock_master->stock = $this->detailService->quanItems($stock_master->item_id)[0];
@@ -1094,13 +1096,13 @@ class StockMasterController extends Controller
         return response()->json([
             'message' => 'StockMaster selected successfully',
             'status' => 200,
-            'data' => $stock_masters->toArray(),
-            // 'pagination' => [
-            //     'current_page' => $stock_masters->currentPage(),
-            //     'per_page' => $stock_masters->perPage(),
-            //     'total' => $stock_masters->total(),
-            //     'last_page' => $stock_masters->lastPage(),
-            // ]
+            'data' => $stock_masters->getCollection(),
+            'pagination' => [
+                'current_page' => $stock_masters->currentPage(),
+                'per_page' => $stock_masters->perPage(),
+                'total' => $stock_masters->total(),
+                'last_page' => $stock_masters->lastPage(),
+            ]
         ]);
     }
 
@@ -1124,18 +1126,18 @@ class StockMasterController extends Controller
             'items.*.item_cost' => 'required|numeric',
             'items.*.expire_date' => 'required|date',
         ]);
-            $existWarehouse = DB::table('warehouses as w')
-                    ->join('users as u', 'u.id', '=', 'w.created_by')
-                    ->join('profiles as p', 'p.id', '=', 'u.profile_id')
-                    ->where('p.id', $proId)->where('w.warehouse_id', $validated['warehouse_id'])->select('w.*')->first();
-            if(empty($existWarehouse)){
-                return response()->json([
-                    'message' => 'Items Not Found: ',
-                    'error' => 'Item id: '.$validated['warehouse_id']
-                ]);
-            }
+        $existWarehouse = DB::table('warehouses as w')
+            ->join('users as u', 'u.id', '=', 'w.created_by')
+            ->join('profiles as p', 'p.id', '=', 'u.profile_id')
+            ->where('p.id', $proId)->where('w.warehouse_id', $validated['warehouse_id'])->select('w.*')->first();
+        if (empty($existWarehouse)) {
+            return response()->json([
+                'message' => 'Items Not Found: ',
+                'error' => 'Item id: ' . $validated['warehouse_id']
+            ]);
+        }
 
-        try{
+        try {
             DB::beginTransaction();
 
             $now = now();
@@ -1151,10 +1153,9 @@ class StockMasterController extends Controller
 
 
             if ($validated['warehouse_id'] == 2 || $validated['warehouse_id'] == 5) {
-                    return response()->json([
-                        'message' => 'This warehouse is not allowed for stock in transaction',
-                    ], 200);
-
+                return response()->json([
+                    'message' => 'This warehouse is not allowed for stock in transaction',
+                ], 200);
             }
 
             $exchange_rate = ExchangeRate::find($proId);
@@ -1176,7 +1177,7 @@ class StockMasterController extends Controller
             ]);
 
             $items = [];
-            $error_message=[];
+            $error_message = [];
             foreach ($validated['items'] as $item) {
                 // $attr = json_encode($item['attributes']);
 
@@ -1185,10 +1186,10 @@ class StockMasterController extends Controller
                     ->join('profiles as p', 'p.id', '=', 'u.profile_id')
                     ->where('p.id', $proId)->where('i.item_id', $item['item_id'])->select('i.*')->first();
 
-                if(empty($existItem)){
+                if (empty($existItem)) {
                     return response()->json([
                         'message' => 'Items Not Found: ',
-                        'error' => 'Item id: '.$item['item_id']
+                        'error' => 'Item id: ' . $item['item_id']
                     ]);
                 }
 
@@ -1211,9 +1212,9 @@ class StockMasterController extends Controller
             return response()->json([
                 'message' => 'StockMaster created successfully!',
                 'status' => 200,
-                'id'=> $data->stock_id
+                'id' => $data->stock_id
             ], 201);
-        }catch(\Exception $e){
+        } catch (\Exception $e) {
             DB::rollBack();
             return response()->json([
                 'message' => 'Stock In Error: ' . $e->getMessage(),
@@ -1244,16 +1245,16 @@ class StockMasterController extends Controller
             'items.*.expire_date' => 'required|date',
         ]);
         $existWarehouse = DB::table('warehouses as w')
-                    ->join('users as u', 'u.id', '=', 'w.created_by')
-                    ->join('profiles as p', 'p.id', '=', 'u.profile_id')
-                    ->where('p.id', $proId)->where('w.warehouse_id', $validated['warehouse_id'])->select('w.*')->first();
-            if(empty($existWarehouse)){
-                return response()->json([
-                    'message' => 'Items Not Found: ',
-                    'error' => 'Item id: '.$validated['warehouse_id']
-                ]);
-            }
-        try{
+            ->join('users as u', 'u.id', '=', 'w.created_by')
+            ->join('profiles as p', 'p.id', '=', 'u.profile_id')
+            ->where('p.id', $proId)->where('w.warehouse_id', $validated['warehouse_id'])->select('w.*')->first();
+        if (empty($existWarehouse)) {
+            return response()->json([
+                'message' => 'Items Not Found: ',
+                'error' => 'Item id: ' . $validated['warehouse_id']
+            ]);
+        }
+        try {
             DB::beginTransaction();
 
             $now = now();
@@ -1267,10 +1268,10 @@ class StockMasterController extends Controller
                 ->count();
             $stock_no = $type . '-' . now()->format('Ymd') . '-' . str_pad($count + 1, 5, '0', STR_PAD_LEFT);
 
-            if($validated['from_warehouse'] == 1 && $validated['warehouse_id'] == 5 || $validated['from_warehouse'] == 5 && $validated['warehouse_id'] == 1 || $validated['from_warehouse'] == 2 || $validated['warehouse_id'] == 2){
+            if ($validated['from_warehouse'] == 1 && $validated['warehouse_id'] == 5 || $validated['from_warehouse'] == 5 && $validated['warehouse_id'] == 1 || $validated['from_warehouse'] == 2 || $validated['warehouse_id'] == 2) {
                 return response()->json([
-                    'message'=>'Transfer between this warehouse is not allowed',
-                ],200);
+                    'message' => 'Transfer between this warehouse is not allowed',
+                ], 200);
             }
 
             $exchange_rate = ExchangeRate::find($proId);
@@ -1296,9 +1297,9 @@ class StockMasterController extends Controller
                 // $attr = json_encode($item['attributes']);
                 $current_stock = $this->detailService->quanItems($item['item_id'])[0];
                 $itemData = Items::find($item['item_id']);
-                $missing_stock = $current_stock->in_stock < $item['quantity']? (int)$item['quantity'] - (int)$current_stock->in_stock: 0;
-                if($missing_stock){
-                    $error_message[] = $itemData->item_name.' Missing: '. $missing_stock .' Available: '. $current_stock->in_stock;
+                $missing_stock = $current_stock->in_stock < $item['quantity'] ? (int)$item['quantity'] - (int)$current_stock->in_stock : 0;
+                if ($missing_stock) {
+                    $error_message[] = $itemData->item_name . ' Missing: ' . $missing_stock . ' Available: ' . $current_stock->in_stock;
                     continue;
                 }
 
@@ -1315,12 +1316,12 @@ class StockMasterController extends Controller
                     'expire_date' => $item['expire_date'],
                 ]);
             }
-            if($error_message){
+            if ($error_message) {
                 return response()->json([
                     'message' => 'Items out of stock:',
-                    'status'=>422,
-                    'error'=> $error_message
-                ],422);
+                    'status' => 422,
+                    'error' => $error_message
+                ], 422);
             }
             DB::commit();
 
@@ -1330,10 +1331,10 @@ class StockMasterController extends Controller
                 'status' => 200,
                 'id' => $data->stock_id
             ], 201);
-        }catch(\Exception $e){
+        } catch (\Exception $e) {
             DB::rollBack();
             return response()->json([
-                'message' => 'Stock transfer error: '. $e->getMessage(),
+                'message' => 'Stock transfer error: ' . $e->getMessage(),
                 'status' => 500
             ]);
         }
@@ -1362,15 +1363,15 @@ class StockMasterController extends Controller
             'items.*.expire_date' => 'required|date',
         ]);
         $existWarehouse = DB::table('warehouses as w')
-                    ->join('users as u', 'u.id', '=', 'w.created_by')
-                    ->join('profiles as p', 'p.id', '=', 'u.profile_id')
-                    ->where('p.id', $proId)->where('w.warehouse_id', $validated['warehouse_id'])->select('w.*')->first();
-            if(empty($existWarehouse)){
-                return response()->json([
-                    'message' => 'Items Not Found: ',
-                    'error' => 'Item id: '.$validated['warehouse_id']
-                ]);
-            }
+            ->join('users as u', 'u.id', '=', 'w.created_by')
+            ->join('profiles as p', 'p.id', '=', 'u.profile_id')
+            ->where('p.id', $proId)->where('w.warehouse_id', $validated['warehouse_id'])->select('w.*')->first();
+        if (empty($existWarehouse)) {
+            return response()->json([
+                'message' => 'Items Not Found: ',
+                'error' => 'Item id: ' . $validated['warehouse_id']
+            ]);
+        }
 
         $now = now();
         $type = $validated['stock_type_id'] == 1 ? 'RRETURN' : ($validated['stock_type_id'] == 2 ? 'RIN' : ($validated['stock_type_id'] == 3 ? 'ROUT' : ($validated['stock_type_id'] == 4 ? 'RWASTE' : 'ROTHER')));
@@ -1391,10 +1392,9 @@ class StockMasterController extends Controller
         //     }
         // }
         if ($validated['warehouse_id'] == 2 || $validated['warehouse_id'] == 1) {
-                return response()->json([
-                    'message' => 'Raw Material Warehouse can to use stock  only "stock in"',
-                ], 200);
-
+            return response()->json([
+                'message' => 'Raw Material Warehouse can to use stock  only "stock in"',
+            ], 200);
         }
 
 
@@ -1483,6 +1483,8 @@ class StockMasterController extends Controller
             ]
         ]);
     }
+
+
     public function showRaw($id)
     {
         // $user = Auth::user();
@@ -1596,65 +1598,64 @@ class StockMasterController extends Controller
             'items.*.item_cost' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
         ]);
         $existWarehouse = DB::table('warehouses as w')
-                    ->join('users as u', 'u.id', '=', 'w.created_by')
-                    ->join('profiles as p', 'p.id', '=', 'u.profile_id')
-                    ->where('p.id', $proId)->where('w.warehouse_id', $validated['warehouse_id'])->select('w.*')->first();
-            if(empty($existWarehouse)){
-                return response()->json([
-                    'message' => 'Items Not Found: ',
-                    'error' => 'Item id: '.$validated['warehouse_id']
-                ]);
-            }
-
-        if ($validated['warehouse_id'] == 2 || $validated['warehouse_id'] == 5) {
-                return response()->json([
-                    'message' => 'This warehouse is not allowed for stock in transaction',
-                ], 200);
-
-        }
-        try{
-            DB::beginTransaction();
-        $stock_masters->update([
-            'stock_type_id' => $validated['stock_type_id'],
-            // 'from_warehouse' => $validated['from_warehouse'],
-            'warehouse_id' => $validated['warehouse_id'],
-            'stock_date' => $validated['stock_date'],
-            'quantity' => array_sum(array_column($validated['items'], 'quantity')),
-            'stock_remark' => $validated['stock_remark'],
-            'received_by' => $validated['received_by'] ?? null,
-            'approved_by' => $validated['approved_by'] ?? null,
-            'reference_no' => $validated['reference_no'] ?? null,
-            // 'stock_created_by'=> $validated['stock_created_by'],
-        ]);
-
-
-        $exchange_rate = ExchangeRate::find($proId);
-
-        // ✅ Update the master record using the object, not query builder
-
-        if ($stock_masters) {
-            StockDetails::where('stock_id', $id)->delete();
-        }
-        $items = [];
-        foreach ($validated['items'] as $item) {
-            $items[] = StockDetails::create([
-                'stock_id' => $id,
-                'item_id' => $item['item_id'],
-                'quantity' => $item['quantity'],
-                'item_cost' => $item['item_cost'],
-                'expire_date' => $item['expire_date'],
-                'transection_date' => $stock_date,
+            ->join('users as u', 'u.id', '=', 'w.created_by')
+            ->join('profiles as p', 'p.id', '=', 'u.profile_id')
+            ->where('p.id', $proId)->where('w.warehouse_id', $validated['warehouse_id'])->select('w.*')->first();
+        if (empty($existWarehouse)) {
+            return response()->json([
+                'message' => 'Items Not Found: ',
+                'error' => 'Item id: ' . $validated['warehouse_id']
             ]);
         }
-        DB::commit();
-        return response()->json([
-            "message" => "StockMaster updated successfully",
-            "status" => 200,
-        ], 200);
-        }catch(\Exception $e){
+
+        if ($validated['warehouse_id'] == 2 || $validated['warehouse_id'] == 5) {
+            return response()->json([
+                'message' => 'This warehouse is not allowed for stock in transaction',
+            ], 200);
+        }
+        try {
+            DB::beginTransaction();
+            $stock_masters->update([
+                'stock_type_id' => $validated['stock_type_id'],
+                // 'from_warehouse' => $validated['from_warehouse'],
+                'warehouse_id' => $validated['warehouse_id'],
+                'stock_date' => $validated['stock_date'],
+                'quantity' => array_sum(array_column($validated['items'], 'quantity')),
+                'stock_remark' => $validated['stock_remark'],
+                'received_by' => $validated['received_by'] ?? null,
+                'approved_by' => $validated['approved_by'] ?? null,
+                'reference_no' => $validated['reference_no'] ?? null,
+                // 'stock_created_by'=> $validated['stock_created_by'],
+            ]);
+
+
+            $exchange_rate = ExchangeRate::find($proId);
+
+            // ✅ Update the master record using the object, not query builder
+
+            if ($stock_masters) {
+                StockDetails::where('stock_id', $id)->delete();
+            }
+            $items = [];
+            foreach ($validated['items'] as $item) {
+                $items[] = StockDetails::create([
+                    'stock_id' => $id,
+                    'item_id' => $item['item_id'],
+                    'quantity' => $item['quantity'],
+                    'item_cost' => $item['item_cost'],
+                    'expire_date' => $item['expire_date'],
+                    'transection_date' => $stock_date,
+                ]);
+            }
+            DB::commit();
+            return response()->json([
+                "message" => "StockMaster updated successfully",
+                "status" => 200,
+            ], 200);
+        } catch (\Exception $e) {
             DB::rollBack();
             return response()->json([
-                'message' => 'Stock update error: '. $e->getMessage(),
+                'message' => 'Stock update error: ' . $e->getMessage(),
                 'status' => 500
             ]);
         }
@@ -1689,82 +1690,82 @@ class StockMasterController extends Controller
         ]);
 
         $existWarehouse = DB::table('warehouses as w')
-                    ->join('users as u', 'u.id', '=', 'w.created_by')
-                    ->join('profiles as p', 'p.id', '=', 'u.profile_id')
-                    ->where('p.id', $proId)->where('w.warehouse_id', $validated['warehouse_id'])->select('w.*')->first();
-            if(empty($existWarehouse)){
-                return response()->json([
-                    'message' => 'Items Not Found: ',
-                    'error' => 'Item id: '.$validated['warehouse_id']
-                ]);
-            }
-        if($validated['from_warehouse'] == 1 && $validated['warehouse_id'] == 5 || $validated['from_warehouse'] == 5 && $validated['warehouse_id'] == 1 || $validated['from_warehouse'] == 2 || $validated['warehouse_id'] == 2){
+            ->join('users as u', 'u.id', '=', 'w.created_by')
+            ->join('profiles as p', 'p.id', '=', 'u.profile_id')
+            ->where('p.id', $proId)->where('w.warehouse_id', $validated['warehouse_id'])->select('w.*')->first();
+        if (empty($existWarehouse)) {
             return response()->json([
-                'message'=>'Transfer between this warehouse is not allowed',
-            ],200);
-        }
-        try{
-            DB::beginTransaction();
-
-        $stock_masters->update([
-            'stock_type_id' => $validated['stock_type_id'],
-            'from_warehouse' => $validated['from_warehouse'],
-            'warehouse_id' => $validated['warehouse_id'],
-            'stock_date' => $validated['stock_date'],
-            'quantity' => array_sum(array_column($validated['items'], 'quantity')),
-            'stock_remark' => $validated['stock_remark'],
-            'received_by' => $validated['received_by'] ?? null,
-            'approved_by' => $validated['approved_by'] ?? null,
-            'reference_no' => $validated['reference_no'] ?? null,
-            // 'stock_created_by'=> $validated['stock_created_by'],
-        ]);
-
-
-        $exchange_rate = ExchangeRate::find($proId);
-
-        // ✅ Update the master record using the object, not query builder
-
-        if ($stock_masters) {
-            StockDetails::where('stock_id', $id)->delete();
-        }
-        $items = [];
-        $error_message = [];
-        foreach ($validated['items'] as $item) {
-            $current_stock = $this->detailService->quanItems($item['item_id'])[0];
-            $itemData = Items::find($item['item_id']);
-            $missing_stock = $current_stock->in_stock < $item['quantity']? (int)$item['quantity'] - (int)$current_stock->in_stock: 0;
-            if($missing_stock){
-                $error_message[] = $itemData->item_name.' Missing: '. $missing_stock .' Available: '. $current_stock->in_stock;
-                continue;
-            }
-            $totalItemCost = $this->stockDetail->TotalItemCost((int)$item['quantity'], $item['item_id']);
-            $cost = $totalItemCost->getData(true);
-            $itemCost = (float)$cost['data']['totalCost'] / (int)$item['quantity'];
-            $items[] = StockDetails::create([
-                'stock_id' => $id,
-                'item_id' => $item['item_id'],
-                'quantity' => $item['quantity'],
-                'item_cost' => $itemCost,
-                'expire_date' => $item['expire_date'],
-                'transection_date' => $stock_date,
+                'message' => 'Items Not Found: ',
+                'error' => 'Item id: ' . $validated['warehouse_id']
             ]);
         }
-        if($error_message){
+        if ($validated['from_warehouse'] == 1 && $validated['warehouse_id'] == 5 || $validated['from_warehouse'] == 5 && $validated['warehouse_id'] == 1 || $validated['from_warehouse'] == 2 || $validated['warehouse_id'] == 2) {
+            return response()->json([
+                'message' => 'Transfer between this warehouse is not allowed',
+            ], 200);
+        }
+        try {
+            DB::beginTransaction();
+
+            $stock_masters->update([
+                'stock_type_id' => $validated['stock_type_id'],
+                'from_warehouse' => $validated['from_warehouse'],
+                'warehouse_id' => $validated['warehouse_id'],
+                'stock_date' => $validated['stock_date'],
+                'quantity' => array_sum(array_column($validated['items'], 'quantity')),
+                'stock_remark' => $validated['stock_remark'],
+                'received_by' => $validated['received_by'] ?? null,
+                'approved_by' => $validated['approved_by'] ?? null,
+                'reference_no' => $validated['reference_no'] ?? null,
+                // 'stock_created_by'=> $validated['stock_created_by'],
+            ]);
+
+
+            $exchange_rate = ExchangeRate::find($proId);
+
+            // ✅ Update the master record using the object, not query builder
+
+            if ($stock_masters) {
+                StockDetails::where('stock_id', $id)->delete();
+            }
+            $items = [];
+            $error_message = [];
+            foreach ($validated['items'] as $item) {
+                $current_stock = $this->detailService->quanItems($item['item_id'])[0];
+                $itemData = Items::find($item['item_id']);
+                $missing_stock = $current_stock->in_stock < $item['quantity'] ? (int)$item['quantity'] - (int)$current_stock->in_stock : 0;
+                if ($missing_stock) {
+                    $error_message[] = $itemData->item_name . ' Missing: ' . $missing_stock . ' Available: ' . $current_stock->in_stock;
+                    continue;
+                }
+                $totalItemCost = $this->stockDetail->TotalItemCost((int)$item['quantity'], $item['item_id']);
+                $cost = $totalItemCost->getData(true);
+                $itemCost = (float)$cost['data']['totalCost'] / (int)$item['quantity'];
+                $items[] = StockDetails::create([
+                    'stock_id' => $id,
+                    'item_id' => $item['item_id'],
+                    'quantity' => $item['quantity'],
+                    'item_cost' => $itemCost,
+                    'expire_date' => $item['expire_date'],
+                    'transection_date' => $stock_date,
+                ]);
+            }
+            if ($error_message) {
                 return response()->json([
                     'message' => 'Items out of stock:',
-                    'status'=>422,
-                    'error'=> $error_message
-                ],422);
+                    'status' => 422,
+                    'error' => $error_message
+                ], 422);
             }
             DB::commit();
-        return response()->json([
-            "message" => "StockMaster updated successfully",
-            "status" => 200,
-        ], 200);
-        }catch(\Exception $e){
+            return response()->json([
+                "message" => "StockMaster updated successfully",
+                "status" => 200,
+            ], 200);
+        } catch (\Exception $e) {
             DB::rollBack();
             return response()->json([
-                'message' => 'Stock transfer error: '. $e->getMessage(),
+                'message' => 'Stock transfer error: ' . $e->getMessage(),
                 'status' => 500
             ]);
         }
@@ -1803,66 +1804,65 @@ class StockMasterController extends Controller
         ]);
 
         $existWarehouse = DB::table('warehouses as w')
-                    ->join('users as u', 'u.id', '=', 'w.created_by')
-                    ->join('profiles as p', 'p.id', '=', 'u.profile_id')
-                    ->where('p.id', $proId)->where('w.warehouse_id', $validated['warehouse_id'])->select('w.*')->first();
-            if(empty($existWarehouse)){
-                return response()->json([
-                    'message' => 'Items Not Found: ',
-                    'error' => 'Item id: '.$validated['warehouse_id']
-                ]);
-            }
-        if ($validated['warehouse_id'] == 1 || $validated['warehouse_id'] == 2) {
-                return response()->json([
-                    'message' => 'This warehouse is not allowed for stock in transaction',
-                ], 200);
-
-        }
-
-
-        try{
-            DB::beginTransaction();
-
-        $stock_masters->update([
-            'stock_type_id' => $validated['stock_type_id'],
-            'from_warehouse' => $validated['from_warehouse'],
-            'warehouse_id' => $validated['warehouse_id'],
-            'stock_date' => $validated['stock_date'],
-            'quantity' => array_sum(array_column($validated['items'], 'quantity')),
-            'stock_remark' => $validated['stock_remark'],
-            'received_by' => $validated['received_by'] ?? null,
-            'approved_by' => $validated['approved_by'] ?? null,
-            'reference_no' => $validated['reference_no'] ?? null,
-        ]);
-
-
-        // $exchange_rate = ExchangeRate::find($proId);
-
-        // ✅ Update the master record using the object, not query builder
-
-        if ($stock_masters) {
-            StockRawDetail::where('stock_id', $id)->delete();
-        }
-        $items = [];
-        foreach ($validated['items'] as $item) {
-            $items[] = StockRawDetail::create([
-                'stock_id' => $id,
-                'raw_material_id' => $item['raw_material_id'],
-                'quantity' => $item['quantity'],
-                'item_cost' => $item['item_cost'],
-                'expire_date' => $item['expire_date'],
-                'transection_date' => $stock_date,
+            ->join('users as u', 'u.id', '=', 'w.created_by')
+            ->join('profiles as p', 'p.id', '=', 'u.profile_id')
+            ->where('p.id', $proId)->where('w.warehouse_id', $validated['warehouse_id'])->select('w.*')->first();
+        if (empty($existWarehouse)) {
+            return response()->json([
+                'message' => 'Items Not Found: ',
+                'error' => 'Item id: ' . $validated['warehouse_id']
             ]);
         }
-        DB::commit();
-        return response()->json([
-            "message" => "StockMaster updated successfully",
-            "status" => 200,
-        ], 200);
-        }catch(\Exception $e){
+        if ($validated['warehouse_id'] == 1 || $validated['warehouse_id'] == 2) {
+            return response()->json([
+                'message' => 'This warehouse is not allowed for stock in transaction',
+            ], 200);
+        }
+
+
+        try {
+            DB::beginTransaction();
+
+            $stock_masters->update([
+                'stock_type_id' => $validated['stock_type_id'],
+                'from_warehouse' => $validated['from_warehouse'],
+                'warehouse_id' => $validated['warehouse_id'],
+                'stock_date' => $validated['stock_date'],
+                'quantity' => array_sum(array_column($validated['items'], 'quantity')),
+                'stock_remark' => $validated['stock_remark'],
+                'received_by' => $validated['received_by'] ?? null,
+                'approved_by' => $validated['approved_by'] ?? null,
+                'reference_no' => $validated['reference_no'] ?? null,
+            ]);
+
+
+            // $exchange_rate = ExchangeRate::find($proId);
+
+            // ✅ Update the master record using the object, not query builder
+
+            if ($stock_masters) {
+                StockRawDetail::where('stock_id', $id)->delete();
+            }
+            $items = [];
+            foreach ($validated['items'] as $item) {
+                $items[] = StockRawDetail::create([
+                    'stock_id' => $id,
+                    'raw_material_id' => $item['raw_material_id'],
+                    'quantity' => $item['quantity'],
+                    'item_cost' => $item['item_cost'],
+                    'expire_date' => $item['expire_date'],
+                    'transection_date' => $stock_date,
+                ]);
+            }
+            DB::commit();
+            return response()->json([
+                "message" => "StockMaster updated successfully",
+                "status" => 200,
+            ], 200);
+        } catch (\Exception $e) {
             DB::rollBack();
             return response()->json([
-                'message' => 'Stock transfer error: '. $e->getMessage(),
+                'message' => 'Stock transfer error: ' . $e->getMessage(),
                 'status' => 500
             ]);
         }
@@ -1896,6 +1896,7 @@ class StockMasterController extends Controller
             'status' => 200,
         ], 200);
     }
+
     public function destroyRaw(string $id)
     {
         $stockMaster = StockMaster::find($id);
@@ -1917,6 +1918,156 @@ class StockMasterController extends Controller
         return response()->json([
             'message' => 'StockMaster deleted successfully',
             'status' => 200,
+        ], 200);
+    }
+
+
+    public function getStockFilter(Request $request)
+    {
+        $profileId = Auth::user()->profile_id;
+        $itemId = $request->input('item_id');
+        $warehouseId = $request->input('warehouse_id');
+        $type = strtolower((string) $request->input('type', 'all'));
+        $stockTypeIds = ['in' => 2, 'out' => 3, 'return' => 1, 'waste' => 4];
+
+        if (!in_array($type, array_merge(array_keys($stockTypeIds), ['sold', 'all']), true)) {
+            return response()->json([
+                'message' => 'Invalid stock type provided.',
+                'status' => 400,
+            ], 400);
+        }
+
+        $hasItemFilter = filled($itemId) && $itemId !== 'all';
+        $stockQuery = $hasItemFilter
+            ? StockDetails::query()->join('stock_masters', 'stock_details.stock_id', '=', 'stock_masters.stock_id')
+            : StockMaster::query()->join('stock_details as sd', function ($join) {
+                $join->on('sd.stock_id', '=', 'stock_masters.stock_id')
+                    ->where('sd.is_deleted', 0);
+            });
+
+        $stockQuery
+            ->join('users as u', 'stock_masters.stock_created_by', '=', 'u.id')
+            ->join('profiles as p', 'u.profile_id', '=', 'p.id')
+            ->join('warehouses as w', 'stock_masters.warehouse_id', '=', 'w.warehouse_id')
+            ->join('warehouses as fw', 'stock_masters.from_warehouse', '=', 'fw.warehouse_id')
+            ->join('stock_types as st', 'stock_masters.stock_type_id', '=', 'st.stock_type_id')
+            ->where('p.id', $profileId)
+            ->where('stock_masters.is_deleted', 0);
+
+        if ($warehouseId) {
+            if (isset($stockTypeIds[$type])) {
+                if ($stockTypeIds[$type] == 3) {
+                    $stockQuery->where('stock_masters.from_warehouse', $warehouseId);
+                } else {
+                    $stockQuery->where('stock_masters.warehouse_id', $warehouseId);
+                }
+            } elseif ($type === 'all') {
+                $stockQuery->where(function ($q) use ($warehouseId) {
+                    $q->where(function ($sub) use ($warehouseId) {
+                        $sub->where('stock_masters.stock_type_id', 3)
+                            ->where('stock_masters.from_warehouse', $warehouseId);
+                    })->orWhere(function ($sub) use ($warehouseId) {
+                        $sub->where('stock_masters.stock_type_id', '!=', 3)
+                            ->where('stock_masters.warehouse_id', $warehouseId);
+                    });
+                });
+            }
+        }
+        if ($hasItemFilter) {
+            $stockQuery->join('items as i', 'stock_details.item_id', '=', 'i.item_id')
+                ->where('stock_details.item_id', $itemId)
+                ->where('stock_details.is_deleted', 0);
+                // ->where('i.is_deleted', 0);
+        }
+
+        if (isset($stockTypeIds[$type])) {
+            $stockQuery->where('stock_masters.stock_type_id', $stockTypeIds[$type]);
+        } elseif ($type === 'sold') {
+            $stockQuery->where('stock_masters.stock_id', 0);
+        }
+
+        $stockColumns = [
+            'w.warehouse_name as to',
+            'fw.warehouse_name as from',
+            'stock_masters.stock_id as id',
+            'stock_masters.stock_no as no',
+            'st.stock_type_name as type',
+            'stock_masters.stock_date as date',
+        ];
+
+        if ($hasItemFilter) {
+            $stockData = $stockQuery->select([
+                'stock_details.item_id',
+                'i.item_name',
+                'stock_details.quantity',
+                DB::raw('(stock_details.item_cost * stock_details.quantity) as total_price'),
+                ...$stockColumns,
+            ])->get();
+        } else {
+            $stockData = $stockQuery->select([
+                'stock_masters.quantity',
+                DB::raw('COALESCE(SUM(sd.item_cost * sd.quantity), 0) as total_price'),
+                ...$stockColumns,
+            ])->groupBy(
+                'stock_masters.quantity',
+                'w.warehouse_name',
+                'fw.warehouse_name',
+                'stock_masters.stock_id',
+                'stock_masters.stock_no',
+                'st.stock_type_name',
+                'stock_masters.stock_date'
+            )->get();
+        }
+
+        $orderData = collect();
+        if ($warehouseId == 1 &&in_array($type, ['sold', 'all'], true)) {
+            $orderQuery = OrderItems::query()
+                ->join('order_masters', 'order_items.order_id', '=', 'order_masters.order_id')
+                ->join('users as u', 'order_masters.created_by', '=', 'u.id')
+                ->join('profiles as p', 'u.profile_id', '=', 'p.id')
+                ->join('customers as c', 'order_masters.order_customer_id', '=', 'c.customer_id')
+                ->where('p.id', $profileId)
+                ->where('order_masters.is_deleted', 0)
+                ->where('order_items.is_deleted', 0)
+                ->where('order_masters.status', '=', 6);
+
+            if ($hasItemFilter) {
+                $orderQuery->join('items as i', 'order_items.item_id', '=', 'i.item_id')
+                    ->where('order_items.item_id', $itemId)
+                    // ->where('i.is_deleted', 0)
+                    ->select(
+                        'order_items.item_id',
+                        'i.item_name',
+                        'order_items.quantity',
+                        DB::raw('(order_items.price * order_items.quantity) as total_price')
+                    );
+            } else {
+                $orderQuery->select(
+                    DB::raw('SUM(order_items.quantity) as quantity'),
+                    DB::raw('MAX(order_masters.order_total) as total_price')
+                )
+                    ->groupBy('order_masters.order_id', 'u.username', 'c.customer_name', 'order_masters.order_no', 'order_masters.order_date');
+            }
+
+            $orderData = $orderQuery->addSelect(
+                'u.username as from',
+                'c.customer_name as to',
+                'order_masters.order_id as id',
+                'order_masters.order_no as no',
+                DB::raw('"Sold" as type'),
+                'order_masters.order_date as date',
+
+            )->get();
+        }
+        $combinedData = collect($stockData->all())
+            ->concat($orderData->all())
+            ->sortByDesc('date')
+            ->values();
+
+        return response()->json([
+            'message' => 'Stock data fetched successfully.',
+            'status' => 200,
+            'data' => $combinedData,
         ], 200);
     }
 }

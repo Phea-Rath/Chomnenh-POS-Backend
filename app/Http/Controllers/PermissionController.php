@@ -124,6 +124,7 @@ class PermissionController extends Controller
                 $join->on('m.menu_id', '=', 'p.menu_id')
                     ->where('p.user_id', '=', $user->id);
             })
+            ->whereIn('m.only', ['all', 'mobile'])
             ->select(
                 'm.menu_id',
                 'm.menu_name',

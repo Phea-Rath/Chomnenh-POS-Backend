@@ -1748,11 +1748,11 @@ class ReportController extends Controller
         $waste = 0;
         $rest_cost=0;
         foreach($quantityRevenue as $item){
-            $cost += $this->detailService->calculateTotalCost('purchase_details', 'item_id', $item->item_id, $item->quantity)['totalCost'];
-            $rest_cost += $this->detailService->calculateTotalCost('purchase_details', 'item_id', $item->item_id, $item->quantity)['restCost'];
+            $cost += $this->detailService->calculateTotalCost('stock_details', 'item_id', $item->item_id, $item->quantity)['totalCost'];
+            $rest_cost += $this->detailService->calculateTotalCost('stock_details', 'item_id', $item->item_id, $item->quantity)['restCost'];
         }
         foreach($stockWaste as $item){
-            $waste += $this->detailService->calculateTotalCost('purchase_details', 'item_id', $item->item_id, $item->quantity)['totalCost'];
+            $waste += $this->detailService->calculateTotalCost('stock_details', 'item_id', $item->item_id, $item->quantity)['totalCost'];
         }
 
 

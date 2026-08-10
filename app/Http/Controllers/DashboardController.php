@@ -512,6 +512,8 @@ class DashboardController extends Controller
         [$startDate, $endDate] = $this->resolveOptionalRange($filters);
         $proId = Auth::user()->profile_id;
 
+        $userId = $filters['user_id'] ?? null;
+
         $query = match ($operation) {
             'sale' => DB::table('order_items as oi')
                 ->join('order_masters as om', 'oi.order_id', '=', 'om.order_id')
@@ -522,6 +524,7 @@ class DashboardController extends Controller
                 ->whereIn('om.status', self::SALE_STATUSES)
                 ->where('u.profile_id', $proId)
                 ->when($startDate && $endDate, fn($q) => $q->whereBetween('om.order_date', [$startDate->format('Y-m-d H:i:s'), $endDate->format('Y-m-d H:i:s')]))
+                ->when($userId, fn($q) => $q->where('om.created_by', $userId))
                 ->select('oi.item_id', 'i.item_name', DB::raw('SUM(oi.quantity) as quantity'), DB::raw('SUM(oi.price) as price'))
                 ->groupBy('oi.item_id', 'i.item_name'),
 
@@ -533,6 +536,7 @@ class DashboardController extends Controller
                 ->where('p.is_deleted', 0)
                 ->where('u.profile_id', $proId)
                 ->when($startDate && $endDate, fn($q) => $q->whereBetween('p.purchase_date', [$startDate->format('Y-m-d H:i:s'), $endDate->format('Y-m-d H:i:s')]))
+                ->when($userId, fn($q) => $q->where('p.created_by', $userId))
                 ->select('pd.item_id', 'i.item_name', DB::raw('SUM(pd.quantity) as quantity'), DB::raw('SUM(pd.subtotal) as price'))
                 ->groupBy('pd.item_id', 'i.item_name'),
 
@@ -544,6 +548,7 @@ class DashboardController extends Controller
                 ->where('sm.stock_type_id', 2) // In
                 ->where('u.profile_id', $proId)
                 ->when($startDate && $endDate, fn($q) => $q->whereBetween('sm.stock_date', [$startDate->format('Y-m-d H:i:s'), $endDate->format('Y-m-d H:i:s')]))
+                ->when($userId, fn($q) => $q->where('sm.stock_created_by', $userId))
                 ->select('sd.item_id', 'i.item_name', DB::raw('SUM(sd.quantity) as quantity'), DB::raw('SUM(sd.quantity * sd.item_cost) as price'))
                 ->groupBy('sd.item_id', 'i.item_name'),
 
@@ -553,6 +558,7 @@ class DashboardController extends Controller
                 ->where('pr.is_deleted', 0)
                 ->where('u.profile_id', $proId)
                 ->when($startDate && $endDate, fn($q) => $q->whereBetween('pr.production_date', [$startDate->format('Y-m-d H:i:s'), $endDate->format('Y-m-d H:i:s')]))
+                ->when($userId, fn($q) => $q->where('pr.created_by', $userId))
                 ->select('pr.item_id', 'i.item_name', DB::raw('SUM(pr.quantity) as quantity'), DB::raw('SUM(pr.total_cost) as price'))
                 ->groupBy('pr.item_id', 'i.item_name'),
 

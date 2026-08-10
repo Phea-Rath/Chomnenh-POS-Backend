@@ -1278,7 +1278,7 @@ class OrderMasterController extends Controller
             $due_date = $validated['order_date'] ? Carbon::parse($validated['order_date'])->addDays((int)$validated['term']) : Carbon::now()->addDays((int)$validated['term']);
         }
         // Create the order master
-        $order_masters->update([
+        DB::table('order_masters')->where('order_id', $id)->update([
             'order_tel' => $validated['order_tel'],
             'order_address' => $validated['order_address'],
             'deliver_id' => $validated['deliver_id']??1,
@@ -1334,7 +1334,7 @@ class OrderMasterController extends Controller
 
         if($paymented){
             $total_paid = count($paymentIds) > 0 ? Payment::whereIn('payment_id', $paymentIds)->select(DB::raw('SUM(amount) as total_payment'))->first()->total_payment : $paymented->amount;
-            $order_masters->update([
+            DB::table('order_masters')->where('order_id', $id)->update([
                 'payment' => $total_paid,
                 'balance' => (float)$order_masters->order_total - (float)$total_paid,
             ]);
@@ -1390,9 +1390,10 @@ class OrderMasterController extends Controller
 
         $validated = $request->validate([
             'order_payment_status' => 'required|string|max:255',
-            'description' => 'required|string|max:255',
+            'description' => 'nullable|string|max:255',
             'order_date' => 'required|date',
             'order_customer_id' => 'required|integer',
+            'deliver_id' => 'nullable|integer',
             'term' => 'nullable|integer',
             'seller' => 'nullable|integer',
             'reference_no' => 'nullable|string|max:255',
@@ -1404,12 +1405,6 @@ class OrderMasterController extends Controller
             'items.*.quantity' => 'required|integer',
             'items.*.item_for' => 'required|string|in:sale,sample,free',
             'items.*.discount' => 'nullable|numeric|min:0',
-            // 'payments'           => 'nullable||array',
-            // 'payments.*.amount'  => 'numeric|min:0',
-            // 'payments.*.paid_at' => 'date',
-            // 'payments.*.payment_method' => 'nullable|string',
-            // 'payments.*.transection_id' => 'nullable|string',
-            // 'payments.*.remark' => 'nullable|string'
         ]);
 
         $subTotal = collect($validated['items'])->sum(function ($item) {
@@ -1421,7 +1416,7 @@ class OrderMasterController extends Controller
             return round($lineSubtotal * $discountPercent / 100, 2);
         });
         $taxAmount = (float) ($validated['order_tax'] ?? 0);
-        $deliveryFee = (float) $validated['delivery_fee'];
+        $deliveryFee = (float) ($validated['delivery_fee'] ?? 0);
         $grandTotal = round($subTotal - $discountAmount + $taxAmount + $deliveryFee, 2);
 
         $seller = $validated['seller'] ?? $uid;
@@ -1432,16 +1427,18 @@ class OrderMasterController extends Controller
         }
         try{
             DB::beginTransaction();
-            // Create the order master
-            $order_masters->update([
-                'deliver_id' => 1,
+            // Update the order master
+            DB::table('order_masters')->where('order_id', $id)->update([
+                'order_customer_id' => $validated['order_customer_id'],
+                'deliver_id' => $validated['deliver_id'] ?? 1,
+                'reference_no' => $validated['reference_no'] ?? null,
                 'order_date' => $validated['order_date'],
-                'description' => $validated['description'],
+                'description' => $validated['description'] ?? null,
                 'seller' => $seller,
                 'updated_by' => $uid,
-                'delivery_fee' => $validated['delivery_fee'],
+                'delivery_fee' => $deliveryFee,
                 'order_payment_status' => $validated['order_payment_status'],
-                'balance' => (float)$grandTotal - (float)$order_masters->paymented,
+                'balance' => (float)$grandTotal - (float)($order_masters->payment ?? 0),
                 'order_subtotal' => $subTotal,
                 'order_discount' => $discountAmount,
                 'order_tax' => $taxAmount,
@@ -1449,51 +1446,6 @@ class OrderMasterController extends Controller
                 'due_date' => $due_date,
                 'term' => $term ?? 0,
             ]);
-
-            // $paymentIds = OrderPayment::where('order_id', $id)->pluck('payment_id');
-            // $paymented = null;
-            // if (!empty($validated['payments'])) {
-            //     foreach ($validated['payments'] as $payment) {
-            //         $amount = $payment['amount']??0;
-            //         $payment_method = $payment['payment_method']??null;
-            //         if($amount > 0){
-            //             $existingPayment = count($paymentIds) > 0 ? Payment::where('payment_id', $paymentIds[count($paymentIds)-1])->first() : null;
-            //             if($existingPayment){
-            //                 $paymented = $existingPayment->update([
-            //                     'payment_method'=>$payment_method??'cash',
-            //                     'transection_id'=> $payment_method!='cash'?$payment['transection_id']??null:null,
-            //                     'amount'=> (float)$amount,
-            //                     'remark' => $payment['remark']??null,
-            //                     'paid_at' => $payment['paid_at']??now(),
-            //                     'created_by'=> $uid
-            //                 ]);
-            //             }else{
-            //                 $paymented = Payment::create([
-            //                     'payment_method'=>$payment_method??'cash',
-            //                     'transection_id'=> $payment_method!='cash'?$payment['transection_id']??null:null,
-            //                     'amount'=> (float)$amount,
-            //                     'remark' => $payment['remark']??null,
-            //                     'paid_at' => $payment['paid_at']??now(),
-            //                     'created_by'=> $uid
-            //                 ]);
-            //                 if(!empty($paymented)){
-            //                     OrderPayment::create([
-            //                         'order_id'=> $id,
-            //                         'payment_id'=> $paymented->payment_id,
-            //                     ]);
-            //                 }
-            //             }
-            //         }
-            //     }
-            // }
-
-            // if($paymented){
-            //     $total_paid = count($paymentIds) > 0 ? Payment::whereIn('payment_id', $paymentIds)->select(DB::raw('SUM(amount) as total_payment'))->first()->total_payment : $paymented->amount;
-            //     $order_masters->update([
-            //         'payment' => $total_paid,
-            //         'balance' => (float)$order_masters->order_total - (float)$total_paid,
-            //     ]);
-            // }
 
             $order_items = [];
             if ($order_masters) {
@@ -1505,14 +1457,12 @@ class OrderMasterController extends Controller
                 $lineDiscount = round($lineSubtotal * $discountPercent / 100, 2);
                 $lineTotal = round($lineSubtotal - $lineDiscount, 2);
 
-                // return response()->json([
-                //     'discount' => $item['discount'],
-                // ]);
                 $order_items[] = OrderItems::create([
                     'order_id' => $order_masters->order_id,
                     'item_id' => $item['item_id'],
+                    'item_for' => $item['item_for'] ?? 'sale',
                     'item_price' => $item['item_price'],
-                    'discount' => (float)$item['discount'],
+                    'discount' => (float)($item['discount'] ?? 0),
                     'price' => $lineTotal,
                     'quantity' => $item['quantity'],
                 ]);
@@ -1920,7 +1870,7 @@ class OrderMasterController extends Controller
         ]);
     }
 
-    public function addPayment(Request $request, $id ,$payment){
+    public function addPayment(Request $request, $id){
         $user = Auth::user();
         $uid = $user->id;
         $proId = $user->profile_id;
@@ -1928,11 +1878,11 @@ class OrderMasterController extends Controller
         $validated = $request->validate([
             'payment_method' => 'nullable|string',
             'transection_id' => 'nullable|string',
-            'amount'=> 'nullable|numeric',
+            'amount'=> 'required|numeric',
             'paid_at' => 'nullable|date',
         ]);
 
-        $amount = $validated['amount']??(int)$payment??0;
+        $amount = $validated['amount'];
         if((float)$amount <= 0){
             return response()->json([
                 'message' => 'Please add payment amount',
@@ -1953,8 +1903,8 @@ class OrderMasterController extends Controller
             ],422);
         }
 
-        if($payment > $order->balance){
-            return response()->json([
+        if((float)$amount > $order->balance){     
+            return response()->json([   
                 'message' => 'Payment exceeds balance!',
                 'status' => 422,
             ],422);
@@ -1994,13 +1944,16 @@ class OrderMasterController extends Controller
         $user = Auth::user();
         $proId = $user->profile_id;
         $filter = $request->input('filter', 'price'); // 'order_total' or 'quantity'
+        $startDate = $request->input('start_date');
+        $endDate = $request->input('end_date');
+        $userId = $request->input('user_id');
 
         $subQuery = DB::table('order_items')
             ->select('order_id', DB::raw('SUM(quantity) as total_qty'))
             ->where('is_deleted', 0)
             ->groupBy('order_id');
 
-        $orders = DB::table('order_masters as om')
+        $query = DB::table('order_masters as om')
             ->join('users as u', 'om.created_by', '=', 'u.id')
             ->join('profiles as p', 'u.profile_id', '=', 'p.id')
             ->leftJoinSub($subQuery, 'oi', 'om.order_id', '=', 'oi.order_id')
@@ -2012,8 +1965,19 @@ class OrderMasterController extends Controller
             )
             ->where('om.is_deleted', 0)
             ->where('om.is_active', 1)
-            ->where('p.id', $proId)
-            ->groupBy('om.created_by', 'u.username')
+            ->where('p.id', $proId);
+
+        if ($startDate && $endDate) {
+            $query->whereBetween('om.order_date', [
+                $startDate . ' 00:00:00',
+                $endDate . ' 23:59:59'
+            ]);
+        }
+        if ($userId) {
+            $query->where('om.created_by', $userId);
+        }
+
+        $orders = $query->groupBy('om.created_by', 'u.username')
             ->orderByDesc($filter === 'quantity' ? 'quantity' : 'order_total')
             ->limit(3)
             ->get();

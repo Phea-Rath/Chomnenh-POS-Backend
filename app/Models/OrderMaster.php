@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class OrderMaster extends Model
 {
     protected $primaryKey = 'order_id';
+    protected $table = 'order_masters';
     protected $fillable = [
         'order_no',
         'order_customer_id',

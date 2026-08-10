@@ -29,7 +29,7 @@ return new class extends Migration
             $table->dateTime("due_date")->nullable();
             $table->string('reference_no')->nullable();
             $table->double("order_tax")->default(0);
-            $table->int("status")->default(1);
+            $table->integer("status")->default(1);
             $table->double("exchange_rate")->default(4000);
             $table->double("payment")->default(0);
             $table->double("balance");

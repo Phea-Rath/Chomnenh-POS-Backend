@@ -1075,14 +1075,15 @@ class PurchaseController extends Controller
             $details = [];
             foreach ($validated['items'] as $item) {
                 $lineSubtotal = (float) $item['quantity'] * (float) $item['item_cost'];
-                $lineDiscount = (float) ($item['discount'] ?? 0);
+                $discountPercent = (float) ($item['discount'] ?? 0);
+                $lineDiscountAmount = round(($lineSubtotal * $discountPercent) / 100, 2);
                 $details[] = PurchaseDetail::create([
                     'purchase_id' => $id,
                     'item_id'     => $item['item_id'],
                     'quantity'    => $item['quantity'],
                     'item_cost'  => $item['item_cost'],
-                    'discount'    => $lineDiscount,
-                    'subtotal'    => round($lineSubtotal - $lineDiscount, 2),
+                    'discount'    => $discountPercent,
+                    'subtotal'    => round($lineSubtotal - $lineDiscountAmount, 2),
                 ]);
             }
             if(count($details) <= 0){
@@ -1094,20 +1095,17 @@ class PurchaseController extends Controller
             }
 
 
-            if (!empty($shippings)) {
-                $shippingData = Sipping::where('purchase_id', $id)->first();
-                // return response()->json($shipping, 404);
-                if(!empty($shippingData)){
-                    foreach ($shippings as $shipping) {
-                        // dd($shipping['via']);
+            if (!empty($shippings) && is_array($shippings)) {
+                $shipping = $shippings[0] ?? null;
+                if ($shipping) {
+                    $shippingData = Sipping::where('purchase_id', $id)->first();
+                    if(!empty($shippingData)){
                         $shippingData->update([
                             'fee' => $shipping['fee'] ?? 0,
                             'carrier' => $shipping['carrier'] ?? null,
                             'via' => $shipping['via'] ?? null,
                         ]);
-                    }
-                }else{
-                    foreach ($shippings as $shipping) {
+                    }else{
                         Sipping::create([
                             'purchase_id' => $id,
                             'fee' => $shipping['fee'] ?? 0,
@@ -1170,7 +1168,7 @@ class PurchaseController extends Controller
             'items'         => 'required|array|min:1',
             'items.*.item_id'    => 'required|integer',
             'items.*.quantity'   => 'required|integer',
-            'items.*.discount'   => 'required|numeric|min:0|max:100',
+            'items.*.discount'   => 'nullable|numeric|min:0|max:100',
             'items.*.item_cost' => 'required|numeric|regex:/^\d{1,8}(\.\d{1,2})?$/',
             'shippings'  => 'nullable|array',
             'shippings.*.fee' => 'nullable|numeric',
@@ -1231,13 +1229,16 @@ class PurchaseController extends Controller
 
             $details = [];
             foreach ($validated['items'] as $item) {
+                $lineSubtotal = (float) $item['quantity'] * (float) $item['item_cost'];
+                $discountPercent = (float) ($item['discount'] ?? 0);
+                $lineDiscountAmount = round(($lineSubtotal * $discountPercent) / 100, 2);
                 $details[] = PurchaseRawDetail::create([
                     'purchase_id' => $id,
                     'raw_material_id'     => $item['item_id'],
                     'quantity'    => $item['quantity'],
-                    'discount'    => $item['discount'],
+                    'discount'    => $discountPercent,
                     'item_cost'  => $item['item_cost'],
-                    'subtotal'    => $item['quantity'] * $item['item_cost'],
+                    'subtotal'    => round($lineSubtotal - $lineDiscountAmount, 2),
                 ]);
             }
 
